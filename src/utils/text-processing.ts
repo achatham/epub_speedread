@@ -24,7 +24,13 @@ export function extractWordsFromDoc(doc: Document): WordData[] {
         return;
     }
     
-    const rawWords = currentTextBuffer
+    // Replace em-dashes and en-dashes with padded versions to ensure they split into separate words
+    // "word—word" -> "word — word"
+    const processedBuffer = currentTextBuffer
+        .replace(/—/g, ' — ')
+        .replace(/–/g, ' – ');
+
+    const rawWords = processedBuffer
         .replace(/\s+/g, ' ')
         .split(' ')
         .filter(w => w.length > 0);
