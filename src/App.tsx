@@ -169,9 +169,8 @@ function App() {
       // Try to find real end if API key is present
       const apiKey = getGeminiApiKey();
       if (apiKey && loadedSections.length > 0) {
-        // Use last 15000 words as context to find the end
-        const endContext = allWords.slice(-15000).map(w => w.text).join(' ');
-        findRealEndOfBook(loadedSections.map(s => s.label), endContext).then(quote => {
+        const fullTextContext = allWords.map(w => w.text).join(' ');
+        findRealEndOfBook(loadedSections.map(s => s.label), fullTextContext).then(quote => {
           if (quote) {
             const quoteWords = quote.split(/\s+/).filter(w => w.length > 0);
             if (quoteWords.length > 0) {
@@ -554,8 +553,8 @@ function App() {
                   setIsSettingsOpen(false);
                   // Trigger real end detection if a book is loaded
                   if (geminiApiKey && sections.length > 0 && words.length > 0) {
-                    const endContext = words.slice(-15000).map(w => w.text).join(' ');
-                    findRealEndOfBook(sections.map(s => s.label), endContext).then(quote => {
+                    const fullTextContext = words.map(w => w.text).join(' ');
+                    findRealEndOfBook(sections.map(s => s.label), fullTextContext).then(quote => {
                       if (quote) {
                         const quoteWords = quote.split(/\s+/).filter(w => w.length > 0);
                         if (quoteWords.length > 0) {
