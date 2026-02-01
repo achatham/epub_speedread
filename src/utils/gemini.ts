@@ -46,7 +46,7 @@ export async function askAboutBook(question: string, context: string): Promise<s
   if (!apiKey) return "API Key not found. Please set it in settings.";
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
   const prompt = `The following is the text of a book read so far. Please answer the user's question based on this context.
 Do not provide spoilers for anything that might happen later in the book if you happen to know the book.
