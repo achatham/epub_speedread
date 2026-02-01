@@ -51,6 +51,7 @@ export async function askAboutBook(question: string, context: string): Promise<s
   const prompt = `The following is the text of a book read so far. Please answer the user's question based on this context.
 Do not provide spoilers for anything that might happen later in the book if you happen to know the book.
 If the information is not in the provided context, say you don't know based on what has been read so far.
+Please format your response in Markdown.
 
 Context:
 ${context}

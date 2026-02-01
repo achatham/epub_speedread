@@ -1,4 +1,5 @@
 import { Bot, Sparkles, X } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 
 interface AiModalProps {
   isOpen: boolean;
@@ -36,8 +37,8 @@ export function AiModal({
 
         <div className="flex-1 overflow-y-auto mb-6 space-y-4 min-h-[200px] p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-lg border border-zinc-100 dark:border-zinc-800">
           {aiResponse ? (
-            <div className="text-sm leading-relaxed whitespace-pre-wrap">
-              {aiResponse}
+            <div className="text-sm leading-relaxed whitespace-pre-wrap prose dark:prose-invert max-w-none">
+              <ReactMarkdown>{aiResponse}</ReactMarkdown>
             </div>
           ) : (
             <div className="h-full flex flex-col items-center justify-center opacity-30 text-center">
