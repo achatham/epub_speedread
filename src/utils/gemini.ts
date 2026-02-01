@@ -15,7 +15,7 @@ export async function findRealEndOfBook(chapters: string[], endOfBookText: strin
   if (!apiKey) return null;
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
   const prompt = `Given the following table of contents and the full text of a book, identify the "real" end of the main story (including epilogue, but excluding appendix, notes, references, bibliography, etc.).
 Quote the LAST 10 WORDS of the main story.
