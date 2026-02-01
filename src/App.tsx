@@ -485,50 +485,7 @@ function App() {
     };
   }, [isPlaying, wpm, words.length, currentIndex, nextWord, words]); 
 
-  // Keyboard controls
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!currentBookId) return; // Only if reading
 
-      switch (e.code) {
-        case 'Space':
-          e.preventDefault();
-          setIsPlaying(p => !p);
-          break;
-        case 'ArrowLeft':
-          setCurrentIndex(prev => Math.max(0, prev - 10));
-          break;
-        case 'ArrowRight':
-          setCurrentIndex(prev => Math.min(words.length - 1, prev + 10));
-          break;
-        case 'ArrowUp':
-          setWpm(prev => {
-              const next = Math.min(1500, prev + 50);
-              updateBookWpm(currentBookId, next);
-              return next;
-          });
-          break;
-        case 'ArrowDown':
-          setWpm(prev => {
-              const next = Math.max(100, prev - 50);
-              updateBookWpm(currentBookId, next);
-              return next;
-          });
-          break;
-        case 'Escape':
-           if (isPlaying) setIsPlaying(false);
-           else if (isNavOpen) setIsNavOpen(false);
-           else if (isTocOpen) setIsTocOpen(false);
-           else if (isSettingsOpen) setIsSettingsOpen(false);
-           else if (isAskAiOpen) setIsAskAiOpen(false);
-           else handleCloseBook();
-           break;
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentBookId, isPlaying, isNavOpen, isTocOpen, isSettingsOpen, isAskAiOpen, words.length]);
 
   return (
     <>

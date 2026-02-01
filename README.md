@@ -12,10 +12,7 @@ no backend.
 - 🌙 **Smart Themes:** Includes Light, Dark, and a special **Bedtime Mode** (Amber/Orange focus letter on black) to protect your sleep hygiene.
 - 📍 **Progress Tracking:** Automatically saves your reading position and speed settings for every book.
 - 🎯 **Advanced Navigation:** Skip by sentence, paragraph, or chapter to find exactly where you left off.
-- ⌨️ **Keyboard Controls:** 
-  - `Space`: Play/Pause
-  - `Arrows`: Adjust speed and fine-tune position
-  - `Escape`: Close menus or return to library
+
 
 ## Tech Stack
 
