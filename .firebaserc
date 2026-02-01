@@ -1,5 +1,7 @@
 {
-  "projects": {},
+  "projects": {
+    "default": "epub-speed-reader-82342"
+  },
   "targets": {},
   "etags": {}
 }
