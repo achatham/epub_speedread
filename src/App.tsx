@@ -3,7 +3,7 @@ import ePub from 'epubjs';
 import { Play, Pause, SkipBack, Upload, Settings2, Moon, Sun } from 'lucide-react';
 import { splitWord } from './utils/orp';
 import { saveCurrentBook, loadCurrentBook, clearCurrentBook } from './utils/storage';
-import { extractWordsFromDoc, WordData } from './utils/text-processing';
+import { extractWordsFromDoc, type WordData } from './utils/text-processing';
 
 function App() {
   const [words, setWords] = useState<WordData[]>([]);
@@ -23,17 +23,39 @@ function App() {
   });
   
   const timerRef = useRef<number | null>(null);
-  const wpmHistoryRef = useRef<{time: number, wpm: number}[]>([]);
+  const sessionStartTimeRef = useRef<number | null>(null);
+  const wordsReadInSessionRef = useRef<number>(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isPlaying) {
-      wpmHistoryRef.current.push({ time: Date.now(), wpm });
-    } else if (wpmHistoryRef.current.length > 0) {
-      console.log('Reading Session Ended. WPM History:', wpmHistoryRef.current);
-      wpmHistoryRef.current = [];
+      if (sessionStartTimeRef.current === null) {
+        sessionStartTimeRef.current = Date.now();
+        wordsReadInSessionRef.current = 0;
+      }
+    } else if (sessionStartTimeRef.current !== null) {
+      const durationMs = Date.now() - sessionStartTimeRef.current;
+      const durationMins = durationMs / 60000;
+      const wordsRead = wordsReadInSessionRef.current;
+      const avgWpm = durationMins > 0 ? Math.round(wordsRead / durationMins) : 0;
+
+      console.log(`Session Summary:
+- Duration: ${(durationMs / 1000).toFixed(1)}s
+- Words Read: ${wordsRead}
+- Set WPM: ${wpm}
+- Effective Avg WPM: ${avgWpm}`);
+      
+      sessionStartTimeRef.current = null;
+      wordsReadInSessionRef.current = 0;
     }
   }, [isPlaying, wpm]);
+
+  // Track words read during session
+  useEffect(() => {
+    if (isPlaying) {
+      wordsReadInSessionRef.current += 1;
+    }
+  }, [currentIndex]);
 
   useEffect(() => {
     if (isDark) {
