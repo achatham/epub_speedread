@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ePub from 'epubjs';
 import { addBook, getAllBooks, getBook, deleteBook, updateBookProgress, updateBookWpm, type BookRecord } from './utils/storage';
 import { extractWordsFromDoc, type WordData } from './utils/text-processing';
+import { calculateNavigationTarget, findSentenceStart, type NavigationType } from './utils/navigation';
 import { getGeminiApiKey, setGeminiApiKey as saveGeminiApiKey, findRealEndOfBook, askAboutBook } from './utils/gemini';
 import { LibraryView } from './components/LibraryView';
 import { ReaderView } from './components/ReaderView';
@@ -379,73 +380,8 @@ function App() {
   }, [isPlaying]);
 
 
-  const navigate = (type: 'book' | 'chapter' | 'prev-paragraph' | 'prev-sentence' | 'next-paragraph' | 'next-sentence') => {
-    if (!words.length) return;
-    let targetIndex = currentIndex;
-
-    switch (type) {
-        case 'book':
-            targetIndex = 0;
-            break;
-        case 'chapter':
-             const currentSection = sections.reduce((prev, curr) => {
-                 return (curr.startIndex <= currentIndex && curr.startIndex > prev.startIndex) ? curr : prev;
-             }, sections[0] || { startIndex: 0 });
-             targetIndex = currentSection.startIndex;
-             break;
-        case 'prev-paragraph':
-             if (words[currentIndex].isParagraphStart) {
-                 for (let i = currentIndex - 1; i >= 0; i--) {
-                     if (words[i].isParagraphStart) {
-                         targetIndex = i;
-                         break;
-                     }
-                 }
-             } else {
-                 for (let i = currentIndex; i >= 0; i--) {
-                     if (words[i].isParagraphStart) {
-                         targetIndex = i;
-                         break;
-                     }
-                 }
-             }
-             break;
-        case 'prev-sentence':
-             if (words[currentIndex].isSentenceStart) {
-                 for (let i = currentIndex - 1; i >= 0; i--) {
-                     if (words[i].isSentenceStart) {
-                         targetIndex = i;
-                         break;
-                     }
-                 }
-             } else {
-                 for (let i = currentIndex; i >= 0; i--) {
-                     if (words[i].isSentenceStart) {
-                         targetIndex = i;
-                         break;
-                     }
-                 }
-             }
-             break;
-        case 'next-paragraph':
-             for (let i = currentIndex + 1; i < words.length; i++) {
-                 if (words[i].isParagraphStart) {
-                     targetIndex = i;
-                     break;
-                 }
-             }
-             break;
-        case 'next-sentence':
-             for (let i = currentIndex + 1; i < words.length; i++) {
-                 if (words[i].isSentenceStart) {
-                     targetIndex = i;
-                     break;
-                 }
-             }
-             break;
-    }
-    
-    targetIndex = Math.max(0, Math.min(words.length - 1, targetIndex));
+  const navigate = (type: NavigationType) => {
+    const targetIndex = calculateNavigationTarget(currentIndex, words, sections, type);
     setCurrentIndex(targetIndex);
     setIsNavOpen(false);
   };
@@ -487,15 +423,7 @@ function App() {
 
   const handleSetIsPlaying = (playing: boolean) => {
     if (playing && !isPlaying) {
-      let newIndex = currentIndex;
-      if (words.length > 0) {
-        for (let i = currentIndex; i >= 0; i--) {
-          if (words[i].isSentenceStart) {
-            newIndex = i;
-            break;
-          }
-        }
-      }
+      const newIndex = findSentenceStart(currentIndex, words);
       setCurrentIndex(newIndex);
     }
     setIsPlaying(playing);
