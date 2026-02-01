@@ -485,6 +485,22 @@ function App() {
     };
   }, [isPlaying, wpm, words.length, currentIndex, nextWord, words]); 
 
+  const handleSetIsPlaying = (playing: boolean) => {
+    if (playing && !isPlaying) {
+      let newIndex = currentIndex;
+      if (words.length > 0) {
+        for (let i = currentIndex; i >= 0; i--) {
+          if (words[i].isSentenceStart) {
+            newIndex = i;
+            break;
+          }
+        }
+      }
+      setCurrentIndex(newIndex);
+    }
+    setIsPlaying(playing);
+  }; 
+
 
 
   return (
@@ -536,7 +552,7 @@ function App() {
             effectiveTotalWords={realEndIndex || words.length}
             realEndIndex={realEndIndex}
             isPlaying={isPlaying}
-            setIsPlaying={setIsPlaying}
+            setIsPlaying={handleSetIsPlaying}
             wpm={wpm}
             onWpmChange={(newWpm) => {
                 setWpm(newWpm);
