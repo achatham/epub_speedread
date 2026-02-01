@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ePub from 'epubjs';
-import { Play, Pause, SkipBack, Upload, Settings2, Moon, Sun } from 'lucide-react';
+import { Play, Pause, SkipBack, Upload, Settings2, Moon, Sun, Settings, Sparkles, X, Bot } from 'lucide-react';
 import { splitWord } from './utils/orp';
 import { saveCurrentBook, loadCurrentBook, clearCurrentBook } from './utils/storage';
 import { extractWordsFromDoc, type WordData } from './utils/text-processing';
+import { getGeminiApiKey, setGeminiApiKey as saveGeminiApiKey, findRealEndOfBook, askAboutBook } from './utils/gemini';
 
 function App() {
   const [words, setWords] = useState<WordData[]>([]);
@@ -15,6 +16,13 @@ function App() {
   const [sections, setSections] = useState<{ label: string; startIndex: number }[]>([]);
   const [isTocOpen, setIsTocOpen] = useState(false);
   const [isNavOpen, setIsNavOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isAskAiOpen, setIsAskAiOpen] = useState(false);
+  const [geminiApiKey, setGeminiApiKey] = useState(getGeminiApiKey() || '');
+  const [realEndIndex, setRealEndIndex] = useState<number | null>(null);
+  const [aiQuestion, setAiQuestion] = useState('');
+  const [aiResponse, setAiResponse] = useState('');
+  const [isAiLoading, setIsAiLoading] = useState(false);
   const [isDark, setIsDark] = useState(() => {
     if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
       return true;
@@ -157,6 +165,20 @@ function App() {
       setWords(allWords);
       setSections(loadedSections);
       setCurrentIndex(0);
+
+      // Try to find real end if API key is present
+      const apiKey = getGeminiApiKey();
+      if (apiKey && loadedSections.length > 0) {
+        findRealEndOfBook(loadedSections.map(s => s.label)).then(lastRealIdx => {
+          if (lastRealIdx !== null) {
+            if (lastRealIdx + 1 < loadedSections.length) {
+              setRealEndIndex(loadedSections[lastRealIdx + 1].startIndex);
+            } else {
+              setRealEndIndex(allWords.length);
+            }
+          }
+        });
+      }
     } catch (innerError) {
       console.error('Error processing book:', innerError);
       alert('Failed to parse EPUB file. See console for details.');
@@ -214,6 +236,21 @@ function App() {
     setSections([]);
     setCurrentIndex(0);
     setBookTitle('');
+    setRealEndIndex(null);
+  };
+
+  const handleAskAi = async () => {
+    if (!aiQuestion.trim() || isAiLoading) return;
+    setIsAiLoading(true);
+    try {
+      const context = words.slice(0, currentIndex + 1).map(w => w.text).join(' ');
+      const response = await askAboutBook(aiQuestion, context);
+      setAiResponse(response);
+    } catch {
+      setAiResponse('Failed to get response from AI.');
+    } finally {
+      setIsAiLoading(false);
+    }
   };
 
   const togglePlay = () => {
@@ -368,13 +405,59 @@ function App() {
   if (words.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-screen font-sans bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 transition-colors duration-300">
-         <button 
-          onClick={toggleTheme}
-          className="absolute top-4 right-4 p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-          title="Toggle theme"
-        >
-          {isDark ? <Sun size={24} /> : <Moon size={24} />}
-        </button>
+        <div className="absolute top-4 right-4 flex gap-2">
+          <button
+            onClick={() => setIsSettingsOpen(true)}
+            className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+            title="Settings"
+          >
+            <Settings size={24} />
+          </button>
+          <button
+            onClick={toggleTheme}
+            className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+            title="Toggle theme"
+          >
+            {isDark ? <Sun size={24} /> : <Moon size={24} />}
+          </button>
+        </div>
+
+        {isSettingsOpen && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4">
+            <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl w-full max-w-md shadow-2xl border border-zinc-200 dark:border-zinc-800">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-semibold">Settings</h2>
+                <button onClick={() => setIsSettingsOpen(false)} className="opacity-50 hover:opacity-100">
+                  <X size={24} />
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="api-key" className="block text-sm font-medium mb-1.5 opacity-70">Gemini API Key</label>
+                  <input
+                    id="api-key"
+                    type="password"
+                    value={geminiApiKey}
+                    onChange={(e) => setGeminiApiKey(e.target.value)}
+                    className="w-full p-2.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-transparent focus:ring-2 focus:ring-zinc-500 outline-none transition-all"
+                    placeholder="Enter your API key"
+                  />
+                  <p className="mt-2 text-xs opacity-40">Stored locally in your browser.</p>
+                </div>
+                <button
+                  onClick={() => {
+                    saveGeminiApiKey(geminiApiKey);
+                    setIsSettingsOpen(false);
+                  }}
+                  className="w-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 py-2.5 rounded-lg font-medium hover:opacity-90 transition-opacity"
+                >
+                  Save Settings
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div 
           className="border-2 border-dashed border-zinc-300 dark:border-zinc-700 rounded-xl p-12 text-center cursor-pointer transition-all hover:border-zinc-400 dark:hover:border-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
           onClick={() => {
@@ -399,22 +482,141 @@ function App() {
 
   const { prefix, focus, suffix } = splitWord(words[currentIndex].text || '');
 
+  const effectiveTotalWords = realEndIndex || words.length;
+
   return (
     <div className="flex flex-col items-center justify-center h-screen font-sans bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 transition-colors duration-300 relative">
       <div className="absolute top-8 text-center w-full px-4">
         <h3 className="m-0 font-normal opacity-60 text-lg truncate max-w-2xl mx-auto">{bookTitle}</h3>
         <p className="my-2 text-sm opacity-40">
-          {currentIndex + 1} / {words.length} words
+          {currentIndex + 1} / {effectiveTotalWords} words
+          {realEndIndex && currentIndex >= realEndIndex && " (Back Matter)"}
         </p>
       </div>
 
-      <button 
-        onClick={toggleTheme}
-        className="absolute top-4 right-4 p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors z-10"
-        title="Toggle theme"
-      >
-        {isDark ? <Sun size={24} /> : <Moon size={24} />}
-      </button>
+      <div className="absolute top-4 right-4 flex gap-2 z-10">
+        <button
+          onClick={() => setIsSettingsOpen(true)}
+          className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+          title="Settings"
+        >
+          <Settings size={24} />
+        </button>
+        <button
+          onClick={toggleTheme}
+          className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+          title="Toggle theme"
+        >
+          {isDark ? <Sun size={24} /> : <Moon size={24} />}
+        </button>
+      </div>
+
+      {isSettingsOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4">
+          <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl w-full max-w-md shadow-2xl border border-zinc-200 dark:border-zinc-800">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-semibold">Settings</h2>
+              <button onClick={() => setIsSettingsOpen(false)} className="opacity-50 hover:opacity-100">
+                <X size={24} />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="api-key-main" className="block text-sm font-medium mb-1.5 opacity-70">Gemini API Key</label>
+                <input
+                  id="api-key-main"
+                  type="password"
+                  value={geminiApiKey}
+                  onChange={(e) => setGeminiApiKey(e.target.value)}
+                  className="w-full p-2.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-transparent focus:ring-2 focus:ring-zinc-500 outline-none transition-all"
+                  placeholder="Enter your API key"
+                />
+                <p className="mt-2 text-xs opacity-40">Stored locally in your browser.</p>
+              </div>
+              <button
+                onClick={() => {
+                  saveGeminiApiKey(geminiApiKey);
+                  setIsSettingsOpen(false);
+                  // Trigger real end detection if a book is loaded
+                  if (geminiApiKey && sections.length > 0) {
+                    findRealEndOfBook(sections.map(s => s.label)).then(lastRealIdx => {
+                      if (lastRealIdx !== null) {
+                        if (lastRealIdx + 1 < sections.length) {
+                          setRealEndIndex(sections[lastRealIdx + 1].startIndex);
+                        } else {
+                          setRealEndIndex(words.length);
+                        }
+                      }
+                    });
+                  }
+                }}
+                className="w-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 py-2.5 rounded-lg font-medium hover:opacity-90 transition-opacity"
+              >
+                Save Settings
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isAskAiOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4">
+          <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl w-full max-w-2xl max-h-[80vh] flex flex-col shadow-2xl border border-zinc-200 dark:border-zinc-800">
+            <div className="flex justify-between items-center mb-6">
+              <div className="flex items-center gap-2">
+                <Bot className="text-zinc-500" />
+                <h2 className="text-xl font-semibold">Ask AI about the book</h2>
+              </div>
+              <button onClick={() => setIsAskAiOpen(false)} className="opacity-50 hover:opacity-100">
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto mb-6 space-y-4 min-h-[200px] p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-lg border border-zinc-100 dark:border-zinc-800">
+              {aiResponse ? (
+                <div className="text-sm leading-relaxed whitespace-pre-wrap">
+                  {aiResponse}
+                </div>
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center opacity-30 text-center">
+                  <Sparkles size={48} className="mb-4" />
+                  <p>Ask a question about what you've read so far.</p>
+                  <p className="text-xs mt-2">The AI only sees text up to your current position.</p>
+                </div>
+              )}
+              {isAiLoading && (
+                <div className="flex items-center gap-2 text-sm opacity-50 animate-pulse">
+                  <div className="flex gap-1">
+                    <div className="w-1.5 h-1.5 bg-current rounded-full animate-bounce"></div>
+                    <div className="w-1.5 h-1.5 bg-current rounded-full animate-bounce [animation-delay:0.2s]"></div>
+                    <div className="w-1.5 h-1.5 bg-current rounded-full animate-bounce [animation-delay:0.4s]"></div>
+                  </div>
+                  Thinking...
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={aiQuestion}
+                onChange={(e) => setAiQuestion(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAskAi()}
+                className="flex-1 p-3 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-transparent focus:ring-2 focus:ring-zinc-500 outline-none transition-all"
+                placeholder="How does the protagonist feel about...?"
+                disabled={isAiLoading}
+              />
+              <button
+                onClick={handleAskAi}
+                disabled={isAiLoading || !aiQuestion.trim()}
+                className="bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 px-6 py-2 rounded-lg font-medium disabled:opacity-50 hover:opacity-90 transition-opacity"
+              >
+                Ask
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="relative text-5xl font-medium h-[120px] flex items-center justify-center w-full max-w-2xl border-t border-b border-zinc-200 dark:border-zinc-800 my-8">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-0.5 h-6 bg-red-600 dark:bg-red-500 opacity-30"></div>
@@ -439,8 +641,15 @@ function App() {
         >
           <div 
             className="h-full bg-zinc-900 dark:bg-zinc-100 rounded-sm"
-            style={{ width: `${(currentIndex / words.length) * 100}%` }}
+            style={{ width: `${Math.min(100, (currentIndex / effectiveTotalWords) * 100)}%` }}
           />
+          {realEndIndex && (
+            <div
+              className="absolute top-0 bottom-0 w-0.5 bg-red-500/30"
+              style={{ left: `${(realEndIndex / words.length) * 100}%` }}
+              title="Real End of Book"
+            />
+          )}
           <div className="absolute inset-y-0 -left-2 -right-2 bg-transparent opacity-0 group-hover:opacity-100 cursor-pointer" />
         </div>
 
@@ -493,6 +702,17 @@ function App() {
             {isPlaying ? <Pause size={24} /> : <Play size={24} />}
           </button>
           
+          <button
+            className="bg-transparent border border-zinc-300 dark:border-zinc-700 p-2 px-4 rounded-md cursor-pointer flex items-center gap-2 transition-all hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
+            onClick={() => {
+              setAiResponse('');
+              setIsAskAiOpen(true);
+            }}
+            title="Ask AI about book"
+          >
+            <Sparkles size={20} />
+          </button>
+
           <div className="relative">
             <button 
               className={`bg-transparent border border-zinc-300 dark:border-zinc-700 p-2 px-4 rounded-md cursor-pointer flex items-center gap-2 transition-all hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-900 dark:text-zinc-100 ${isTocOpen ? 'bg-zinc-100 dark:bg-zinc-800' : ''}`}
