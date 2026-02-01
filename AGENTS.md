@@ -31,3 +31,7 @@ The project is hosted on **Firebase Hosting**.
 ### Configuration
 - `firebase.json`: Configures the Hosting settings, including the `dist` directory and single-page application (SPA) rewrites.
 - `.firebaserc`: Associates the local project with the Firebase project ID (`epub-speed-reader-82342`).
+
+## Development Mandates
+
+- **Gemini Versioning:** *NEVER* change a Gemini version number in code. `gemini-3-flash-preview` is the latest model and must be preserved.
