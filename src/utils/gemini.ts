@@ -10,30 +10,31 @@ export function setGeminiApiKey(key: string) {
   localStorage.setItem(API_KEY_STORAGE_KEY, key);
 }
 
-export async function findRealEndOfBook(chapters: string[]): Promise<number | null> {
+export async function findRealEndOfBook(chapters: string[], endOfBookText: string): Promise<string | null> {
   const apiKey = getGeminiApiKey();
   if (!apiKey) return null;
 
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-  const prompt = `Given the following table of contents of a book, identify the index (0-based) of the LAST chapter that is part of the main content.
-Exclude appendices, notes, references, bibliographies, indices, and similar back matter.
-Include the epilogue if it exists.
+  const prompt = `Given the following table of contents and the end of a book, identify the "real" end of the main story (including epilogue, but excluding appendix, notes, references, bibliography, etc.).
+Quote the LAST 10 WORDS of the main story.
+Return ONLY these 10 words, without punctuation.
 
-Chapters:
-${chapters.map((label, index) => `${index}: ${label}`).join('\n')}
+Table of Contents:
+${chapters.join('\n')}
 
-Return ONLY the index as a number.`;
+End of Book Text (last few chapters):
+${endOfBookText}
+
+Last 10 words of main story:`;
 
   try {
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const text = response.text().trim();
-    const index = parseInt(text, 10);
-    if (!isNaN(index) && index >= 0 && index < chapters.length) {
-      return index;
-    }
+    // Clean up response to just words
+    return text.toLowerCase().replace(/[^\w\s]/g, '');
   } catch (error) {
     console.error("Error finding real end of book:", error);
   }

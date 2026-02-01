@@ -169,12 +169,27 @@ function App() {
       // Try to find real end if API key is present
       const apiKey = getGeminiApiKey();
       if (apiKey && loadedSections.length > 0) {
-        findRealEndOfBook(loadedSections.map(s => s.label)).then(lastRealIdx => {
-          if (lastRealIdx !== null) {
-            if (lastRealIdx + 1 < loadedSections.length) {
-              setRealEndIndex(loadedSections[lastRealIdx + 1].startIndex);
-            } else {
-              setRealEndIndex(allWords.length);
+        // Use last 15000 words as context to find the end
+        const endContext = allWords.slice(-15000).map(w => w.text).join(' ');
+        findRealEndOfBook(loadedSections.map(s => s.label), endContext).then(quote => {
+          if (quote) {
+            const quoteWords = quote.split(/\s+/).filter(w => w.length > 0);
+            if (quoteWords.length > 0) {
+              // Search backwards for this sequence
+              for (let i = allWords.length - quoteWords.length; i >= 0; i--) {
+                let match = true;
+                for (let j = 0; j < quoteWords.length; j++) {
+                  const wordText = allWords[i + j].text.toLowerCase().replace(/[^\w]/g, '');
+                  if (wordText !== quoteWords[j]) {
+                    match = false;
+                    break;
+                  }
+                }
+                if (match) {
+                  setRealEndIndex(i + quoteWords.length);
+                  break;
+                }
+              }
             }
           }
         });
@@ -538,13 +553,27 @@ function App() {
                   saveGeminiApiKey(geminiApiKey);
                   setIsSettingsOpen(false);
                   // Trigger real end detection if a book is loaded
-                  if (geminiApiKey && sections.length > 0) {
-                    findRealEndOfBook(sections.map(s => s.label)).then(lastRealIdx => {
-                      if (lastRealIdx !== null) {
-                        if (lastRealIdx + 1 < sections.length) {
-                          setRealEndIndex(sections[lastRealIdx + 1].startIndex);
-                        } else {
-                          setRealEndIndex(words.length);
+                  if (geminiApiKey && sections.length > 0 && words.length > 0) {
+                    const endContext = words.slice(-15000).map(w => w.text).join(' ');
+                    findRealEndOfBook(sections.map(s => s.label), endContext).then(quote => {
+                      if (quote) {
+                        const quoteWords = quote.split(/\s+/).filter(w => w.length > 0);
+                        if (quoteWords.length > 0) {
+                          // Search backwards for this sequence
+                          for (let i = words.length - quoteWords.length; i >= 0; i--) {
+                            let match = true;
+                            for (let j = 0; j < quoteWords.length; j++) {
+                              const wordText = words[i + j].text.toLowerCase().replace(/[^\w]/g, '');
+                              if (wordText !== quoteWords[j]) {
+                                match = false;
+                                break;
+                              }
+                            }
+                            if (match) {
+                              setRealEndIndex(i + quoteWords.length);
+                              break;
+                            }
+                          }
                         }
                       }
                     });
