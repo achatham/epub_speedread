@@ -1,4 +1,4 @@
-import { Moon, Pause, Play, Settings, Settings2, SkipBack, Sparkles, Sun, Sunset } from 'lucide-react';
+import { Minus, Moon, Pause, Play, Plus, Settings, Settings2, SkipBack, Sparkles, Sun, Sunset } from 'lucide-react';
 import type { WordData } from '../utils/text-processing';
 import { splitWord } from '../utils/orp';
 
@@ -14,6 +14,7 @@ interface ReaderViewProps {
   wpm: number;
   onWpmChange: (wpm: number) => void;
   theme: Theme;
+  fontSize: number;
   bookTitle: string;
   onCloseBook: () => void;
   onSettingsClick: () => void;
@@ -39,6 +40,7 @@ export function ReaderView({
   wpm,
   onWpmChange,
   theme,
+  fontSize,
   bookTitle,
   onCloseBook,
   onSettingsClick,
@@ -74,6 +76,22 @@ export function ReaderView({
   const rsvpFocusColor = theme === 'bedtime' ? 'text-amber-600' : (theme === 'dark' ? 'text-red-500' : 'text-red-600');
   const rsvpContextClass = theme === 'bedtime' ? 'text-stone-600' : 'opacity-90';
   const guidelinesClass = theme === 'bedtime' ? 'bg-amber-900/30' : 'bg-red-600 dark:bg-red-500 opacity-30';
+
+  // Find current chapter
+  let currentChapterIdx = -1;
+  for (let i = 0; i < sections.length; i++) {
+      if (sections[i].startIndex <= currentIndex) {
+          currentChapterIdx = i;
+      } else {
+          break;
+      }
+  }
+
+  const chapterStart = sections[currentChapterIdx]?.startIndex || 0;
+  const chapterEnd = sections[currentChapterIdx + 1]?.startIndex || words.length;
+  const wordsInChapter = chapterEnd - chapterStart;
+  const progressInChapter = currentIndex - chapterStart;
+  const chapterPercentage = wordsInChapter > 0 ? (progressInChapter / wordsInChapter) * 100 : 0;
 
   // Progress Calculations
   const getProgressStats = () => {
@@ -134,40 +152,44 @@ export function ReaderView({
         />
       )}
       
-      <div className="absolute top-8 text-center w-full px-4">
-        <h3 className="m-0 font-normal opacity-60 text-lg truncate max-w-2xl mx-auto">{bookTitle}</h3>
-        <p className="my-2 text-sm opacity-40">
-          {currentIndex + 1} / {effectiveTotalWords} words
-          {realEndIndex && currentIndex >= realEndIndex && " (Back Matter)"}
-        </p>
-        {!isPlaying && getProgressStats()}
-      </div>
+      {!isPlaying && (
+        <div className="absolute top-8 text-center w-full px-4">
+          <h3 className="m-0 font-normal opacity-60 text-lg truncate max-w-2xl mx-auto">{bookTitle}</h3>
+          <p className="my-2 text-sm opacity-40">
+            {currentIndex + 1} / {effectiveTotalWords} words
+            {realEndIndex && currentIndex >= realEndIndex && " (Back Matter)"}
+          </p>
+          {getProgressStats()}
+        </div>
+      )}
 
-      <div className="absolute top-4 right-4 flex gap-2 z-10">
-        <button
-          onClick={onSettingsClick}
-          className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-          title="Settings"
-        >
-          <Settings size={24} />
-        </button>
-        <button 
-            onClick={onToggleTheme}
+      {!isPlaying && (
+        <div className="absolute top-4 right-4 flex gap-2 z-10">
+          <button
+            onClick={onSettingsClick}
             className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-            title={`Theme: ${theme}`}
-        >
-            {theme === 'light' ? <Sun size={24} /> : theme === 'dark' ? <Moon size={24} /> : <Sunset size={24} className="text-amber-600" />}
-        </button>
-      </div>
+            title="Settings"
+          >
+            <Settings size={24} />
+          </button>
+          <button
+              onClick={onToggleTheme}
+              className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              title={`Theme: ${theme}`}
+          >
+              {theme === 'light' ? <Sun size={24} /> : theme === 'dark' ? <Moon size={24} /> : <Sunset size={24} className="text-amber-600" />}
+          </button>
+        </div>
+      )}
 
       {/* RSVP Display or Text Preview */}
-      <div className={`relative flex items-center justify-center w-full max-w-2xl border-t border-b my-8 ${theme === 'bedtime' ? 'border-zinc-900' : 'border-zinc-200 dark:border-zinc-800'}`} style={{ height: '120px' }}>
+      <div className={`relative flex items-center justify-center w-full max-w-2xl border-t border-b my-8 ${theme === 'bedtime' ? 'border-zinc-900' : 'border-zinc-200 dark:border-zinc-800'}`} style={{ minHeight: isPlaying ? Math.max(120, fontSize * 1.5) : '120px' }}>
         {isPlaying ? (
           <>
             <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-0.5 h-6 ${guidelinesClass}`}></div>
             <div className={`absolute bottom-0 left-1/2 -translate-x-1/2 w-0.5 h-6 ${guidelinesClass}`}></div>
 
-            <div className="flex w-full items-baseline justify-center text-5xl font-medium">
+            <div className="flex w-full items-baseline justify-center font-medium" style={{ fontSize: `${fontSize}px` }}>
               <div className={`text-right whitespace-pre ${rsvpContextClass} flex-1`}>{prefix}</div>
               <div className={`${rsvpFocusColor} font-bold text-center px-0.5`}>{focus}</div>
               <div className={`text-left whitespace-pre ${rsvpContextClass} flex-1`}>{suffix}</div>
@@ -182,30 +204,51 @@ export function ReaderView({
 
       {/* Controls */}
       <div className="flex flex-col gap-6 items-center w-full max-w-md px-4 relative z-50">
-        <div 
-          className={`w-full h-1 rounded-sm cursor-pointer relative group ${theme === 'bedtime' ? 'bg-zinc-900' : 'bg-zinc-200 dark:bg-zinc-800'}`}
-          onClick={(e) => {
-            const rect = e.currentTarget.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const percentage = x / rect.width;
-            setCurrentIndex(Math.floor(percentage * words.length));
-          }}
-        >
+        <div className="w-full space-y-3">
+          {/* Chapter Progress */}
           <div 
-            className={`h-full rounded-sm ${theme === 'bedtime' ? 'bg-stone-500' : 'bg-zinc-900 dark:bg-zinc-100'}`}
-            style={{ width: `${Math.min(100, (currentIndex / effectiveTotalWords) * 100)}%` }}
-          />
-          {realEndIndex && (
+            className={`w-full h-1 rounded-sm relative ${theme === 'bedtime' ? 'bg-zinc-900' : 'bg-zinc-200 dark:bg-zinc-800'}`}
+          >
             <div
-              className="absolute top-0 bottom-0 w-0.5 bg-red-500/30"
-              style={{ left: `${(realEndIndex / words.length) * 100}%` }}
-              title="Real End of Book"
+              className={`h-full rounded-sm transition-all duration-300 ${theme === 'bedtime' ? 'bg-amber-700' : 'bg-zinc-400 dark:bg-zinc-600'}`}
+              style={{ width: `${Math.min(100, chapterPercentage)}%` }}
             />
-          )}
-          <div className="absolute inset-y-0 -left-2 -right-2 bg-transparent opacity-0 group-hover:opacity-100 cursor-pointer" />
+            {isPlaying && (
+               <div className="absolute -top-5 left-0 text-[10px] uppercase tracking-tighter opacity-30 font-bold">Chapter Progress</div>
+            )}
+          </div>
+
+          {/* Book Progress */}
+          <div
+            className={`w-full h-1 rounded-sm cursor-pointer relative group ${theme === 'bedtime' ? 'bg-zinc-900' : 'bg-zinc-200 dark:bg-zinc-800'}`}
+            onClick={(e) => {
+              if (isPlaying) return;
+              const rect = e.currentTarget.getBoundingClientRect();
+              const x = e.clientX - rect.left;
+              const percentage = x / rect.width;
+              setCurrentIndex(Math.floor(percentage * words.length));
+            }}
+          >
+            <div
+              className={`h-full rounded-sm ${theme === 'bedtime' ? 'bg-stone-500' : 'bg-zinc-900 dark:bg-zinc-100'}`}
+              style={{ width: `${Math.min(100, (currentIndex / effectiveTotalWords) * 100)}%` }}
+            />
+            {realEndIndex && (
+              <div
+                className="absolute top-0 bottom-0 w-0.5 bg-red-500/30"
+                style={{ left: `${(realEndIndex / words.length) * 100}%` }}
+                title="Real End of Book"
+              />
+            )}
+            <div className="absolute inset-y-0 -left-2 -right-2 bg-transparent opacity-0 group-hover:opacity-100 cursor-pointer" />
+            {isPlaying && (
+               <div className="absolute -top-5 right-0 text-[10px] uppercase tracking-tighter opacity-30 font-bold">Book Progress</div>
+            )}
+          </div>
         </div>
 
-        <div className="flex gap-4 items-center">
+        {!isPlaying && (
+          <div className="flex gap-4 items-center">
           {/* Navigation Menu */}
           <div className="relative">
             <button 
@@ -293,27 +336,43 @@ export function ReaderView({
             )}
           </div>
         </div>
+      )}
 
-        <div className={`flex items-center gap-4 w-full ${theme === 'bedtime' ? 'text-stone-500' : 'text-zinc-900 dark:text-zinc-100'}`}>
-          <span className="min-w-[5rem] text-right">{wpm} WPM</span>
-          <input 
-            type="range" 
-            min="100" 
-            max="1200" 
-            step="50" 
-            value={wpm} 
-            onChange={(e) => onWpmChange(parseInt(e.target.value))} 
-            className={`flex-1 h-2 rounded-lg appearance-none cursor-pointer ${theme === 'bedtime' ? 'accent-amber-700 bg-zinc-900' : 'accent-zinc-900 dark:accent-zinc-100 bg-zinc-200 dark:bg-zinc-700'}`}
-          />
-        </div>
+        {!isPlaying && (
+          <div className={`flex items-center justify-between w-full ${theme === 'bedtime' ? 'text-stone-500' : 'text-zinc-900 dark:text-zinc-100'}`}>
+            <span className="text-sm font-medium opacity-70 uppercase tracking-wider">Speed</span>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => onWpmChange(Math.max(100, wpm - 25))}
+                className={`p-2 rounded-lg border transition-colors ${theme === 'bedtime' ? 'border-zinc-800 hover:bg-zinc-900' : 'border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}
+                title="Decrease Speed"
+              >
+                <Minus size={20} />
+              </button>
+              <div className="flex flex-col items-center min-w-[4rem]">
+                <span className="text-xl font-bold">{wpm}</span>
+                <span className="text-[10px] opacity-40 font-semibold uppercase">WPM</span>
+              </div>
+              <button
+                onClick={() => onWpmChange(Math.min(1200, wpm + 25))}
+                className={`p-2 rounded-lg border transition-colors ${theme === 'bedtime' ? 'border-zinc-800 hover:bg-zinc-900' : 'border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}
+                title="Increase Speed"
+              >
+                <Plus size={20} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
       
-      <button 
-        className="absolute bottom-8 opacity-30 hover:opacity-60 transition-opacity background-none border-none cursor-pointer text-inherit"
-        onClick={onCloseBook}
-      >
-        Close Book
-      </button>
+      {!isPlaying && (
+        <button
+          className="absolute bottom-8 opacity-30 hover:opacity-60 transition-opacity background-none border-none cursor-pointer text-inherit"
+          onClick={onCloseBook}
+        >
+          Close Book
+        </button>
+      )}
     </div>
   );
 }

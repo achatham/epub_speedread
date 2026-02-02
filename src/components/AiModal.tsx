@@ -31,6 +31,14 @@ export function AiModal({
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const audioRef = useRef<AudioController | null>(null);
 
+  const stopAudio = () => {
+      if (audioRef.current) {
+          audioRef.current.stop();
+          audioRef.current = null;
+      }
+      setIsPlayingAudio(false);
+  };
+
   useEffect(() => {
       if (!isOpen) {
           stopAudio();
@@ -41,14 +49,6 @@ export function AiModal({
   useEffect(() => {
       stopAudio();
   }, [aiResponse]);
-
-  const stopAudio = () => {
-      if (audioRef.current) {
-          audioRef.current.stop();
-          audioRef.current = null;
-      }
-      setIsPlayingAudio(false);
-  };
 
   const handleToggleAudio = async () => {
       if (isPlayingAudio) {
