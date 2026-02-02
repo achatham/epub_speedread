@@ -58,13 +58,55 @@ function createAudioController(audioCtx: AudioContext): AudioController & { stat
     };
 }
 
+async function fetchChunkAudio(model: any, chunkText: string, index: number, controller: any): Promise<ArrayBuffer | null> {
+    if (controller.state.isStopped) return null;
+    
+    const cleanText = chunkText
+        .replace(/[#*`_~]/g, '') 
+        .replace(/\b\[([^\]]+)\]\(([^)]+)\)\b/g, '$1') 
+        .replace(/\n+/g, '. ');
+        
+    if (!cleanText.trim()) return null;
+
+    const startTime = performance.now();
+    try {
+        const result = await model.generateContent({
+            contents: [{ role: "user", parts: [{ text: cleanText }] }],
+            generationConfig: {
+                responseModalities: ["AUDIO"] as any,
+                speechConfig: {
+                    voiceConfig: { prebuiltVoiceConfig: { voiceName: "Puck" } }
+                }
+            } as any
+        });
+        
+        if (controller.state.isStopped) return null;
+
+        const response = result.response;
+        if (response.usageMetadata) {
+             const cost = calculateCost("gemini-2.5-flash-preview-tts", 
+                response.usageMetadata.promptTokenCount,
+                response.usageMetadata.candidatesTokenCount || 0);
+            console.log(`Gemini Cost (TTS Chunk ${index}): $${cost.toFixed(6)}`);
+        }
+
+        const candidate = response.candidates?.[0];
+        const audioPart = candidate?.content?.parts?.find((p: any) => p.inlineData);
+        
+        if (audioPart?.inlineData?.data) {
+            console.log(`Chunk ${index} fetched in ${(performance.now() - startTime).toFixed(0)}ms`);
+            return base64ToArrayBuffer(audioPart.inlineData.data);
+        }
+        
+        return null;
+    } catch (e) {
+        console.error(`Error processing chunk ${index}`, e);
+        return null;
+    }
+}
+
 async function processChunks(fullText: string, apiKey: string, audioCtx: AudioContext, controller: any) {
     // 1. Split text by headers (markdown style)
-    // Regex matches lines starting with one or more # characters
-    // We want to keep the split parts or just handle the logic manually.
-    // simpler: split by \n# and restore the #
-    
-    // Actually, user said "split ... by '^#'".
     const chunks = fullText.split(/(?=\n#|^#)/).filter(c => c.trim().length > 0);
     
     if (chunks.length === 0) return;
@@ -73,58 +115,7 @@ async function processChunks(fullText: string, apiKey: string, audioCtx: AudioCo
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-preview-tts" });
     
     // 2. Create promise tasks for all chunks
-    const tasks = chunks.map((chunkText, index) => {
-        return (async () => {
-            if (controller.state.isStopped) return null;
-            
-            const cleanText = chunkText
-                .replace(/[#*`_~]/g, '') 
-                .replace(/\b\[([^\]]+)\]\(([^)]+)\)\b/g, '$1') 
-                .replace(/\n+/g, '. ');
-                
-            if (!cleanText.trim()) return null;
-
-            const startTime = performance.now();
-            try {
-                const result = await model.generateContent({
-                    contents: [{ role: "user", parts: [{ text: cleanText }] }],
-                    generationConfig: {
-                        responseModalities: ["AUDIO"] as any,
-                        speechConfig: {
-                            voiceConfig: { prebuiltVoiceConfig: { voiceName: "Puck" } }
-                        }
-                    } as any
-                });
-                
-                if (controller.state.isStopped) return null;
-
-                const response = result.response;
-                if (response.usageMetadata) {
-                     const cost = calculateCost("gemini-2.5-flash-preview-tts", 
-                        response.usageMetadata.promptTokenCount,
-                        response.usageMetadata.candidatesTokenCount || 0);
-                    console.log(`Gemini Cost (TTS Chunk ${index}): $${cost.toFixed(6)}`);
-                }
-
-                // Extract audio data
-                // Accessing internal proto structure if needed, or helper
-                // The SDK might return it in a specific way for audio
-                // Inspecting candidates:
-                const candidate = response.candidates?.[0];
-                const audioPart = candidate?.content?.parts?.find((p: any) => p.inlineData);
-                
-                if (audioPart?.inlineData?.data) {
-                    console.log(`Chunk ${index} fetched in ${(performance.now() - startTime).toFixed(0)}ms`);
-                    return base64ToArrayBuffer(audioPart.inlineData.data);
-                }
-                
-                return null;
-            } catch (e) {
-                console.error(`Error processing chunk ${index}`, e);
-                return null;
-            }
-        })();
-    });
+    const tasks = chunks.map((chunkText, index) => fetchChunkAudio(model, chunkText, index, controller));
 
     // 3. Sequential playback loop
     // Monitor playback end
