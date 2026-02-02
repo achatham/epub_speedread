@@ -76,7 +76,8 @@ async function fetchChunkAudio(model: any, chunkText: string, index: number, con
                 responseModalities: ["AUDIO"] as any,
                 speechConfig: {
                     voiceConfig: { prebuiltVoiceConfig: { voiceName: "Puck" } }
-                }
+                },
+                audioTimestamp: true // Request timestamps if available, though we don't use them yet
             } as any
         });
         
@@ -94,7 +95,7 @@ async function fetchChunkAudio(model: any, chunkText: string, index: number, con
         const audioPart = candidate?.content?.parts?.find((p: any) => p.inlineData);
         
         if (audioPart?.inlineData?.data) {
-            console.log(`Chunk ${index} fetched in ${(performance.now() - startTime).toFixed(0)}ms`);
+            console.log(`Chunk ${index} fetched in ${(performance.now() - startTime).toFixed(0)}ms, size: ${audioPart.inlineData.data.length}`);
             return base64ToArrayBuffer(audioPart.inlineData.data);
         }
         
@@ -118,18 +119,11 @@ async function processChunks(fullText: string, apiKey: string, audioCtx: AudioCo
     const tasks = chunks.map((chunkText, index) => fetchChunkAudio(model, chunkText, index, controller));
 
     // 3. Sequential playback loop
-    // Monitor playback end
-    const checkEnded = setInterval(() => {
-        if (controller.state.isStopped) {
-            clearInterval(checkEnded);
-            return;
-        }
-    }, 200);
+    // No monitor interval needed here, we check in the loop and final check
 
     // Override stop
     const originalStop = controller.stop;
     controller.stop = () => {
-        clearInterval(checkEnded);
         originalStop();
     };
 
@@ -144,6 +138,11 @@ async function processChunks(fullText: string, apiKey: string, audioCtx: AudioCo
             
             if (controller.state.isStopped) break;
             if (pcmData) {
+                // Check context state
+                if (audioCtx.state === 'suspended') {
+                    await audioCtx.resume();
+                }
+
                 // Schedule this chunk
                 // If it's the first chunk, start now (or nextStartTime which is initialized to audioCtx.currentTime)
                 // Ensure nextStartTime is at least currentTime
@@ -168,10 +167,17 @@ async function processChunks(fullText: string, apiKey: string, audioCtx: AudioCo
              clearInterval(finalCheck);
              return;
         }
+        // If we haven't started yet (e.g. all fetches failed), we should probably exit too
+        // But assuming at least one played:
         if (allChunksPlayed && controller.state.hasStarted && audioCtx.currentTime >= controller.state.nextStartTime) {
              clearInterval(finalCheck);
              if (controller.onEnded) controller.onEnded();
              audioCtx.close();
+        } else if (allChunksPlayed && !controller.state.hasStarted) {
+            // Nothing played
+            clearInterval(finalCheck);
+            if (controller.onEnded) controller.onEnded();
+            audioCtx.close();
         }
     }, 200);
 }
