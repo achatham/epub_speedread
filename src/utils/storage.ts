@@ -11,20 +11,35 @@ export interface BookRecord {
   realEndIndex?: number;
 }
 
+export interface ChapterAudioRecord {
+  id: string; // bookId-chapterIndex-speed
+  audioChunks: ArrayBuffer[];
+}
+
 interface RSVPDB extends DBSchema {
   books: {
     key: string;
     value: BookRecord;
   };
+  chapterAudio: {
+    key: string;
+    value: ChapterAudioRecord;
+  };
 }
 
 const DB_NAME = 'epub-rsvp-db';
 const STORE_NAME = 'books';
+const AUDIO_STORE_NAME = 'chapterAudio';
 
 export async function initDB() {
-  return openDB<RSVPDB>(DB_NAME, 1, {
-    upgrade(db) {
-      db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+  return openDB<RSVPDB>(DB_NAME, 2, {
+    upgrade(db, oldVersion) {
+      if (oldVersion < 1) {
+        db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+      }
+      if (oldVersion < 2) {
+        db.createObjectStore(AUDIO_STORE_NAME, { keyPath: 'id' });
+      }
     },
   });
 }
@@ -67,6 +82,22 @@ export async function updateBookProgress(id: string, index: number) {
         book.timestamp = Date.now();
         await db.put(STORE_NAME, book);
     }
+}
+
+export async function saveChapterAudio(bookId: string, chapterIndex: number, speed: number, audioChunks: ArrayBuffer[]) {
+  const db = await initDB();
+  const id = `${bookId}-${chapterIndex}-${speed}`;
+  await db.put(AUDIO_STORE_NAME, {
+    id,
+    audioChunks,
+  });
+}
+
+export async function getChapterAudio(bookId: string, chapterIndex: number, speed: number): Promise<ArrayBuffer[] | undefined> {
+  const db = await initDB();
+  const id = `${bookId}-${chapterIndex}-${speed}`;
+  const record = await db.get(AUDIO_STORE_NAME, id);
+  return record?.audioChunks;
 }
 
 export async function updateBookWpm(id: string, wpm: number) {

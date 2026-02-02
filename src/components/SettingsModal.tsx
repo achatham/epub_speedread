@@ -7,10 +7,22 @@ interface SettingsModalProps {
   setApiKey: (key: string) => void;
   fontSize: number;
   setFontSize: (size: number) => void;
+  ttsSpeed: number;
+  setTtsSpeed: (speed: number) => void;
   onSave: () => void;
 }
 
-export function SettingsModal({ isOpen, onClose, apiKey, setApiKey, fontSize, setFontSize, onSave }: SettingsModalProps) {
+export function SettingsModal({
+  isOpen,
+  onClose,
+  apiKey,
+  setApiKey,
+  fontSize,
+  setFontSize,
+  ttsSpeed,
+  setTtsSpeed,
+  onSave
+}: SettingsModalProps) {
   if (!isOpen) return null;
 
   return (
@@ -47,6 +59,24 @@ export function SettingsModal({ isOpen, onClose, apiKey, setApiKey, fontSize, se
               <span className="text-xl font-medium min-w-[3rem] text-center">{fontSize}</span>
               <button
                 onClick={() => setFontSize(Math.min(128, fontSize + 2))}
+                className="p-2 rounded-lg border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              >
+                <Plus size={20} />
+              </button>
+            </div>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="block text-sm font-medium opacity-70">TTS Reading Speed (x)</label>
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => setTtsSpeed(Math.max(0.5, Math.round((ttsSpeed - 0.1) * 10) / 10))}
+                className="p-2 rounded-lg border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              >
+                <Minus size={20} />
+              </button>
+              <span className="text-xl font-medium min-w-[3rem] text-center">{ttsSpeed.toFixed(1)}x</span>
+              <button
+                onClick={() => setTtsSpeed(Math.min(3.0, Math.round((ttsSpeed + 0.1) * 10) / 10))}
                 className="p-2 rounded-lg border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
               >
                 <Plus size={20} />
