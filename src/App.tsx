@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ePub from 'epubjs';
-import { addBook, getAllBooks, getBook, deleteBook, updateBookProgress, updateBookWpm, type BookRecord } from './utils/storage';
+import { addBook, getAllBooks, getBook, deleteBook, updateBookProgress, updateBookWpm, updateBookRealEndQuote, type BookRecord } from './utils/storage';
 import { extractWordsFromDoc, type WordData } from './utils/text-processing';
 import { calculateNavigationTarget, findSentenceStart, type NavigationType } from './utils/navigation';
 import { getGeminiApiKey, setGeminiApiKey as saveGeminiApiKey, findRealEndOfBook, askAboutBook } from './utils/gemini';
@@ -11,11 +11,8 @@ import { AiModal } from './components/AiModal';
 
 type Theme = 'light' | 'dark' | 'bedtime';
 
-// Helper function to detect real end index
-const detectRealEnd = async (currentSections: { label: string }[], currentWords: WordData[]) => {
-  const fullTextContext = currentWords.map(w => w.text).join(' ');
-  const quote = await findRealEndOfBook(currentSections.map(s => s.label), fullTextContext);
-  if (quote) {
+// Helper to find index of quote
+const findQuoteIndex = (quote: string, currentWords: WordData[]): number | null => {
     const quoteWords = quote.split(/\s+/).filter(w => w.length > 0);
     if (quoteWords.length > 0) {
       for (let i = currentWords.length - quoteWords.length; i >= 0; i--) {
@@ -32,8 +29,7 @@ const detectRealEnd = async (currentSections: { label: string }[], currentWords:
         }
       }
     }
-  }
-  return null;
+    return null;
 };
 
 function App() {
@@ -290,12 +286,24 @@ function App() {
             setWpm(bookRecord.wpm);
         }
 
-        // Try to find real end if API key is present
-        const apiKey = getGeminiApiKey();
-        if (apiKey && loadedSections.length > 0) {
-            detectRealEnd(loadedSections, allWords).then(idx => {
-                if (idx !== null) setRealEndIndex(idx);
-            });
+        // Logic for Real End Detection
+        if (bookRecord.realEndQuote) {
+            // If we have the quote cached, just find the index
+            const idx = findQuoteIndex(bookRecord.realEndQuote, allWords);
+            if (idx !== null) setRealEndIndex(idx);
+        } else {
+            // Otherwise, if we have an API key, try to find it
+            const apiKey = getGeminiApiKey();
+            if (apiKey && loadedSections.length > 0) {
+                const fullTextContext = allWords.map(w => w.text).join(' ');
+                findRealEndOfBook(loadedSections.map(s => s.label), fullTextContext).then(quote => {
+                    if (quote) {
+                        updateBookRealEndQuote(bookRecord.id, quote); // Save it
+                        const idx = findQuoteIndex(quote, allWords);
+                        if (idx !== null) setRealEndIndex(idx);
+                    }
+                });
+            }
         }
 
       } catch (innerError) {
@@ -442,10 +450,15 @@ function App() {
          onSave={() => {
              saveGeminiApiKey(geminiApiKey);
              setIsSettingsOpen(false);
-             // Trigger real end detection logic
-             if (geminiApiKey && sections.length > 0 && words.length > 0) {
-                 detectRealEnd(sections, words).then(idx => {
-                    if (idx !== null) setRealEndIndex(idx);
+             // Trigger real end detection logic if we don't have it yet and have a book loaded
+             if (geminiApiKey && sections.length > 0 && words.length > 0 && currentBookId && !realEndIndex) {
+                 const fullTextContext = words.map(w => w.text).join(' ');
+                 findRealEndOfBook(sections.map(s => s.label), fullTextContext).then(quote => {
+                    if (quote) {
+                        updateBookRealEndQuote(currentBookId, quote);
+                        const idx = findQuoteIndex(quote, words);
+                        if (idx !== null) setRealEndIndex(idx);
+                    }
                  });
              }
          }}
