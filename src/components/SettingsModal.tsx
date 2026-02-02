@@ -1,14 +1,16 @@
-import { X } from 'lucide-react';
+import { X, Minus, Plus } from 'lucide-react';
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   apiKey: string;
   setApiKey: (key: string) => void;
+  fontSize: number;
+  setFontSize: (size: number) => void;
   onSave: () => void;
 }
 
-export function SettingsModal({ isOpen, onClose, apiKey, setApiKey, onSave }: SettingsModalProps) {
+export function SettingsModal({ isOpen, onClose, apiKey, setApiKey, fontSize, setFontSize, onSave }: SettingsModalProps) {
   if (!isOpen) return null;
 
   return (
@@ -32,6 +34,24 @@ export function SettingsModal({ isOpen, onClose, apiKey, setApiKey, onSave }: Se
               placeholder="Enter your API key"
             />
             <p className="mt-2 text-xs opacity-40">Stored locally in your browser.</p>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="block text-sm font-medium opacity-70">Font Size (px)</label>
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => setFontSize(Math.max(16, fontSize - 2))}
+                className="p-2 rounded-lg border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              >
+                <Minus size={20} />
+              </button>
+              <span className="text-xl font-medium min-w-[3rem] text-center">{fontSize}</span>
+              <button
+                onClick={() => setFontSize(Math.min(128, fontSize + 2))}
+                className="p-2 rounded-lg border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              >
+                <Plus size={20} />
+              </button>
+            </div>
           </div>
           <button
             onClick={onSave}

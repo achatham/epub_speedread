@@ -49,6 +49,10 @@ function App() {
   // AI & Settings State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAskAiOpen, setIsAskAiOpen] = useState(false);
+  const [fontSize, setFontSize] = useState<number>(() => {
+    const saved = localStorage.getItem('fontSize');
+    return saved ? parseInt(saved, 10) : 48;
+  });
   const [geminiApiKey, setGeminiApiKey] = useState(getGeminiApiKey() || '');
   const [realEndIndex, setRealEndIndex] = useState<number | null>(null);
   const [aiQuestion, setAiQuestion] = useState('');
@@ -71,6 +75,7 @@ function App() {
   const sessionStartTimeRef = useRef<number | null>(null);
   const wordsReadInSessionRef = useRef<number>(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
 
   // --- Initial Load ---
   useEffect(() => {
@@ -93,6 +98,10 @@ function App() {
   }, []);
 
   // --- Theme Effect ---
+  useEffect(() => {
+    localStorage.setItem('fontSize', fontSize.toString());
+  }, [fontSize]);
+
   useEffect(() => {
     const root = document.documentElement;
     root.classList.remove('dark', 'bedtime');
@@ -379,9 +388,49 @@ function App() {
     if (isPlaying) {
       wordsReadInSessionRef.current += 1;
     }
-  }, [currentIndex]);
+  }, [currentIndex, isPlaying]);
 
-  // Fullscreen Logic
+  // Wake Lock & Fullscreen Logic
+  useEffect(() => {
+    const requestWakeLock = async () => {
+      if ('wakeLock' in navigator && isPlaying) {
+        try {
+          wakeLockRef.current = await navigator.wakeLock.request('screen');
+          console.log('Wake Lock is active');
+        } catch (err) {
+          if (err instanceof Error) {
+            console.error(`${err.name}, ${err.message}`);
+          }
+        }
+      }
+    };
+
+    const handleVisibilityChange = async () => {
+      if (wakeLockRef.current !== null && document.visibilityState === 'visible') {
+        await requestWakeLock();
+      }
+    };
+
+    if (isPlaying) {
+      requestWakeLock();
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    } else {
+      if (wakeLockRef.current) {
+        wakeLockRef.current.release();
+        wakeLockRef.current = null;
+      }
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }
+
+    return () => {
+      if (wakeLockRef.current) {
+        wakeLockRef.current.release();
+        wakeLockRef.current = null;
+      }
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [isPlaying]);
+
   useEffect(() => {
     if (isPlaying) {
       if (!document.fullscreenElement) {
@@ -455,6 +504,8 @@ function App() {
          onClose={() => setIsSettingsOpen(false)}
          apiKey={geminiApiKey}
          setApiKey={setGeminiApiKey}
+         fontSize={fontSize}
+         setFontSize={setFontSize}
          onSave={() => {
              saveGeminiApiKey(geminiApiKey);
              setIsSettingsOpen(false);
@@ -507,6 +558,7 @@ function App() {
             isPlaying={isPlaying}
             setIsPlaying={handleSetIsPlaying}
             wpm={wpm}
+            fontSize={fontSize}
             onWpmChange={(newWpm) => {
                 setWpm(newWpm);
                 if (currentBookId) updateBookWpm(currentBookId, newWpm);
