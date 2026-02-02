@@ -76,8 +76,7 @@ async function fetchChunkAudio(model: any, chunkText: string, index: number, con
                 responseModalities: ["AUDIO"] as any,
                 speechConfig: {
                     voiceConfig: { prebuiltVoiceConfig: { voiceName: "Puck" } }
-                },
-                audioTimestamp: true // Request timestamps if available, though we don't use them yet
+                }
             } as any
         });
         
