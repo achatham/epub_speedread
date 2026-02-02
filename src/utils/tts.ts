@@ -92,6 +92,7 @@ async function processStream(text: string, apiKey: string, audioCtx: AudioContex
         // The loop below will break on next iteration because isStopped is true
     };
 
+    const startTime = performance.now();
     try {
         const result = await model.generateContentStream({
             contents: [{ role: "user", parts: [{ text: cleanText }] }],
@@ -119,6 +120,9 @@ async function processStream(text: string, apiKey: string, audioCtx: AudioContex
             const audioPart = candidate.content?.parts?.find((p: any) => p.inlineData);
             
             if (audioPart?.inlineData?.data) {
+                if (controller.state.chunkCount === 0) {
+                    console.log(`Time to first audio: ${(performance.now() - startTime).toFixed(0)}ms`);
+                }
                 controller.state.chunkCount++;
                 console.log(`Received chunk ${controller.state.chunkCount}, size: ${audioPart.inlineData.data.length}`);
                 
@@ -133,6 +137,7 @@ async function processStream(text: string, apiKey: string, audioCtx: AudioContex
             }
         }
         streamConsumed = true;
+        console.log(`TTS Stream completed in: ${(performance.now() - startTime).toFixed(0)}ms`);
 
     } catch (e) {
         console.error("TTS Error:", e);
