@@ -20,7 +20,7 @@ export async function synthesizeSpeech(text: string): Promise<AudioController | 
   const controller = createAudioController(audioCtx);
   
   // Start processing in background
-  processStream(text, apiKey, audioCtx, controller).catch(err => {
+  processChunks(text, apiKey, audioCtx, controller).catch(err => {
       console.error("TTS processing error", err);
       controller.stop();
   });
@@ -46,7 +46,6 @@ function createAudioController(audioCtx: AudioContext): AudioController & { stat
         isStopped: false,
         nextStartTime: audioCtx.currentTime,
         hasStarted: false,
-        chunkCount: 0
     };
 
     return {
@@ -59,90 +58,131 @@ function createAudioController(audioCtx: AudioContext): AudioController & { stat
     };
 }
 
-async function processStream(text: string, apiKey: string, audioCtx: AudioContext, controller: any) {
-    const cleanText = text
-        .replace(/[#*`_~]/g, '') 
-        .replace(/\b\[([^\]]+)\]\(([^)]+)\)\b/g, '$1') 
-        .replace(/\n+/g, '. '); 
+async function processChunks(fullText: string, apiKey: string, audioCtx: AudioContext, controller: any) {
+    // 1. Split text by headers (markdown style)
+    // Regex matches lines starting with one or more # characters
+    // We want to keep the split parts or just handle the logic manually.
+    // simpler: split by \n# and restore the #
+    
+    // Actually, user said "split ... by '^#'".
+    const chunks = fullText.split(/(?=\n#|^#)/).filter(c => c.trim().length > 0);
+    
+    if (chunks.length === 0) return;
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-preview-tts" });
+    
+    // 2. Create promise tasks for all chunks
+    const tasks = chunks.map((chunkText, index) => {
+        return (async () => {
+            if (controller.state.isStopped) return null;
+            
+            const cleanText = chunkText
+                .replace(/[#*`_~]/g, '') 
+                .replace(/\b\[([^\]]+)\]\(([^)]+)\)\b/g, '$1') 
+                .replace(/\n+/g, '. ');
+                
+            if (!cleanText.trim()) return null;
 
-    let streamConsumed = false;
+            const startTime = performance.now();
+            try {
+                const result = await model.generateContent({
+                    contents: [{ role: "user", parts: [{ text: cleanText }] }],
+                    generationConfig: {
+                        responseModalities: ["AUDIO"] as any,
+                        speechConfig: {
+                            voiceConfig: { prebuiltVoiceConfig: { voiceName: "Puck" } }
+                        }
+                    } as any
+                });
+                
+                if (controller.state.isStopped) return null;
 
+                const response = result.response;
+                if (response.usageMetadata) {
+                     const cost = calculateCost("gemini-2.5-flash-preview-tts", 
+                        response.usageMetadata.promptTokenCount,
+                        response.usageMetadata.candidatesTokenCount || 0);
+                    console.log(`Gemini Cost (TTS Chunk ${index}): $${cost.toFixed(6)}`);
+                }
+
+                // Extract audio data
+                // Accessing internal proto structure if needed, or helper
+                // The SDK might return it in a specific way for audio
+                // Inspecting candidates:
+                const candidate = response.candidates?.[0];
+                const audioPart = candidate?.content?.parts?.find((p: any) => p.inlineData);
+                
+                if (audioPart?.inlineData?.data) {
+                    console.log(`Chunk ${index} fetched in ${(performance.now() - startTime).toFixed(0)}ms`);
+                    return base64ToArrayBuffer(audioPart.inlineData.data);
+                }
+                
+                return null;
+            } catch (e) {
+                console.error(`Error processing chunk ${index}`, e);
+                return null;
+            }
+        })();
+    });
+
+    // 3. Sequential playback loop
     // Monitor playback end
     const checkEnded = setInterval(() => {
         if (controller.state.isStopped) {
             clearInterval(checkEnded);
             return;
         }
-        // Only trigger onEnded if the stream is fully consumed AND audio has finished playing
-        if (streamConsumed && controller.state.hasStarted && audioCtx.currentTime >= controller.state.nextStartTime) {
-            clearInterval(checkEnded);
-            if (controller.onEnded) controller.onEnded();
-            audioCtx.close();
-        }
     }, 200);
 
-    // Override stop to clean up interval
+    // Override stop
     const originalStop = controller.stop;
     controller.stop = () => {
         clearInterval(checkEnded);
         originalStop();
-        // The loop below will break on next iteration because isStopped is true
     };
 
-    const startTime = performance.now();
-    try {
-        const result = await model.generateContentStream({
-            contents: [{ role: "user", parts: [{ text: cleanText }] }],
-            generationConfig: {
-                responseModalities: ["AUDIO"] as any,
-                speechConfig: {
-                    voiceConfig: { prebuiltVoiceConfig: { voiceName: "Puck" } }
-                }
-            } as any
-        });
+    let allChunksPlayed = false;
 
-        for await (const item of result.stream) {
+    // Loop through tasks sequentially for playback
+    for (let i = 0; i < tasks.length; i++) {
+        if (controller.state.isStopped) break;
+
+        try {
+            const pcmData = await tasks[i];
+            
             if (controller.state.isStopped) break;
-
-            if (item.usageMetadata) {
-                const cost = calculateCost("gemini-2.5-flash-preview-tts", 
-                    item.usageMetadata.promptTokenCount,
-                    item.usageMetadata.candidatesTokenCount || 0);
-                console.log(`Gemini Cost (TTS): $${cost.toFixed(6)}`);
-            }
-            
-            const candidate = item.candidates?.[0];
-            if (!candidate) continue;
-            
-            const audioPart = candidate.content?.parts?.find((p: any) => p.inlineData);
-            
-            if (audioPart?.inlineData?.data) {
-                if (controller.state.chunkCount === 0) {
-                    console.log(`Time to first audio: ${(performance.now() - startTime).toFixed(0)}ms`);
-                }
-                controller.state.chunkCount++;
-                console.log(`Received chunk ${controller.state.chunkCount}, size: ${audioPart.inlineData.data.length}`);
-                
-                const pcmData = base64ToArrayBuffer(audioPart.inlineData.data);
-                const duration = schedulePcmChunk(audioCtx, pcmData, controller.state.nextStartTime);
-                
+            if (pcmData) {
+                // Schedule this chunk
+                // If it's the first chunk, start now (or nextStartTime which is initialized to audioCtx.currentTime)
+                // Ensure nextStartTime is at least currentTime
                 if (controller.state.nextStartTime < audioCtx.currentTime) {
                     controller.state.nextStartTime = audioCtx.currentTime;
                 }
+                
+                const duration = schedulePcmChunk(audioCtx, pcmData, controller.state.nextStartTime);
                 controller.state.nextStartTime += duration;
                 controller.state.hasStarted = true;
             }
+        } catch (e) {
+            console.error(`Error waiting for chunk ${i}`, e);
         }
-        streamConsumed = true;
-        console.log(`TTS Stream completed in: ${(performance.now() - startTime).toFixed(0)}ms`);
-
-    } catch (e) {
-        console.error("TTS Error:", e);
-        controller.stop();
     }
+    
+    allChunksPlayed = true;
+    
+    // Final check for end
+    const finalCheck = setInterval(() => {
+        if (controller.state.isStopped) {
+             clearInterval(finalCheck);
+             return;
+        }
+        if (allChunksPlayed && controller.state.hasStarted && audioCtx.currentTime >= controller.state.nextStartTime) {
+             clearInterval(finalCheck);
+             if (controller.onEnded) controller.onEnded();
+             audioCtx.close();
+        }
+    }, 200);
 }
 
 function schedulePcmChunk(audioCtx: AudioContext, pcmData: ArrayBuffer, startTime: number): number {
@@ -158,10 +198,6 @@ function schedulePcmChunk(audioCtx: AudioContext, pcmData: ArrayBuffer, startTim
     const source = audioCtx.createBufferSource();
     source.buffer = audioBuffer;
     source.connect(audioCtx.destination);
-    
-    // Ensure we don't schedule in the past if possible, but startTime is managed by caller
-    // If caller's startTime is < currentTime, context plays immediately.
-    // However, for smooth streaming, caller tracks cumulative time.
     
     source.start(startTime);
     return audioBuffer.duration;
