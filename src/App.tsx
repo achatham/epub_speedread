@@ -182,12 +182,13 @@ function App() {
     setRealEndIndex(null);
   };
 
-  const handleAskAi = async () => {
-    if (!aiQuestion.trim() || isAiLoading) return;
+  const handleAskAi = async (questionOverride?: string) => {
+    const questionToUse = typeof questionOverride === 'string' ? questionOverride : aiQuestion;
+    if (!questionToUse.trim() || isAiLoading) return;
     setIsAiLoading(true);
     try {
       const context = words.slice(0, currentIndex + 1).map(w => w.text).join(' ');
-      const response = await askAboutBook(aiQuestion, context);
+      const response = await askAboutBook(questionToUse, context);
       setAiResponse(response);
     } catch {
       setAiResponse('Failed to get response from AI.');

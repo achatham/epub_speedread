@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { calculateCost } from "./pricing";
 
 const API_KEY_STORAGE_KEY = 'gemini_api_key';
 
@@ -32,6 +33,14 @@ Last 10 words of main story:`;
   try {
     const result = await model.generateContent(prompt);
     const response = await result.response;
+    
+    if (response.usageMetadata) {
+        const cost = calculateCost("gemini-3-flash-preview", 
+            response.usageMetadata.promptTokenCount, 
+            response.usageMetadata.candidatesTokenCount);
+        console.log(`Gemini Cost (End Detection): $${cost.toFixed(6)}`);
+    }
+
     const text = response.text().trim();
     // Clean up response to just words
     return text.toLowerCase().replace(/[^\w\s]/g, '');
@@ -51,7 +60,7 @@ export async function askAboutBook(question: string, context: string): Promise<s
   const prompt = `The following is the text of a book read so far. Please answer the user's question based on this context.
 Do not provide spoilers for anything that might happen later in the book if you happen to know the book.
 If the information is not in the provided context, say you don't know based on what has been read so far.
-Please format your response in Markdown.
+Please format your response in Markdown. Don't include any leading or closing text, just answer the question.
 
 Context:
 ${context}
@@ -61,6 +70,14 @@ User Question: ${question}`;
   try {
     const result = await model.generateContent(prompt);
     const response = await result.response;
+    
+    if (response.usageMetadata) {
+        const cost = calculateCost("gemini-3-flash-preview", 
+            response.usageMetadata.promptTokenCount, 
+            response.usageMetadata.candidatesTokenCount);
+        console.log(`Gemini Cost (Q&A): $${cost.toFixed(6)}`);
+    }
+
     return response.text();
   } catch (error: unknown) {
     console.error("Error asking Gemini:", error);

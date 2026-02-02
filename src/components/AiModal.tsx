@@ -1,5 +1,7 @@
-import { Bot, Sparkles, X } from 'lucide-react';
+import { Bot, Sparkles, X, Volume2, Square } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import { useState, useRef, useEffect } from 'react';
+import { synthesizeSpeech, type AudioController } from '../utils/tts';
 
 interface AiModalProps {
   isOpen: boolean;
@@ -7,9 +9,15 @@ interface AiModalProps {
   aiResponse: string;
   aiQuestion: string;
   setAiQuestion: (q: string) => void;
-  handleAskAi: () => void;
+  handleAskAi: (q?: string) => void;
   isAiLoading: boolean;
 }
+
+const CANNED_QUESTIONS = [
+  "Remind me what happened recently",
+  "Remind me what happened in this chapter so far",
+  "Give me the dramatis personae so far"
+];
 
 export function AiModal({
   isOpen,
@@ -20,6 +28,47 @@ export function AiModal({
   handleAskAi,
   isAiLoading
 }: AiModalProps) {
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const audioRef = useRef<AudioController | null>(null);
+
+  useEffect(() => {
+      if (!isOpen) {
+          stopAudio();
+      }
+  }, [isOpen]);
+
+  // Stop audio when response changes (new question asked)
+  useEffect(() => {
+      stopAudio();
+  }, [aiResponse]);
+
+  const stopAudio = () => {
+      if (audioRef.current) {
+          audioRef.current.stop();
+          audioRef.current = null;
+      }
+      setIsPlayingAudio(false);
+  };
+
+  const handleToggleAudio = async () => {
+      if (isPlayingAudio) {
+          stopAudio();
+      } else {
+          if (!aiResponse) return;
+          setIsPlayingAudio(true); 
+          const controller = await synthesizeSpeech(aiResponse);
+          if (controller) {
+              audioRef.current = controller;
+              controller.onEnded = () => {
+                  setIsPlayingAudio(false);
+                  audioRef.current = null;
+              };
+          } else {
+              setIsPlayingAudio(false);
+          }
+      }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -29,6 +78,15 @@ export function AiModal({
           <div className="flex items-center gap-2">
             <Bot className="text-zinc-500" />
             <h2 className="text-xl font-semibold">Ask AI about the book</h2>
+            {aiResponse && !isAiLoading && (
+                <button 
+                    onClick={handleToggleAudio}
+                    className={`ml-2 p-1.5 rounded-full transition-colors ${isPlayingAudio ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500'}`}
+                    title={isPlayingAudio ? "Stop reading" : "Read aloud"}
+                >
+                    {isPlayingAudio ? <Square size={18} fill="currentColor" /> : <Volume2 size={18} />}
+                </button>
+            )}
           </div>
           <button onClick={onClose} className="opacity-50 hover:opacity-100">
             <X size={24} />
@@ -41,10 +99,26 @@ export function AiModal({
               <ReactMarkdown>{aiResponse}</ReactMarkdown>
             </div>
           ) : (
-            <div className="h-full flex flex-col items-center justify-center opacity-30 text-center">
-              <Sparkles size={48} className="mb-4" />
-              <p>Ask a question about what you've read so far.</p>
-              <p className="text-xs mt-2">The AI only sees text up to your current position.</p>
+            <div className="h-full flex flex-col items-center justify-center text-center">
+              <Sparkles size={48} className="mb-4 opacity-30" />
+              <p className="mb-6 opacity-50">Ask a question about what you've read so far.</p>
+              
+              <div className="flex flex-wrap gap-2 justify-center max-w-lg mb-4">
+                {CANNED_QUESTIONS.map(q => (
+                  <button
+                    key={q}
+                    onClick={() => {
+                      setAiQuestion(q);
+                      handleAskAi(q);
+                    }}
+                    className="text-xs bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 px-3 py-1.5 rounded-full transition-colors border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400"
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+
+              <p className="text-xs opacity-30">The AI only sees text up to your current position.</p>
             </div>
           )}
           {isAiLoading && (
@@ -70,7 +144,7 @@ export function AiModal({
             disabled={isAiLoading}
           />
           <button
-            onClick={handleAskAi}
+            onClick={() => handleAskAi()}
             disabled={isAiLoading || !aiQuestion.trim()}
             className="bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 px-6 py-2 rounded-lg font-medium disabled:opacity-50 hover:opacity-90 transition-opacity"
           >
