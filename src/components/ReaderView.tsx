@@ -1,4 +1,4 @@
-import { Minus, Moon, Pause, Play, Plus, Settings, Settings2, SkipBack, Sparkles, Sun, Sunset } from 'lucide-react';
+import { Minus, Moon, Pause, Play, Plus, Settings, Settings2, SkipBack, Sparkles, Sun, Sunset, Volume2, Loader2, Square } from 'lucide-react';
 import type { WordData } from '../utils/text-processing';
 import { splitWord } from '../utils/orp';
 
@@ -28,6 +28,9 @@ interface ReaderViewProps {
   isTocOpen: boolean;
   toggleToc: () => void;
   isAskAiOpen: boolean;
+  onReadChapter: () => void;
+  isReadingAloud: boolean;
+  isSynthesizing: boolean;
 }
 
 export function ReaderView({
@@ -53,7 +56,10 @@ export function ReaderView({
   toggleNav,
   isTocOpen,
   toggleToc,
-  isAskAiOpen
+  isAskAiOpen,
+  onReadChapter,
+  isReadingAloud,
+  isSynthesizing
 }: ReaderViewProps) {
   if (words.length === 0) {
       return (
@@ -295,6 +301,15 @@ export function ReaderView({
             {isPlaying ? <Pause size={24} /> : <Play size={24} />}
           </button>
           
+          <button
+            className={`bg-transparent border p-2 px-4 rounded-md cursor-pointer flex items-center gap-2 transition-all ${theme === 'bedtime' ? 'border-zinc-800 text-stone-400 hover:bg-zinc-900' : 'border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-900 dark:text-zinc-100'} ${(isReadingAloud || isSynthesizing) ? (theme === 'bedtime' ? 'bg-zinc-900 text-amber-600' : 'bg-zinc-100 dark:bg-zinc-800 text-red-600 dark:text-red-400') : ''}`}
+            onClick={onReadChapter}
+            title={isReadingAloud ? "Stop reading chapter" : isSynthesizing ? "Synthesizing..." : "Read chapter aloud"}
+            disabled={isSynthesizing && !isReadingAloud}
+          >
+            {isSynthesizing ? <Loader2 size={20} className="animate-spin" /> : isReadingAloud ? <Square size={20} fill="currentColor" /> : <Volume2 size={20} />}
+          </button>
+
           <button
             className={`bg-transparent border p-2 px-4 rounded-md cursor-pointer flex items-center gap-2 transition-all ${theme === 'bedtime' ? 'border-zinc-800 text-stone-400 hover:bg-zinc-900' : 'border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-900 dark:text-zinc-100'} ${isAskAiOpen ? (theme === 'bedtime' ? 'bg-zinc-900' : 'bg-zinc-100 dark:bg-zinc-800') : ''} ${!onAskAiClick ? 'hidden' : ''}`}
             onClick={onAskAiClick}

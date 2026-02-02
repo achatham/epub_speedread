@@ -11,6 +11,7 @@ interface AiModalProps {
   setAiQuestion: (q: string) => void;
   handleAskAi: (q?: string) => void;
   isAiLoading: boolean;
+  ttsSpeed: number;
 }
 
 const CANNED_QUESTIONS = [
@@ -26,7 +27,8 @@ export function AiModal({
   aiQuestion,
   setAiQuestion,
   handleAskAi,
-  isAiLoading
+  isAiLoading,
+  ttsSpeed
 }: AiModalProps) {
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const audioRef = useRef<AudioController | null>(null);
@@ -40,15 +42,14 @@ export function AiModal({
   };
 
   useEffect(() => {
-      if (!isOpen) {
-          stopAudio();
+      if (!isOpen || aiResponse) {
+          if (audioRef.current) {
+              audioRef.current.stop();
+              audioRef.current = null;
+          }
+          setIsPlayingAudio(false);
       }
-  }, [isOpen]);
-
-  // Stop audio when response changes (new question asked)
-  useEffect(() => {
-      stopAudio();
-  }, [aiResponse]);
+  }, [isOpen, aiResponse]);
 
   const handleToggleAudio = async () => {
       if (isPlayingAudio) {
@@ -56,7 +57,7 @@ export function AiModal({
       } else {
           if (!aiResponse) return;
           setIsPlayingAudio(true); 
-          const controller = await synthesizeSpeech(aiResponse);
+          const controller = await synthesizeSpeech(aiResponse, ttsSpeed);
           if (controller) {
               audioRef.current = controller;
               controller.onEnded = () => {

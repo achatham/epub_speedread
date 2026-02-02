@@ -7,7 +7,7 @@ export interface AudioController {
     onEnded?: () => void;
 }
 
-export async function synthesizeSpeech(text: string): Promise<AudioController | null> {
+export async function synthesizeSpeech(text: string, speed: number = 2.0): Promise<AudioController | null> {
     const apiKey = getGeminiApiKey();
     if (!apiKey) {
         console.error("No API key found for TTS");
@@ -20,12 +20,28 @@ export async function synthesizeSpeech(text: string): Promise<AudioController | 
     const controller = createAudioController(audioCtx);
 
     // Start processing in background
-    processChunks(text, apiKey, audioCtx, controller).catch(err => {
+    processChunks(text, apiKey, audioCtx, controller, speed).catch(err => {
         console.error("TTS processing error", err);
         controller.stop();
     });
 
     return controller;
+}
+
+export async function synthesizeChapterAudio(text: string, speed: number, apiKey: string): Promise<ArrayBuffer[]> {
+    const chunks = text.split(/(?=\n#|^#)/).filter(c => c.trim().length > 0);
+    if (chunks.length === 0) return [];
+
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-preview-tts" });
+
+    // Dummy controller that is never stopped
+    const controller = { state: { isStopped: false } };
+
+    const tasks = chunks.map((chunkText, index) => fetchChunkAudio(model, chunkText, index, controller, speed));
+    const results = await Promise.all(tasks);
+
+    return results.filter((b): b is ArrayBuffer => b !== null);
 }
 
 async function getAudioContext(): Promise<AudioContext | null> {
@@ -58,7 +74,7 @@ function createAudioController(audioCtx: AudioContext): AudioController & { stat
     };
 }
 
-async function fetchChunkAudio(model: any, chunkText: string, index: number, controller: any): Promise<ArrayBuffer | null> {
+async function fetchChunkAudio(model: any, chunkText: string, index: number, controller: any, speed: number = 2.0): Promise<ArrayBuffer | null> {
     if (controller.state.isStopped) return null;
 
     const cleanText = chunkText
@@ -71,7 +87,7 @@ async function fetchChunkAudio(model: any, chunkText: string, index: number, con
     const startTime = performance.now();
     try {
         const result = await model.generateContent({
-            contents: [{ role: "user", parts: [{ text: "Pacing: Speak at 2x the normal speed.\n" + cleanText }] }],
+            contents: [{ role: "user", parts: [{ text: `Pacing: Speak at ${speed}x the normal speed.\n` + cleanText }] }],
             generationConfig: {
                 responseModalities: ["AUDIO"] as any,
                 speechConfig: {
@@ -105,7 +121,7 @@ async function fetchChunkAudio(model: any, chunkText: string, index: number, con
     }
 }
 
-async function processChunks(fullText: string, apiKey: string, audioCtx: AudioContext, controller: any) {
+async function processChunks(fullText: string, apiKey: string, audioCtx: AudioContext, controller: any, speed: number = 2.0) {
     // 1. Split text by headers (markdown style)
     const chunks = fullText.split(/(?=\n#|^#)/).filter(c => c.trim().length > 0);
 
@@ -115,7 +131,7 @@ async function processChunks(fullText: string, apiKey: string, audioCtx: AudioCo
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-preview-tts" });
 
     // 2. Create promise tasks for all chunks
-    const tasks = chunks.map((chunkText, index) => fetchChunkAudio(model, chunkText, index, controller));
+    const tasks = chunks.map((chunkText, index) => fetchChunkAudio(model, chunkText, index, controller, speed));
 
     // 3. Sequential playback loop
     // No monitor interval needed here, we check in the loop and final check
@@ -182,7 +198,7 @@ async function processChunks(fullText: string, apiKey: string, audioCtx: AudioCo
     }, 200);
 }
 
-function schedulePcmChunk(audioCtx: AudioContext, pcmData: ArrayBuffer, startTime: number): number {
+export function schedulePcmChunk(audioCtx: AudioContext, pcmData: ArrayBuffer, startTime: number): number {
     const float32 = new Float32Array(pcmData.byteLength / 2);
     const view = new DataView(pcmData);
     for (let i = 0; i < pcmData.byteLength / 2; i++) {

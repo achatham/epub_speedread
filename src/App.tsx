@@ -1,9 +1,22 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ePub from 'epubjs';
-import { addBook, getAllBooks, getBook, deleteBook, updateBookProgress, updateBookWpm, updateBookRealEndQuote, updateBookRealEndIndex, type BookRecord } from './utils/storage';
+import {
+  addBook,
+  getAllBooks,
+  getBook,
+  deleteBook,
+  updateBookProgress,
+  updateBookWpm,
+  updateBookRealEndQuote,
+  updateBookRealEndIndex,
+  saveChapterAudio,
+  getChapterAudio,
+  type BookRecord
+} from './utils/storage';
 import { extractWordsFromDoc, type WordData } from './utils/text-processing';
 import { calculateNavigationTarget, findSentenceStart, type NavigationType } from './utils/navigation';
 import { getGeminiApiKey, setGeminiApiKey as saveGeminiApiKey, findRealEndOfBook, askAboutBook } from './utils/gemini';
+import { synthesizeChapterAudio, schedulePcmChunk, type AudioController } from './utils/tts';
 import { LibraryView } from './components/LibraryView';
 import { ReaderView } from './components/ReaderView';
 import { SettingsModal } from './components/SettingsModal';
@@ -53,11 +66,17 @@ function App() {
     const saved = localStorage.getItem('fontSize');
     return saved ? parseInt(saved, 10) : 48;
   });
+  const [ttsSpeed, setTtsSpeed] = useState<number>(() => {
+    const saved = localStorage.getItem('ttsSpeed');
+    return saved ? parseFloat(saved) : 2.0;
+  });
   const [geminiApiKey, setGeminiApiKey] = useState(getGeminiApiKey() || '');
   const [realEndIndex, setRealEndIndex] = useState<number | null>(null);
   const [aiQuestion, setAiQuestion] = useState('');
   const [aiResponse, setAiResponse] = useState('');
   const [isAiLoading, setIsAiLoading] = useState(false);
+  const [isReadingAloud, setIsReadingAloud] = useState(false);
+  const [isSynthesizing, setIsSynthesizing] = useState(false);
 
   // UI State
   const [isTocOpen, setIsTocOpen] = useState(false);
@@ -76,6 +95,7 @@ function App() {
   const wordsReadInSessionRef = useRef<number>(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+  const chapterAudioControllerRef = useRef<AudioController | null>(null);
 
   // --- Initial Load ---
   useEffect(() => {
@@ -101,6 +121,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem('fontSize', fontSize.toString());
   }, [fontSize]);
+
+  useEffect(() => {
+    localStorage.setItem('ttsSpeed', ttsSpeed.toString());
+  }, [ttsSpeed]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -233,7 +257,7 @@ function App() {
                 hrefToStartIndex[cleanHref] = allWords.length;
               }
   
-              let contents = await book.load(item.href);
+              const contents = await book.load(item.href);
               let doc: Document | null = null;
               
               if (typeof contents === 'string') {
@@ -492,8 +516,127 @@ function App() {
       const newIndex = findSentenceStart(currentIndex, words);
       setCurrentIndex(newIndex);
     }
+    if (playing) {
+        stopReadingAloud();
+    }
     setIsPlaying(playing);
   }; 
+
+  const stopReadingAloud = () => {
+    if (chapterAudioControllerRef.current) {
+      chapterAudioControllerRef.current.stop();
+      chapterAudioControllerRef.current = null;
+    }
+    setIsReadingAloud(false);
+    setIsSynthesizing(false);
+  };
+
+  const handleReadChapter = async () => {
+    if (isReadingAloud || isSynthesizing) {
+        stopReadingAloud();
+        return;
+    }
+
+    if (!currentBookId || words.length === 0) return;
+
+    // 1. Identify current chapter
+    let currentChapterIdx = -1;
+    for (let i = 0; i < sections.length; i++) {
+        if (sections[i].startIndex <= currentIndex) {
+            currentChapterIdx = i;
+        } else {
+            break;
+        }
+    }
+
+    const chapterStart = sections[currentChapterIdx]?.startIndex || 0;
+    const chapterEnd = sections[currentChapterIdx + 1]?.startIndex || words.length;
+    const chapterWords = words.slice(chapterStart, chapterEnd);
+    const chapterText = chapterWords.map(w => w.text).join(' ');
+
+    if (!chapterText.trim()) return;
+
+    setIsPlaying(false); // Stop RSVP
+
+    try {
+        // 2. Check Cache
+        let audioChunks = await getChapterAudio(currentBookId, currentChapterIdx, ttsSpeed);
+
+        if (!audioChunks) {
+            setIsSynthesizing(true);
+            const apiKey = getGeminiApiKey();
+            if (!apiKey) {
+                alert("Please set your Gemini API key in settings to use TTS.");
+                setIsSynthesizing(false);
+                return;
+            }
+            audioChunks = await synthesizeChapterAudio(chapterText, ttsSpeed, apiKey);
+            if (audioChunks.length > 0) {
+                await saveChapterAudio(currentBookId, currentChapterIdx, ttsSpeed, audioChunks);
+            }
+            setIsSynthesizing(false);
+        }
+
+        if (audioChunks && audioChunks.length > 0) {
+            playChapterAudio(audioChunks);
+        }
+    } catch (error) {
+        console.error("Failed to read chapter aloud", error);
+        setIsSynthesizing(false);
+        setIsReadingAloud(false);
+    }
+  };
+
+  const playChapterAudio = async (chunks: ArrayBuffer[]) => {
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    const audioCtx = new AudioContextClass({ sampleRate: 24000 });
+
+    setIsReadingAloud(true);
+
+    const state = {
+        isStopped: false,
+        nextStartTime: audioCtx.currentTime,
+        hasStarted: false,
+    };
+
+    const controller: AudioController = {
+        stop: () => {
+            state.isStopped = true;
+            audioCtx.close();
+        }
+    };
+    chapterAudioControllerRef.current = controller;
+
+    for (let i = 0; i < chunks.length; i++) {
+        if (state.isStopped) break;
+
+        const pcmData = chunks[i];
+        if (audioCtx.state === 'suspended') {
+            await audioCtx.resume();
+        }
+
+        if (state.nextStartTime < audioCtx.currentTime) {
+            state.nextStartTime = audioCtx.currentTime;
+        }
+
+        const duration = schedulePcmChunk(audioCtx, pcmData, state.nextStartTime);
+        state.nextStartTime += duration;
+        state.hasStarted = true;
+    }
+
+    const checkEnded = setInterval(() => {
+        if (state.isStopped) {
+            clearInterval(checkEnded);
+            return;
+        }
+        if (state.hasStarted && audioCtx.currentTime >= state.nextStartTime) {
+            clearInterval(checkEnded);
+            setIsReadingAloud(false);
+            audioCtx.close();
+            chapterAudioControllerRef.current = null;
+        }
+    }, 200);
+  };
 
 
 
@@ -506,6 +649,8 @@ function App() {
          setApiKey={setGeminiApiKey}
          fontSize={fontSize}
          setFontSize={setFontSize}
+         ttsSpeed={ttsSpeed}
+         setTtsSpeed={setTtsSpeed}
          onSave={() => {
              saveGeminiApiKey(geminiApiKey);
              setIsSettingsOpen(false);
@@ -534,6 +679,7 @@ function App() {
          setAiQuestion={setAiQuestion}
          handleAskAi={handleAskAi}
          isAiLoading={isAiLoading}
+         ttsSpeed={ttsSpeed}
        />
        
        {!currentBookId ? (
@@ -580,6 +726,9 @@ function App() {
             toggleNav={toggleNav}
             isTocOpen={isTocOpen}
             toggleToc={toggleToc}
+            onReadChapter={handleReadChapter}
+            isReadingAloud={isReadingAloud}
+            isSynthesizing={isSynthesizing}
          />
        )}
     </>
