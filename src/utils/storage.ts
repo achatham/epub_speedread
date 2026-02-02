@@ -8,6 +8,7 @@ export interface BookRecord {
   timestamp: number;
   wpm?: number;
   realEndQuote?: string;
+  realEndIndex?: number;
 }
 
 interface RSVPDB extends DBSchema {
@@ -82,6 +83,15 @@ export async function updateBookRealEndQuote(id: string, quote: string) {
     const book = await db.get(STORE_NAME, id);
     if (book) {
         book.realEndQuote = quote;
+        await db.put(STORE_NAME, book);
+    }
+}
+
+export async function updateBookRealEndIndex(id: string, index: number) {
+    const db = await initDB();
+    const book = await db.get(STORE_NAME, id);
+    if (book) {
+        book.realEndIndex = index;
         await db.put(STORE_NAME, book);
     }
 }

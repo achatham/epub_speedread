@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ePub from 'epubjs';
-import { addBook, getAllBooks, getBook, deleteBook, updateBookProgress, updateBookWpm, updateBookRealEndQuote, type BookRecord } from './utils/storage';
+import { addBook, getAllBooks, getBook, deleteBook, updateBookProgress, updateBookWpm, updateBookRealEndQuote, updateBookRealEndIndex, type BookRecord } from './utils/storage';
 import { extractWordsFromDoc, type WordData } from './utils/text-processing';
 import { calculateNavigationTarget, findSentenceStart, type NavigationType } from './utils/navigation';
 import { getGeminiApiKey, setGeminiApiKey as saveGeminiApiKey, findRealEndOfBook, askAboutBook } from './utils/gemini';
@@ -287,10 +287,15 @@ function App() {
         }
 
         // Logic for Real End Detection
-        if (bookRecord.realEndQuote) {
-            // If we have the quote cached, just find the index
+        if (bookRecord.realEndIndex !== undefined) {
+            setRealEndIndex(bookRecord.realEndIndex);
+        } else if (bookRecord.realEndQuote) {
+            // If we have the quote cached but not the index, find it and save index
             const idx = findQuoteIndex(bookRecord.realEndQuote, allWords);
-            if (idx !== null) setRealEndIndex(idx);
+            if (idx !== null) {
+                 setRealEndIndex(idx);
+                 updateBookRealEndIndex(bookRecord.id, idx);
+            }
         } else {
             // Otherwise, if we have an API key, try to find it
             const apiKey = getGeminiApiKey();
@@ -298,9 +303,12 @@ function App() {
                 const fullTextContext = allWords.map(w => w.text).join(' ');
                 findRealEndOfBook(loadedSections.map(s => s.label), fullTextContext).then(quote => {
                     if (quote) {
-                        updateBookRealEndQuote(bookRecord.id, quote); // Save it
+                        updateBookRealEndQuote(bookRecord.id, quote); // Save quote
                         const idx = findQuoteIndex(quote, allWords);
-                        if (idx !== null) setRealEndIndex(idx);
+                        if (idx !== null) {
+                            setRealEndIndex(idx);
+                            updateBookRealEndIndex(bookRecord.id, idx); // Save index
+                        }
                     }
                 });
             }
@@ -457,7 +465,10 @@ function App() {
                     if (quote) {
                         updateBookRealEndQuote(currentBookId, quote);
                         const idx = findQuoteIndex(quote, words);
-                        if (idx !== null) setRealEndIndex(idx);
+                        if (idx !== null) {
+                            setRealEndIndex(idx);
+                            updateBookRealEndIndex(currentBookId, idx);
+                        }
                     }
                  });
              }
