@@ -3,29 +3,29 @@ import { getGeminiApiKey } from './gemini';
 import { calculateCost } from './pricing';
 
 export interface AudioController {
-  stop: () => void;
-  onEnded?: () => void;
+    stop: () => void;
+    onEnded?: () => void;
 }
 
 export async function synthesizeSpeech(text: string): Promise<AudioController | null> {
-  const apiKey = getGeminiApiKey();
-  if (!apiKey) {
-    console.error("No API key found for TTS");
-    return null;
-  }
+    const apiKey = getGeminiApiKey();
+    if (!apiKey) {
+        console.error("No API key found for TTS");
+        return null;
+    }
 
-  const audioCtx = await getAudioContext();
-  if (!audioCtx) return null;
+    const audioCtx = await getAudioContext();
+    if (!audioCtx) return null;
 
-  const controller = createAudioController(audioCtx);
-  
-  // Start processing in background
-  processChunks(text, apiKey, audioCtx, controller).catch(err => {
-      console.error("TTS processing error", err);
-      controller.stop();
-  });
+    const controller = createAudioController(audioCtx);
 
-  return controller;
+    // Start processing in background
+    processChunks(text, apiKey, audioCtx, controller).catch(err => {
+        console.error("TTS processing error", err);
+        controller.stop();
+    });
+
+    return controller;
 }
 
 async function getAudioContext(): Promise<AudioContext | null> {
@@ -60,18 +60,18 @@ function createAudioController(audioCtx: AudioContext): AudioController & { stat
 
 async function fetchChunkAudio(model: any, chunkText: string, index: number, controller: any): Promise<ArrayBuffer | null> {
     if (controller.state.isStopped) return null;
-    
+
     const cleanText = chunkText
-        .replace(/[#*`_~]/g, '') 
-        .replace(/\b\[([^\]]+)\]\(([^)]+)\)\b/g, '$1') 
+        .replace(/[#*`_~]/g, '')
+        .replace(/\b\[([^\]]+)\]\(([^)]+)\)\b/g, '$1')
         .replace(/\n+/g, '. ');
-        
+
     if (!cleanText.trim()) return null;
 
     const startTime = performance.now();
     try {
         const result = await model.generateContent({
-            contents: [{ role: "user", parts: [{ text: cleanText }] }],
+            contents: [{ role: "user", parts: [{ text: "Pacing: Speak at 2x the normal speed.\n" + cleanText }] }],
             generationConfig: {
                 responseModalities: ["AUDIO"] as any,
                 speechConfig: {
@@ -79,12 +79,12 @@ async function fetchChunkAudio(model: any, chunkText: string, index: number, con
                 }
             } as any
         });
-        
+
         if (controller.state.isStopped) return null;
 
         const response = result.response;
         if (response.usageMetadata) {
-             const cost = calculateCost("gemini-2.5-flash-preview-tts", 
+            const cost = calculateCost("gemini-2.5-flash-preview-tts",
                 response.usageMetadata.promptTokenCount,
                 response.usageMetadata.candidatesTokenCount || 0);
             console.log(`Gemini Cost (TTS Chunk ${index}): $${cost.toFixed(6)}`);
@@ -92,12 +92,12 @@ async function fetchChunkAudio(model: any, chunkText: string, index: number, con
 
         const candidate = response.candidates?.[0];
         const audioPart = candidate?.content?.parts?.find((p: any) => p.inlineData);
-        
+
         if (audioPart?.inlineData?.data) {
             console.log(`Chunk ${index} fetched in ${(performance.now() - startTime).toFixed(0)}ms, size: ${audioPart.inlineData.data.length}`);
             return base64ToArrayBuffer(audioPart.inlineData.data);
         }
-        
+
         return null;
     } catch (e) {
         console.error(`Error processing chunk ${index}`, e);
@@ -108,12 +108,12 @@ async function fetchChunkAudio(model: any, chunkText: string, index: number, con
 async function processChunks(fullText: string, apiKey: string, audioCtx: AudioContext, controller: any) {
     // 1. Split text by headers (markdown style)
     const chunks = fullText.split(/(?=\n#|^#)/).filter(c => c.trim().length > 0);
-    
+
     if (chunks.length === 0) return;
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-preview-tts" });
-    
+
     // 2. Create promise tasks for all chunks
     const tasks = chunks.map((chunkText, index) => fetchChunkAudio(model, chunkText, index, controller));
 
@@ -134,7 +134,7 @@ async function processChunks(fullText: string, apiKey: string, audioCtx: AudioCo
 
         try {
             const pcmData = await tasks[i];
-            
+
             if (controller.state.isStopped) break;
             if (pcmData) {
                 // Check context state
@@ -148,7 +148,8 @@ async function processChunks(fullText: string, apiKey: string, audioCtx: AudioCo
                 if (controller.state.nextStartTime < audioCtx.currentTime) {
                     controller.state.nextStartTime = audioCtx.currentTime;
                 }
-                
+
+                console.log(`Scheduling chunk ${i} at ${controller.state.nextStartTime.toFixed(2)}s`);
                 const duration = schedulePcmChunk(audioCtx, pcmData, controller.state.nextStartTime);
                 controller.state.nextStartTime += duration;
                 controller.state.hasStarted = true;
@@ -157,21 +158,21 @@ async function processChunks(fullText: string, apiKey: string, audioCtx: AudioCo
             console.error(`Error waiting for chunk ${i}`, e);
         }
     }
-    
+
     allChunksPlayed = true;
-    
+
     // Final check for end
     const finalCheck = setInterval(() => {
         if (controller.state.isStopped) {
-             clearInterval(finalCheck);
-             return;
+            clearInterval(finalCheck);
+            return;
         }
         // If we haven't started yet (e.g. all fetches failed), we should probably exit too
         // But assuming at least one played:
         if (allChunksPlayed && controller.state.hasStarted && audioCtx.currentTime >= controller.state.nextStartTime) {
-             clearInterval(finalCheck);
-             if (controller.onEnded) controller.onEnded();
-             audioCtx.close();
+            clearInterval(finalCheck);
+            if (controller.onEnded) controller.onEnded();
+            audioCtx.close();
         } else if (allChunksPlayed && !controller.state.hasStarted) {
             // Nothing played
             clearInterval(finalCheck);
@@ -190,21 +191,21 @@ function schedulePcmChunk(audioCtx: AudioContext, pcmData: ArrayBuffer, startTim
 
     const audioBuffer = audioCtx.createBuffer(1, float32.length, 24000);
     audioBuffer.getChannelData(0).set(float32);
-    
+
     const source = audioCtx.createBufferSource();
     source.buffer = audioBuffer;
     source.connect(audioCtx.destination);
-    
+
     source.start(startTime);
     return audioBuffer.duration;
 }
 
 function base64ToArrayBuffer(base64: string) {
-  const binaryString = window.atob(base64);
-  const len = binaryString.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes.buffer;
+    const binaryString = window.atob(base64);
+    const len = binaryString.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes.buffer;
 }
