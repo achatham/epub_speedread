@@ -17,6 +17,7 @@ import { extractWordsFromDoc, type WordData } from './utils/text-processing';
 import { calculateNavigationTarget, findSentenceStart, type NavigationType } from './utils/navigation';
 import { getGeminiApiKey, setGeminiApiKey as saveGeminiApiKey, findRealEndOfBook, askAboutBook } from './utils/gemini';
 import { synthesizeChapterAudio, schedulePcmChunk, type AudioController } from './utils/tts';
+import { splitWord } from './utils/orp';
 import { LibraryView } from './components/LibraryView';
 import { ReaderView } from './components/ReaderView';
 import { SettingsModal } from './components/SettingsModal';
@@ -62,10 +63,6 @@ function App() {
   // AI & Settings State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAskAiOpen, setIsAskAiOpen] = useState(false);
-  const [fontSize, setFontSize] = useState<number>(() => {
-    const saved = localStorage.getItem('fontSize');
-    return saved ? parseInt(saved, 10) : 48;
-  });
   const [ttsSpeed, setTtsSpeed] = useState<number>(() => {
     const saved = localStorage.getItem('ttsSpeed');
     return saved ? parseFloat(saved) : 2.0;
@@ -119,10 +116,6 @@ function App() {
   }, []);
 
   // --- Theme Effect ---
-  useEffect(() => {
-    localStorage.setItem('fontSize', fontSize.toString());
-  }, [fontSize]);
-
   useEffect(() => {
     localStorage.setItem('ttsSpeed', ttsSpeed.toString());
   }, [ttsSpeed]);
@@ -510,7 +503,17 @@ function App() {
             multiplier = 1.5;
           }
 
-          if (currentWord.length > 8) {
+          // Dynamic scaling timing adjustment
+          const { prefix, suffix } = splitWord(currentWord);
+          const vw = window.innerWidth;
+          const vh = window.innerHeight;
+          const idealFontSize = vh * 0.25;
+          const maxSideChars = Math.max(prefix.length + 0.5, suffix.length + 0.5);
+          const fittingFontSize = (vw * 0.9) / (1.2 * maxSideChars);
+
+          if (fittingFontSize < idealFontSize) {
+            multiplier *= 1.5;
+          } else if (currentWord.length > 8) {
             multiplier *= 1.2;
           }
 
@@ -669,8 +672,6 @@ function App() {
          onClose={() => setIsSettingsOpen(false)}
          apiKey={geminiApiKey}
          setApiKey={setGeminiApiKey}
-         fontSize={fontSize}
-         setFontSize={setFontSize}
          ttsSpeed={ttsSpeed}
          setTtsSpeed={setTtsSpeed}
          onSave={() => {
@@ -726,7 +727,6 @@ function App() {
             isPlaying={isPlaying}
             setIsPlaying={handleSetIsPlaying}
             wpm={wpm}
-            fontSize={fontSize}
             onWpmChange={(newWpm) => {
                 setWpm(newWpm);
                 if (currentBookId) updateBookWpm(currentBookId, newWpm);

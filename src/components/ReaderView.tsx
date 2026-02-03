@@ -14,7 +14,6 @@ interface ReaderViewProps {
   wpm: number;
   onWpmChange: (wpm: number) => void;
   theme: Theme;
-  fontSize: number;
   bookTitle: string;
   onCloseBook: () => void;
   onSettingsClick: () => void;
@@ -45,7 +44,6 @@ export function ReaderView({
   wpm,
   onWpmChange,
   theme,
-  fontSize,
   bookTitle,
   onCloseBook,
   onSettingsClick,
@@ -78,6 +76,14 @@ export function ReaderView({
   }
 
   const { prefix, focus, suffix } = splitWord(words[currentIndex].text || '');
+
+  // Dynamic font size calculation
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const idealFontSize = vh * 0.25;
+  const maxSideChars = Math.max(prefix.length + 0.5, suffix.length + 0.5);
+  const fittingFontSize = (vw * 0.9) / (1.2 * maxSideChars);
+  const currentFontSize = isPlaying ? Math.min(idealFontSize, fittingFontSize) : 48;
 
   // Theme-derived classes
   const mainBg = theme === 'bedtime' ? 'bg-black' : 'bg-white dark:bg-zinc-900';
@@ -183,13 +189,13 @@ export function ReaderView({
       )}
 
       {/* RSVP Display or Text Preview */}
-      <div className={`relative flex items-center justify-center w-full max-w-2xl border-t border-b my-8 ${theme === 'bedtime' ? 'border-zinc-900' : 'border-zinc-200 dark:border-zinc-800'}`} style={{ minHeight: isPlaying ? Math.max(120, fontSize * 1.5) : '120px' }}>
+      <div className={`relative flex items-center justify-center w-full ${isPlaying ? '' : 'max-w-2xl'} border-t border-b my-8 ${theme === 'bedtime' ? 'border-zinc-900' : 'border-zinc-200 dark:border-zinc-800'}`} style={{ minHeight: isPlaying ? Math.max(120, currentFontSize * 1.5) : '120px' }}>
         {isPlaying ? (
           <>
             {!isChapterBreak && (
               <>
-                <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-0.5 h-6 ${guidelinesClass}`}></div>
-                <div className={`absolute bottom-0 left-1/2 -translate-x-1/2 w-0.5 h-6 ${guidelinesClass}`}></div>
+                <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-0.5 h-10 ${guidelinesClass}`}></div>
+                <div className={`absolute bottom-0 left-1/2 -translate-x-1/2 w-0.5 h-10 ${guidelinesClass}`}></div>
               </>
             )}
 
@@ -203,7 +209,7 @@ export function ReaderView({
                     </div>
                 </div>
             ) : (
-                <div className="flex w-full items-baseline justify-center font-medium" style={{ fontSize: `${fontSize}px` }}>
+                <div className="flex w-full items-baseline justify-center font-medium transition-all duration-100" style={{ fontSize: `${currentFontSize}px` }}>
                   <div className={`text-right whitespace-pre ${rsvpContextClass} flex-1`}>{prefix}</div>
                   <div className={`${rsvpFocusColor} font-bold text-center px-0.5`}>{focus}</div>
                   <div className={`text-left whitespace-pre ${rsvpContextClass} flex-1`}>{suffix}</div>
