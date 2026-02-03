@@ -81,9 +81,25 @@ export function ReaderView({
   const vw = window.innerWidth;
   const vh = window.innerHeight;
   const idealFontSize = vh * 0.25;
-  const maxSideChars = Math.max(prefix.length + 0.5, suffix.length + 0.5);
-  const fittingFontSize = (vw * 0.9) / (1.2 * maxSideChars);
-  const currentFontSize = isPlaying ? Math.min(idealFontSize, fittingFontSize) : 48;
+
+  // Use "transportation" as a benchmark for stable sizing
+  // This prevents the font from constantly resizing for every word
+  const { prefix: benchPrefix, suffix: benchSuffix } = splitWord("transportation");
+  const benchMaxSideChars = Math.max(benchPrefix.length + 0.5, benchSuffix.length + 0.5);
+  const baseFittingFontSize = (vw * 0.9) / (1.0 * benchMaxSideChars);
+
+  const currentMaxSideChars = Math.max(prefix.length + 0.5, suffix.length + 0.5);
+  
+  // Start with the stable size (min of ideal and benchmark fit)
+  let targetFontSize = Math.min(idealFontSize, baseFittingFontSize);
+
+  // Only shrink further if the current word is wider than the benchmark
+  if (currentMaxSideChars > benchMaxSideChars) {
+      const currentFittingFontSize = (vw * 0.9) / (1.0 * currentMaxSideChars);
+      targetFontSize = Math.min(targetFontSize, currentFittingFontSize);
+  }
+
+  const currentFontSize = isPlaying ? targetFontSize : 48;
 
   // Theme-derived classes
   const mainBg = theme === 'bedtime' ? 'bg-black' : 'bg-white dark:bg-zinc-900';

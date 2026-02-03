@@ -15,8 +15,6 @@ dist-ssr
 # Firebase
 .firebase/
 
-# User content
-*.epub
 
 # Editor directories and files
 .vscode/*
