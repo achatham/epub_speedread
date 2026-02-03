@@ -77,6 +77,7 @@ function App() {
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [isReadingAloud, setIsReadingAloud] = useState(false);
   const [isSynthesizing, setIsSynthesizing] = useState(false);
+  const [isChapterBreak, setIsChapterBreak] = useState(false);
 
   // UI State
   const [isTocOpen, setIsTocOpen] = useState(false);
@@ -380,6 +381,7 @@ function App() {
   useEffect(() => {
     if (!isPlaying && currentBookId) {
         updateBookProgress(currentBookId, currentIndex);
+        setIsChapterBreak(false);
     }
   }, [isPlaying, currentIndex, currentBookId]);
 
@@ -471,6 +473,7 @@ function App() {
 
 
   const navigate = (type: NavigationType) => {
+    setIsChapterBreak(false);
     const targetIndex = calculateNavigationTarget(currentIndex, words, sections, type);
     setCurrentIndex(targetIndex);
     setIsNavOpen(false);
@@ -488,28 +491,47 @@ function App() {
 
   useEffect(() => {
     if (isPlaying && words.length > 0) {
-      const currentWord = words[currentIndex].text || '';
-      let multiplier = 1;
-      
-      if (currentWord.endsWith('.') || currentWord.endsWith('!') || currentWord.endsWith('?')) {
-        multiplier = 2;
-      } else if (currentWord.endsWith(',') || currentWord.endsWith(';') || currentWord.endsWith(':')) {
-        multiplier = 1.5;
-      }
-      
-      if (currentWord.length > 8) {
-        multiplier *= 1.2;
-      }
+      let interval: number;
+      let callback: () => void;
 
-      const interval = (60000 / wpm) * multiplier;
-      timerRef.current = window.setTimeout(nextWord, interval);
+      if (isChapterBreak) {
+          interval = 3000;
+          callback = () => {
+              setIsChapterBreak(false);
+              nextWord();
+          };
+      } else {
+          const currentWord = words[currentIndex].text || '';
+          let multiplier = 1;
+
+          if (currentWord.endsWith('.') || currentWord.endsWith('!') || currentWord.endsWith('?')) {
+            multiplier = 2;
+          } else if (currentWord.endsWith(',') || currentWord.endsWith(';') || currentWord.endsWith(':')) {
+            multiplier = 1.5;
+          }
+
+          if (currentWord.length > 8) {
+            multiplier *= 1.2;
+          }
+
+          interval = (60000 / wpm) * multiplier;
+
+          const isNextChapterStart = sections.some(s => s.startIndex === currentIndex + 1);
+          if (isNextChapterStart) {
+              callback = () => setIsChapterBreak(true);
+          } else {
+              callback = nextWord;
+          }
+      }
+      
+      timerRef.current = window.setTimeout(callback, interval);
     } else {
       if (timerRef.current) clearTimeout(timerRef.current);
     }
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [isPlaying, wpm, words.length, currentIndex, nextWord, words]); 
+  }, [isPlaying, wpm, words.length, currentIndex, nextWord, words, sections, isChapterBreak]);
 
   const handleSetIsPlaying = (playing: boolean) => {
     if (playing && !isPlaying) {
@@ -729,6 +751,8 @@ function App() {
             onReadChapter={handleReadChapter}
             isReadingAloud={isReadingAloud}
             isSynthesizing={isSynthesizing}
+            isChapterBreak={isChapterBreak}
+            upcomingChapterTitle={sections.find(s => s.startIndex === currentIndex + 1)?.label || ''}
          />
        )}
     </>
