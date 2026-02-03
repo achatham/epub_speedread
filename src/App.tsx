@@ -95,6 +95,17 @@ function App() {
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
   const chapterAudioControllerRef = useRef<AudioController | null>(null);
 
+  // For testing
+  useEffect(() => {
+    (window as any).__loadMockWords = (mockWords: WordData[], sectionsList: {label: string, startIndex: number}[] = []) => {
+      setWords(mockWords);
+      setBookTitle("Mock Book");
+      setSections(sectionsList.length > 0 ? sectionsList : [{ label: 'Start', startIndex: 0 }]);
+      setCurrentBookId("mock");
+      setIsLoading(false);
+    };
+  }, []);
+
   // --- Initial Load ---
   useEffect(() => {
     const loadLibrary = async () => {
@@ -349,7 +360,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (currentBookId) {
+    if (currentBookId && currentBookId !== 'mock') {
         setIsLoading(true);
         const bookRecord = library.find(b => b.id === currentBookId);
         if (bookRecord) {

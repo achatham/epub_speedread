@@ -24,10 +24,20 @@ export interface SplitWord {
 }
 
 export function splitWord(word: string): SplitWord {
-  // Find actual word content (ignoring trailing punctuation for ORP calculation)
-  const match = word.match(/^([\w'-]+)(.*)$/);
-  const baseWord = match ? match[1] : word;
-  const trailing = match ? match[2] : '';
+  // Find actual word content. Include dots and @ for URLs/emails.
+  // We initially grab everything that looks like a word char, dot, hyphen, apostrophe, or @.
+  const match = word.match(/^([\w'\-\.@]+)(.*)$/);
+  let baseWord = match ? match[1] : word;
+  let trailing = match ? match[2] : '';
+
+  // If the baseWord ends with a dot (and isn't just a dot), it's likely a sentence end.
+  // Move trailing punctuation back to 'trailing'
+  const trailingPunctMatch = baseWord.match(/([^\w]+)$/);
+  if (trailingPunctMatch && baseWord.length > 1) {
+      const punct = trailingPunctMatch[1];
+      baseWord = baseWord.slice(0, -punct.length);
+      trailing = punct + trailing;
+  }
 
   const index = getORPIndex(baseWord);
   
