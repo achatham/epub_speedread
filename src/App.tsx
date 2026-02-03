@@ -15,7 +15,7 @@ import {
 } from './utils/storage';
 import { extractWordsFromDoc, type WordData } from './utils/text-processing';
 import { calculateNavigationTarget, findSentenceStart, type NavigationType } from './utils/navigation';
-import { getGeminiApiKey, setGeminiApiKey as saveGeminiApiKey, findRealEndOfBook, askAboutBook } from './utils/gemini';
+import { getGeminiApiKey, setGeminiApiKey as saveGeminiApiKey, findRealEndOfBook, askAboutBook, summarizeRecent } from './utils/gemini';
 import { synthesizeChapterAudio, schedulePcmChunk, type AudioController } from './utils/tts';
 import { splitWord } from './utils/orp';
 import { LibraryView } from './components/LibraryView';
@@ -142,6 +142,14 @@ function App() {
     localStorage.setItem('fontFamily', fontFamily);
   }, [fontFamily]);
 
+  useEffect(() => {
+    if (theme === 'dark' || theme === 'bedtime') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [theme]);
+
   const toggleTheme = () => {
     setTheme(prev => {
       if (prev === 'light') return 'dark';
@@ -218,8 +226,38 @@ function App() {
     if (!questionToUse.trim() || isAiLoading) return;
     setIsAiLoading(true);
     try {
-      const context = words.slice(0, currentIndex + 1).map(w => w.text).join(' ');
-      const response = await askAboutBook(questionToUse, context);
+      let context = '';
+      let useSummaryCall = false;
+
+      // Find current chapter index
+      let currentChapterIdx = 0;
+      for (let i = 0; i < sections.length; i++) {
+        if (sections[i].startIndex <= currentIndex) {
+          currentChapterIdx = i;
+        } else {
+          break;
+        }
+      }
+
+      if (questionToUse === "Remind me what happened recently") {
+        // From start of previous chapter (if exists) to now
+        const startIdx = currentChapterIdx > 0 ? sections[currentChapterIdx - 1].startIndex : 0;
+        context = words.slice(startIdx, currentIndex + 1).map(w => w.text).join(' ');
+        useSummaryCall = true;
+      } else if (questionToUse === "Remind me what happened in this chapter so far") {
+        // From start of current chapter to now
+        const startIdx = sections[currentChapterIdx]?.startIndex || 0;
+        context = words.slice(startIdx, currentIndex + 1).map(w => w.text).join(' ');
+        useSummaryCall = true;
+      } else {
+        // Full context for other questions
+        context = words.slice(0, currentIndex + 1).map(w => w.text).join(' ');
+      }
+
+      const response = useSummaryCall
+        ? await summarizeRecent(context)
+        : await askAboutBook(questionToUse, context);
+
       setAiResponse(response);
     } catch {
       setAiResponse('Failed to get response from AI.');
