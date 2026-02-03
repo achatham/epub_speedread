@@ -15,7 +15,7 @@ import {
 } from './utils/storage';
 import { extractWordsFromDoc, type WordData } from './utils/text-processing';
 import { calculateNavigationTarget, findSentenceStart, type NavigationType } from './utils/navigation';
-import { getGeminiApiKey, setGeminiApiKey as saveGeminiApiKey, findRealEndOfBook, askAboutBook, summarizeRecent } from './utils/gemini';
+import { getGeminiApiKey, setGeminiApiKey as saveGeminiApiKey, findRealEndOfBook, askAboutBook, summarizeRecent, summarizeWhatJustHappened } from './utils/gemini';
 import { synthesizeChapterAudio, schedulePcmChunk, type AudioController } from './utils/tts';
 import { splitWord } from './utils/orp';
 import { LibraryView } from './components/LibraryView';
@@ -228,6 +228,7 @@ function App() {
     try {
       let context = '';
       let useSummaryCall = false;
+      let useWhatJustHappenedCall = false;
 
       // Find current chapter index
       let currentChapterIdx = 0;
@@ -239,11 +240,15 @@ function App() {
         }
       }
 
-      if (questionToUse === "Remind me what happened recently") {
+      if (questionToUse === "What just happened?" || questionToUse === "Remind me what happened recently") {
         // From start of previous chapter (if exists) to now
         const startIdx = currentChapterIdx > 0 ? sections[currentChapterIdx - 1].startIndex : 0;
         context = words.slice(startIdx, currentIndex + 1).map(w => w.text).join(' ');
-        useSummaryCall = true;
+        if (questionToUse === "What just happened?") {
+          useWhatJustHappenedCall = true;
+        } else {
+          useSummaryCall = true;
+        }
       } else if (questionToUse === "Remind me what happened in this chapter so far") {
         // From start of current chapter to now
         const startIdx = sections[currentChapterIdx]?.startIndex || 0;
@@ -254,7 +259,9 @@ function App() {
         context = words.slice(0, currentIndex + 1).map(w => w.text).join(' ');
       }
 
-      const response = useSummaryCall
+      const response = useWhatJustHappenedCall
+        ? await summarizeWhatJustHappened(context)
+        : useSummaryCall
         ? await summarizeRecent(context)
         : await askAboutBook(questionToUse, context);
 

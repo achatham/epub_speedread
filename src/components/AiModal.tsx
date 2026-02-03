@@ -15,6 +15,7 @@ interface AiModalProps {
 }
 
 const CANNED_QUESTIONS = [
+  "What just happened?",
   "Remind me what happened recently",
   "Remind me what happened in this chapter so far",
   "Give me the dramatis personae so far"
