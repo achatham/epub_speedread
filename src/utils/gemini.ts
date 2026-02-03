@@ -84,3 +84,35 @@ User Question: ${question}`;
     return `Error: ${error instanceof Error ? error.message : "Unknown error occurred"}`;
   }
 }
+
+export async function summarizeRecent(context: string): Promise<string> {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) return "API Key not found. Please set it in settings.";
+
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
+
+  const prompt = `The following is an excerpt from a book that has been read recently.
+Please provide a concise summary of what happened in this excerpt to help the reader catch up.
+Please format your response in Markdown. Don't include any leading or closing text, just the summary.
+
+Excerpt:
+${context}`;
+
+  try {
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+
+    if (response.usageMetadata) {
+        const cost = calculateCost("gemini-3-flash-preview",
+            response.usageMetadata.promptTokenCount,
+            response.usageMetadata.candidatesTokenCount);
+        console.log(`Gemini Cost (Summary): $${cost.toFixed(6)}`);
+    }
+
+    return response.text();
+  } catch (error: unknown) {
+    console.error("Error summarizing with Gemini:", error);
+    return `Error: ${error instanceof Error ? error.message : "Unknown error occurred"}`;
+  }
+}
