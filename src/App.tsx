@@ -585,9 +585,8 @@ function App() {
     const chapterStart = sections[currentChapterIdx]?.startIndex || 0;
     const chapterEnd = sections[currentChapterIdx + 1]?.startIndex || words.length;
     const chapterWords = words.slice(chapterStart, chapterEnd);
-    const chapterText = chapterWords.map(w => w.text).join(' ');
 
-    if (!chapterText.trim()) return;
+    if (chapterWords.length === 0) return;
 
     setIsPlaying(false); // Stop RSVP
 
@@ -603,7 +602,7 @@ function App() {
                 setIsSynthesizing(false);
                 return;
             }
-            audioChunks = await synthesizeChapterAudio(chapterText, ttsSpeed, apiKey);
+            audioChunks = await synthesizeChapterAudio(chapterWords, ttsSpeed, apiKey);
             if (audioChunks.length > 0) {
                 await saveChapterAudio(currentBookId, currentChapterIdx, ttsSpeed, audioChunks);
             }
