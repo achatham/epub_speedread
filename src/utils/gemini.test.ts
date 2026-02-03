@@ -10,7 +10,7 @@ const getGenerativeModelMock = vi.fn().mockReturnValue({
 vi.mock('@google/generative-ai', () => {
   return {
     GoogleGenerativeAI: class {
-      constructor(apiKey: string) {}
+      constructor() {}
       getGenerativeModel = getGenerativeModelMock
     },
   };
