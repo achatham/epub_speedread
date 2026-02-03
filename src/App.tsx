@@ -20,7 +20,7 @@ import { synthesizeChapterAudio, schedulePcmChunk, type AudioController } from '
 import { splitWord } from './utils/orp';
 import { LibraryView } from './components/LibraryView';
 import { ReaderView } from './components/ReaderView';
-import { SettingsModal } from './components/SettingsModal';
+import { SettingsModal, type FontFamily } from './components/SettingsModal';
 import { AiModal } from './components/AiModal';
 
 type Theme = 'light' | 'dark' | 'bedtime';
@@ -87,6 +87,9 @@ function App() {
     }
     return 'light';
   });
+  const [fontFamily, setFontFamily] = useState<FontFamily>(() => {
+    return (localStorage.getItem('fontFamily') as FontFamily) || 'system';
+  });
   
   const timerRef = useRef<number | null>(null);
   const sessionStartTimeRef = useRef<number | null>(null);
@@ -132,18 +135,12 @@ function App() {
   }, [ttsSpeed]);
 
   useEffect(() => {
-    const root = document.documentElement;
-    root.classList.remove('dark', 'bedtime');
-    
-    if (theme === 'dark') {
-      root.classList.add('dark');
-    } else if (theme === 'bedtime') {
-      root.classList.add('dark'); // Bedtime uses dark mode UI basics
-      root.classList.add('bedtime');
-    }
-    
     localStorage.setItem('theme', theme);
   }, [theme]);
+
+  useEffect(() => {
+    localStorage.setItem('fontFamily', fontFamily);
+  }, [fontFamily]);
 
   const toggleTheme = () => {
     setTheme(prev => {
@@ -685,6 +682,8 @@ function App() {
          setApiKey={setGeminiApiKey}
          ttsSpeed={ttsSpeed}
          setTtsSpeed={setTtsSpeed}
+         fontFamily={fontFamily}
+         setFontFamily={setFontFamily}
          onSave={() => {
              saveGeminiApiKey(geminiApiKey);
              setIsSettingsOpen(false);
@@ -743,6 +742,7 @@ function App() {
                 if (currentBookId) updateBookWpm(currentBookId, newWpm);
             }}
             theme={theme}
+            fontFamily={fontFamily}
             bookTitle={bookTitle}
             onCloseBook={handleCloseBook}
             onSettingsClick={() => setIsSettingsOpen(true)}

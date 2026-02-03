@@ -1,4 +1,6 @@
-import { X, Minus, Plus } from 'lucide-react';
+import { X, Minus, Plus, Type } from 'lucide-react';
+
+export type FontFamily = 'system' | 'inter' | 'roboto' | 'merriweather' | 'mono';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -7,6 +9,8 @@ interface SettingsModalProps {
   setApiKey: (key: string) => void;
   ttsSpeed: number;
   setTtsSpeed: (speed: number) => void;
+  fontFamily: FontFamily;
+  setFontFamily: (font: FontFamily) => void;
   onSave: () => void;
 }
 
@@ -17,6 +21,8 @@ export function SettingsModal({
   setApiKey,
   ttsSpeed,
   setTtsSpeed,
+  fontFamily,
+  setFontFamily,
   onSave
 }: SettingsModalProps) {
   if (!isOpen) return null;
@@ -30,19 +36,36 @@ export function SettingsModal({
             <X size={24} />
           </button>
         </div>
-        <div className="space-y-4">
+        <div className="space-y-6">
           <div>
-            <label htmlFor="api-key" className="block text-sm font-medium mb-1.5 opacity-70">Gemini API Key</label>
-            <input
-              id="api-key"
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              className="w-full p-2.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-transparent focus:ring-2 focus:ring-zinc-500 outline-none transition-all"
-              placeholder="Enter your API key"
-            />
-            <p className="mt-2 text-xs opacity-40">Stored locally in your browser.</p>
+            <label className="block text-sm font-medium mb-3 opacity-70 flex items-center gap-2">
+              <Type size={16} />
+              Reader Font
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { id: 'system', label: 'System (Current)', style: { fontFamily: 'ui-sans-serif, system-ui, sans-serif' } },
+                { id: 'inter', label: 'Inter', style: { fontFamily: 'Inter, sans-serif' } },
+                { id: 'roboto', label: 'Roboto', style: { fontFamily: 'Roboto, sans-serif' } },
+                { id: 'merriweather', label: 'Serif', style: { fontFamily: 'Merriweather, serif' } },
+                { id: 'mono', label: 'Monospace', style: { fontFamily: 'monospace' } },
+              ].map((font) => (
+                <button
+                  key={font.id}
+                  onClick={() => setFontFamily(font.id as FontFamily)}
+                  className={`p-3 text-sm rounded-lg border text-left transition-all ${
+                    fontFamily === font.id
+                      ? 'border-zinc-900 dark:border-zinc-100 bg-zinc-50 dark:bg-zinc-800/50 ring-1 ring-zinc-900 dark:ring-zinc-100'
+                      : 'border-zinc-200 dark:border-zinc-700 hover:border-zinc-400 dark:hover:border-zinc-500'
+                  }`}
+                  style={font.style}
+                >
+                  {font.label}
+                </button>
+              ))}
+            </div>
           </div>
+
           <div className="flex flex-col gap-1.5">
             <label className="block text-sm font-medium opacity-70">TTS Reading Speed (x)</label>
             <div className="flex items-center gap-4">
@@ -61,6 +84,20 @@ export function SettingsModal({
               </button>
             </div>
           </div>
+
+          <div>
+            <label htmlFor="api-key" className="block text-sm font-medium mb-1.5 opacity-70">Gemini API Key</label>
+            <input
+              id="api-key"
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              className="w-full p-2.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-transparent focus:ring-2 focus:ring-zinc-500 outline-none transition-all"
+              placeholder="Enter your API key"
+            />
+            <p className="mt-2 text-xs opacity-40">Stored locally in your browser.</p>
+          </div>
+
           <button
             onClick={onSave}
             className="w-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 py-2.5 rounded-lg font-medium hover:opacity-90 transition-opacity"
