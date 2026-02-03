@@ -77,7 +77,7 @@ export function SettingsModal({
               </button>
               <span className="text-xl font-medium min-w-[3rem] text-center">{ttsSpeed.toFixed(1)}x</span>
               <button
-                onClick={() => setTtsSpeed(Math.min(3.0, Math.round((ttsSpeed + 0.1) * 10) / 10))}
+                onClick={() => setTtsSpeed(Math.min(5.0, Math.round((ttsSpeed + 0.1) * 10) / 10))}
                 className="p-2 rounded-lg border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
               >
                 <Plus size={20} />
