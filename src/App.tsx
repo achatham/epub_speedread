@@ -545,6 +545,15 @@ function App() {
   }, [isPlaying, wpm, words.length, currentIndex, nextWord, words, sections, isChapterBreak]);
 
   const handleSetIsPlaying = (playing: boolean) => {
+    if (!playing && isPlaying && isChapterBreak) {
+      // If pausing during chapter break, advance to next chapter
+      const nextChapterIndex = currentIndex + 1;
+      if (nextChapterIndex < words.length) {
+        setCurrentIndex(nextChapterIndex);
+      }
+      setIsChapterBreak(false);
+    }
+
     if (playing && !isPlaying) {
       const newIndex = findSentenceStart(currentIndex, words);
       setCurrentIndex(newIndex);
