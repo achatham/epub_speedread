@@ -15,6 +15,11 @@ dist-ssr
 # Firebase
 .firebase/
 
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
 
 # Editor directories and files
 .vscode/*
@@ -25,4 +30,7 @@ dist-ssr
 *.ntvs*
 *.njsproj
 *.sln
-*.sw?devil.epub
+*.sw?
+
+# Private assets
+devil.epub
