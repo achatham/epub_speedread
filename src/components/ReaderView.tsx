@@ -30,6 +30,8 @@ interface ReaderViewProps {
   onReadChapter: () => void;
   isReadingAloud: boolean;
   isSynthesizing: boolean;
+  isChapterBreak: boolean;
+  upcomingChapterTitle: string;
 }
 
 export function ReaderView({
@@ -57,7 +59,9 @@ export function ReaderView({
   isAskAiOpen,
   onReadChapter,
   isReadingAloud,
-  isSynthesizing
+  isSynthesizing,
+  isChapterBreak,
+  upcomingChapterTitle
 }: ReaderViewProps) {
   if (words.length === 0) {
       return (
@@ -90,17 +94,17 @@ export function ReaderView({
   const guidelinesClass = theme === 'bedtime' ? 'bg-amber-900/30' : 'bg-red-600 dark:bg-red-500 opacity-30';
 
   // Find current chapter
-  let currentChapterIdx = -1;
+  let activeChapterIdx = -1;
   for (let i = 0; i < sections.length; i++) {
       if (sections[i].startIndex <= currentIndex) {
-          currentChapterIdx = i;
+          activeChapterIdx = i;
       } else {
           break;
       }
   }
 
-  const chapterStart = sections[currentChapterIdx]?.startIndex || 0;
-  const chapterEnd = sections[currentChapterIdx + 1]?.startIndex || words.length;
+  const chapterStart = sections[activeChapterIdx]?.startIndex || 0;
+  const chapterEnd = sections[activeChapterIdx + 1]?.startIndex || words.length;
   const wordsInChapter = chapterEnd - chapterStart;
   const progressInChapter = currentIndex - chapterStart;
   const chapterPercentage = wordsInChapter > 0 ? (progressInChapter / wordsInChapter) * 100 : 0;
@@ -111,17 +115,7 @@ export function ReaderView({
 
     const percentage = Math.round(((currentIndex + 1) / words.length) * 100);
     
-    // Find current chapter
-    let currentChapterIdx = -1;
-    for (let i = 0; i < sections.length; i++) {
-        if (sections[i].startIndex <= currentIndex) {
-            currentChapterIdx = i;
-        } else {
-            break;
-        }
-    }
-    
-    const nextChapterStartIndex = sections[currentChapterIdx + 1]?.startIndex || words.length;
+    const nextChapterStartIndex = sections[activeChapterIdx + 1]?.startIndex || words.length;
     const wordsLeftInChapter = nextChapterStartIndex - currentIndex;
     const wordsLeftInBook = words.length - currentIndex;
     
@@ -198,14 +192,29 @@ export function ReaderView({
       <div className={`relative flex items-center justify-center w-full ${isPlaying ? '' : 'max-w-2xl'} border-t border-b my-8 ${theme === 'bedtime' ? 'border-zinc-900' : 'border-zinc-200 dark:border-zinc-800'}`} style={{ minHeight: isPlaying ? Math.max(120, currentFontSize * 1.5) : '120px' }}>
         {isPlaying ? (
           <>
-            <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-0.5 h-10 ${guidelinesClass}`}></div>
-            <div className={`absolute bottom-0 left-1/2 -translate-x-1/2 w-0.5 h-10 ${guidelinesClass}`}></div>
+            {!isChapterBreak && (
+              <>
+                <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-0.5 h-10 ${guidelinesClass}`}></div>
+                <div className={`absolute bottom-0 left-1/2 -translate-x-1/2 w-0.5 h-10 ${guidelinesClass}`}></div>
+              </>
+            )}
 
-            <div className="flex w-full items-baseline justify-center font-medium transition-all duration-100" style={{ fontSize: `${currentFontSize}px` }}>
-              <div className={`text-right whitespace-pre ${rsvpContextClass} flex-1`}>{prefix}</div>
-              <div className={`${rsvpFocusColor} font-bold text-center px-0.5`}>{focus}</div>
-              <div className={`text-left whitespace-pre ${rsvpContextClass} flex-1`}>{suffix}</div>
-            </div>
+            {isChapterBreak ? (
+                <div className="flex flex-col items-center justify-center text-center px-4 animate-in fade-in zoom-in duration-500">
+                    <div className={`text-xs uppercase tracking-widest mb-3 opacity-50 font-bold ${theme === 'bedtime' ? 'text-amber-600' : 'text-zinc-500'}`}>
+                        Next Chapter
+                    </div>
+                    <div className={`text-3xl font-serif italic ${theme === 'bedtime' ? 'text-stone-300' : 'text-zinc-800 dark:text-zinc-200'}`}>
+                        {upcomingChapterTitle}
+                    </div>
+                </div>
+            ) : (
+                <div className="flex w-full items-baseline justify-center font-medium transition-all duration-100" style={{ fontSize: `${currentFontSize}px` }}>
+                  <div className={`text-right whitespace-pre ${rsvpContextClass} flex-1`}>{prefix}</div>
+                  <div className={`${rsvpFocusColor} font-bold text-center px-0.5`}>{focus}</div>
+                  <div className={`text-left whitespace-pre ${rsvpContextClass} flex-1`}>{suffix}</div>
+                </div>
+            )}
           </>
         ) : (
           <div className={`text-xl leading-relaxed text-center px-8 ${theme === 'bedtime' ? 'text-stone-500' : 'text-zinc-500 dark:text-zinc-400'}`}>
@@ -340,18 +349,25 @@ export function ReaderView({
                 {sections.length === 0 ? (
                   <div className="px-3 py-4 text-sm text-center text-zinc-400">No chapters found</div>
                 ) : (
-                  sections.map((section, idx) => (
-                    <button
-                      key={idx}
-                      className={`text-left px-3 py-2.5 text-sm rounded-md transition-colors leading-normal ${theme === 'bedtime' ? 'text-stone-400 hover:bg-zinc-900' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300'}`}
-                      onClick={() => {
-                        setCurrentIndex(section.startIndex);
-                        toggleToc();
-                      }}
-                    >
-                      {section.label}
-                    </button>
-                  ))
+                  sections.map((section, idx) => {
+                    const isCurrent = idx === activeChapterIdx;
+                    return (
+                      <button
+                        key={idx}
+                        className={`text-left px-3 py-2.5 text-sm rounded-md transition-colors leading-normal ${
+                          isCurrent
+                            ? (theme === 'bedtime' ? 'bg-zinc-900 text-amber-600 font-bold' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-bold')
+                            : (theme === 'bedtime' ? 'text-stone-400 hover:bg-zinc-900' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300')
+                        }`}
+                        onClick={() => {
+                          setCurrentIndex(section.startIndex);
+                          toggleToc();
+                        }}
+                      >
+                        {section.label}
+                      </button>
+                    );
+                  })
                 )}
               </div>
             )}

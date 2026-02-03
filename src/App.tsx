@@ -74,6 +74,7 @@ function App() {
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [isReadingAloud, setIsReadingAloud] = useState(false);
   const [isSynthesizing, setIsSynthesizing] = useState(false);
+  const [isChapterBreak, setIsChapterBreak] = useState(false);
 
   // UI State
   const [isTocOpen, setIsTocOpen] = useState(false);
@@ -373,6 +374,7 @@ function App() {
   useEffect(() => {
     if (!isPlaying && currentBookId) {
         updateBookProgress(currentBookId, currentIndex);
+        setIsChapterBreak(false);
     }
   }, [isPlaying, currentIndex, currentBookId]);
 
@@ -464,6 +466,7 @@ function App() {
 
 
   const navigate = (type: NavigationType) => {
+    setIsChapterBreak(false);
     const targetIndex = calculateNavigationTarget(currentIndex, words, sections, type);
     setCurrentIndex(targetIndex);
     setIsNavOpen(false);
@@ -481,38 +484,57 @@ function App() {
 
   useEffect(() => {
     if (isPlaying && words.length > 0) {
-      const currentWord = words[currentIndex].text || '';
-      let multiplier = 1;
-      
-      if (currentWord.endsWith('.') || currentWord.endsWith('!') || currentWord.endsWith('?')) {
-        multiplier = 2;
-      } else if (currentWord.endsWith(',') || currentWord.endsWith(';') || currentWord.endsWith(':')) {
-        multiplier = 1.5;
+      let interval: number;
+      let callback: () => void;
+
+      if (isChapterBreak) {
+          interval = 3000;
+          callback = () => {
+              setIsChapterBreak(false);
+              nextWord();
+          };
+      } else {
+          const currentWord = words[currentIndex].text || '';
+          let multiplier = 1;
+
+          if (currentWord.endsWith('.') || currentWord.endsWith('!') || currentWord.endsWith('?')) {
+            multiplier = 2;
+          } else if (currentWord.endsWith(',') || currentWord.endsWith(';') || currentWord.endsWith(':')) {
+            multiplier = 1.5;
+          }
+
+          // Dynamic scaling timing adjustment
+          const { prefix, suffix } = splitWord(currentWord);
+          const vw = window.innerWidth;
+          const vh = window.innerHeight;
+          const idealFontSize = vh * 0.25;
+          const maxSideChars = Math.max(prefix.length + 0.5, suffix.length + 0.5);
+          const fittingFontSize = (vw * 0.9) / (1.2 * maxSideChars);
+
+          if (fittingFontSize < idealFontSize) {
+            multiplier *= 1.5;
+          } else if (currentWord.length > 8) {
+            multiplier *= 1.2;
+          }
+
+          interval = (60000 / wpm) * multiplier;
+
+          const isNextChapterStart = sections.some(s => s.startIndex === currentIndex + 1);
+          if (isNextChapterStart) {
+              callback = () => setIsChapterBreak(true);
+          } else {
+              callback = nextWord;
+          }
       }
       
-      // Dynamic scaling timing adjustment
-      const { prefix, suffix } = splitWord(currentWord);
-      const vw = window.innerWidth;
-      const vh = window.innerHeight;
-      const idealFontSize = vh * 0.25;
-      const maxSideChars = Math.max(prefix.length + 0.5, suffix.length + 0.5);
-      const fittingFontSize = (vw * 0.9) / (1.2 * maxSideChars);
-
-      if (fittingFontSize < idealFontSize) {
-        multiplier *= 1.5;
-      } else if (currentWord.length > 8) {
-        multiplier *= 1.2;
-      }
-
-      const interval = (60000 / wpm) * multiplier;
-      timerRef.current = window.setTimeout(nextWord, interval);
+      timerRef.current = window.setTimeout(callback, interval);
     } else {
       if (timerRef.current) clearTimeout(timerRef.current);
     }
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [isPlaying, wpm, words.length, currentIndex, nextWord, words]); 
+  }, [isPlaying, wpm, words.length, currentIndex, nextWord, words, sections, isChapterBreak]);
 
   const handleSetIsPlaying = (playing: boolean) => {
     if (playing && !isPlaying) {
@@ -729,6 +751,8 @@ function App() {
             onReadChapter={handleReadChapter}
             isReadingAloud={isReadingAloud}
             isSynthesizing={isSynthesizing}
+            isChapterBreak={isChapterBreak}
+            upcomingChapterTitle={sections.find(s => s.startIndex === currentIndex + 1)?.label || ''}
          />
        )}
     </>
