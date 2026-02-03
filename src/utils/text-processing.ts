@@ -104,3 +104,57 @@ export function extractWordsFromDoc(doc: Document): WordData[] {
 
   return words;
 }
+
+export function chunkWordsByParagraph(words: WordData[], minWords: number = 300): string[] {
+  const chunks: string[] = [];
+  let currentChunkWords: string[] = [];
+  let count = 0;
+
+  for (const word of words) {
+    if (word.isParagraphStart && count >= minWords) {
+      if (currentChunkWords.length > 0) {
+        chunks.push(currentChunkWords.join(' '));
+        currentChunkWords = [];
+        count = 0;
+      }
+    }
+    currentChunkWords.push(word.text);
+    count++;
+  }
+
+  if (currentChunkWords.length > 0) {
+    chunks.push(currentChunkWords.join(' '));
+  }
+
+  return chunks;
+}
+
+export function chunkTextByParagraph(text: string, minWords: number = 300): string[] {
+  // Split by paragraph markers (common in markdown or plain text)
+  const paragraphs = text.split(/\n+/);
+  const chunks: string[] = [];
+  let currentChunk: string[] = [];
+  let currentWordCount = 0;
+
+  for (const para of paragraphs) {
+    const trimmedPara = para.trim();
+    if (!trimmedPara) continue;
+
+    const wordsInPara = trimmedPara.split(/\s+/).filter(w => w.length > 0);
+
+    if (currentWordCount >= minWords && currentChunk.length > 0) {
+      chunks.push(currentChunk.join('\n\n'));
+      currentChunk = [];
+      currentWordCount = 0;
+    }
+
+    currentChunk.push(trimmedPara);
+    currentWordCount += wordsInPara.length;
+  }
+
+  if (currentChunk.length > 0) {
+    chunks.push(currentChunk.join('\n\n'));
+  }
+
+  return chunks;
+}

@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { getGeminiApiKey } from './gemini';
 import { calculateCost } from './pricing';
+import { chunkTextByParagraph, chunkWordsByParagraph, type WordData } from './text-processing';
 
 export interface AudioController {
     stop: () => void;
@@ -28,8 +29,11 @@ export async function synthesizeSpeech(text: string, speed: number = 2.0): Promi
     return controller;
 }
 
-export async function synthesizeChapterAudio(text: string, speed: number, apiKey: string): Promise<ArrayBuffer[]> {
-    const chunks = text.split(/(?=\n#|^#)/).filter(c => c.trim().length > 0);
+export async function synthesizeChapterAudio(wordsOrText: WordData[] | string, speed: number, apiKey: string): Promise<ArrayBuffer[]> {
+    const chunks = typeof wordsOrText === 'string'
+        ? chunkTextByParagraph(wordsOrText, 300)
+        : chunkWordsByParagraph(wordsOrText, 300);
+
     if (chunks.length === 0) return [];
 
     const genAI = new GoogleGenerativeAI(apiKey);
@@ -122,8 +126,8 @@ async function fetchChunkAudio(model: any, chunkText: string, index: number, con
 }
 
 async function processChunks(fullText: string, apiKey: string, audioCtx: AudioContext, controller: any, speed: number = 2.0) {
-    // 1. Split text by headers (markdown style)
-    const chunks = fullText.split(/(?=\n#|^#)/).filter(c => c.trim().length > 0);
+    // 1. Split text by paragraphs with a minimum of 300 words
+    const chunks = chunkTextByParagraph(fullText, 300);
 
     if (chunks.length === 0) return;
 
