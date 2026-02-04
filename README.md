@@ -4,7 +4,7 @@
 
 This is a minimalist, high-speed EPUB reader built for the web. This application uses **Rapid Serial Visual Presentation (RSVP)** to display one word at a time, allowing you to read faster by eliminating the need for eye movement across a page. It has no backends, though I may change that in the future. It will only work with DRM-free epub files.
 
-![Speed reading demo](docs/Speed%20Reading.webp)
+![Speed reading demo](docs/Speed%20Reading_optimized.webp)
 
 The whole thing was vibe-coded with Gemini CLI, as I still have no idea how to write React.
 
@@ -17,7 +17,7 @@ see the content you've read so far, with instructions not to spoil anything late
 - "Who is this character?"
 - "I just picked this book after a long break. Summarize the book so far."
 
-![LLM Answering a question about a book](docs/LLM%20Answer.webp)
+![LLM Answering a question about a book](docs/LLM%20Answer_optimized.webp)
 
 ## Other Features
 
