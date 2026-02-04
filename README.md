@@ -6,6 +6,8 @@ This is a minimalist, high-speed EPUB reader built for the web. This application
 
 ![Speed reading demo](docs/Speed%20Reading.webp)
 
+The whole thing was vibe-coded with Gemini CLI, as I still have no idea how to write React.
+
 ## Ask an LLM About Your Book, Without Spoilers
 
 You can ask an LLM (only Gemini for now) about the book you're reading, and it will only
