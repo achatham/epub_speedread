@@ -22,6 +22,7 @@ import { LibraryView } from './components/LibraryView';
 import { ReaderView } from './components/ReaderView';
 import { SettingsModal, type FontFamily } from './components/SettingsModal';
 import { AiModal } from './components/AiModal';
+import { AI_QUESTIONS } from './constants';
 
 type Theme = 'light' | 'dark' | 'bedtime';
 
@@ -240,16 +241,16 @@ function App() {
         }
       }
 
-      if (questionToUse === "What just happened?" || questionToUse === "Remind me what happened recently") {
+      if (questionToUse === AI_QUESTIONS.JUST_HAPPENED || questionToUse === AI_QUESTIONS.RECENT_SUMMARY) {
         // From start of previous chapter (if exists) to now
         const startIdx = currentChapterIdx > 0 ? sections[currentChapterIdx - 1].startIndex : 0;
         context = words.slice(startIdx, currentIndex + 1).map(w => w.text).join(' ');
-        if (questionToUse === "What just happened?") {
+        if (questionToUse === AI_QUESTIONS.JUST_HAPPENED) {
           useWhatJustHappenedCall = true;
         } else {
           useSummaryCall = true;
         }
-      } else if (questionToUse === "Remind me what happened in this chapter so far") {
+      } else if (questionToUse === AI_QUESTIONS.CHAPTER_SUMMARY) {
         // From start of current chapter to now
         const startIdx = sections[currentChapterIdx]?.startIndex || 0;
         context = words.slice(startIdx, currentIndex + 1).map(w => w.text).join(' ');
