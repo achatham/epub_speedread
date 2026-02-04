@@ -201,6 +201,15 @@ function App() {
     }
   };
 
+  const handleDeleteFromReader = async () => {
+    if (currentBookId) {
+      await deleteBook(currentBookId);
+      const books = await getAllBooks();
+      setLibrary(books);
+      setCurrentBookId(null);
+    }
+  };
+
   const handleSelectBook = (id: string) => {
     setCurrentBookId(id);
   };
@@ -374,6 +383,7 @@ function App() {
             // If we have the quote cached but not the index, find it and save index
             const idx = findQuoteIndex(bookRecord.realEndQuote, allWords);
             if (idx !== null) {
+                 console.log(`End Detection: Found end at index ${idx} / ${allWords.length} (${((idx / allWords.length) * 100).toFixed(1)}% of full size) [cached quote]`);
                  setRealEndIndex(idx);
                  updateBookRealEndIndex(bookRecord.id, idx);
             }
@@ -387,6 +397,7 @@ function App() {
                         updateBookRealEndQuote(bookRecord.id, quote); // Save quote
                         const idx = findQuoteIndex(quote, allWords);
                         if (idx !== null) {
+                            console.log(`End Detection: Found end at index ${idx} / ${allWords.length} (${((idx / allWords.length) * 100).toFixed(1)}% of full size)`);
                             setRealEndIndex(idx);
                             updateBookRealEndIndex(bookRecord.id, idx); // Save index
                         }
@@ -749,6 +760,7 @@ function App() {
                         updateBookRealEndQuote(currentBookId, quote);
                         const idx = findQuoteIndex(quote, words);
                         if (idx !== null) {
+                            console.log(`End Detection: Found end at index ${idx} / ${words.length} (${((idx / words.length) * 100).toFixed(1)}% of full size)`);
                             setRealEndIndex(idx);
                             updateBookRealEndIndex(currentBookId, idx);
                         }
@@ -809,6 +821,7 @@ function App() {
             sections={sections}
             setCurrentIndex={setCurrentIndex}
             navigate={navigate}
+            onDeleteBook={handleDeleteFromReader}
             isNavOpen={isNavOpen}
             toggleNav={toggleNav}
             isTocOpen={isTocOpen}

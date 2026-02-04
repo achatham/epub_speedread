@@ -71,7 +71,7 @@ export function LibraryView({
                             <BookOpen size={32} className="opacity-50 group-hover:opacity-100 transition-opacity" />
                             <button 
                                 onClick={(e) => onDeleteBook(e, book.id)}
-                                className="p-2 -mr-2 -mt-2 opacity-0 group-hover:opacity-100 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 rounded-full transition-all"
+                                className="p-2 -mr-2 -mt-2 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 rounded-full transition-all"
                                 title="Delete book"
                             >
                                 <Trash2 size={18} />

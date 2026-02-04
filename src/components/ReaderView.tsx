@@ -24,6 +24,7 @@ interface ReaderViewProps {
   sections: { label: string; startIndex: number }[];
   setCurrentIndex: (index: number) => void;
   navigate: (type: 'book' | 'chapter' | 'prev-paragraph' | 'prev-sentence' | 'next-paragraph' | 'next-sentence') => void;
+  onDeleteBook: () => void;
   isNavOpen: boolean;
   toggleNav: () => void;
   isTocOpen: boolean;
@@ -55,6 +56,7 @@ export function ReaderView({
   sections,
   setCurrentIndex,
   navigate,
+  onDeleteBook,
   isNavOpen,
   toggleNav,
   isTocOpen,
@@ -347,6 +349,17 @@ export function ReaderView({
                   </button>
                   <button onClick={() => navigate('book')} className={`text-left px-3 py-2 text-sm rounded font-semibold ${theme === 'bedtime' ? 'text-amber-700 hover:bg-zinc-900' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-red-600 dark:text-red-400'}`}>
                     Restart Book
+                  </button>
+                  <div className={`border-t my-1 ${theme === 'bedtime' ? 'border-zinc-900' : 'border-zinc-100 dark:border-zinc-800'}`}></div>
+                  <button 
+                    onClick={() => {
+                        if (confirm('Are you sure you want to delete this book?')) {
+                            onDeleteBook();
+                        }
+                    }} 
+                    className={`text-left px-3 py-2 text-sm rounded font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20`}
+                  >
+                    Delete Book
                   </button>
                 </div>
               )}
