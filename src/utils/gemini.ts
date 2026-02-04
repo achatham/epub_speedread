@@ -85,6 +85,38 @@ User Question: ${question}`;
   }
 }
 
+export async function summarizeWhatJustHappened(context: string): Promise<string> {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) return "API Key not found. Please set it in settings.";
+
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
+
+  const prompt = `The following is an excerpt from a book that has been read recently.
+Focusing ONLY on the very end of this excerpt (the last paragraph or few sentences), please provide a very brief summary of what just happened.
+Please format your response in Markdown. Don't include any leading or closing text, just the summary.
+
+Excerpt:
+${context}`;
+
+  try {
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+
+    if (response.usageMetadata) {
+      const cost = calculateCost("gemini-3-flash-preview",
+        response.usageMetadata.promptTokenCount,
+        response.usageMetadata.candidatesTokenCount);
+      console.log(`Gemini Cost (Just Happened): $${cost.toFixed(6)}`);
+    }
+
+    return response.text();
+  } catch (error: unknown) {
+    console.error("Error summarizing with Gemini:", error);
+    return `Error: ${error instanceof Error ? error.message : "Unknown error occurred"}`;
+  }
+}
+
 export async function summarizeRecent(context: string): Promise<string> {
   const apiKey = getGeminiApiKey();
   if (!apiKey) return "API Key not found. Please set it in settings.";

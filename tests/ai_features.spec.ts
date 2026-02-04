@@ -69,6 +69,7 @@ test.describe('AI Features & Dark Mode', () => {
   test('Summary buttons are available in AI Modal', async ({ page }) => {
     await page.getByTitle('Ask AI about book').click();
 
+    await expect(page.getByText('What just happened?')).toBeVisible();
     await expect(page.getByText('Remind me what happened recently')).toBeVisible();
     await expect(page.getByText('Remind me what happened in this chapter so far')).toBeVisible();
   });

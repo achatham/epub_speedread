@@ -2,6 +2,7 @@ import { Bot, Sparkles, X, Volume2, Square } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { useState, useRef, useEffect } from 'react';
 import { synthesizeSpeech, type AudioController } from '../utils/tts';
+import { AI_QUESTIONS } from '../constants';
 
 interface AiModalProps {
   isOpen: boolean;
@@ -15,9 +16,10 @@ interface AiModalProps {
 }
 
 const CANNED_QUESTIONS = [
-  "Remind me what happened recently",
-  "Remind me what happened in this chapter so far",
-  "Give me the dramatis personae so far"
+  AI_QUESTIONS.JUST_HAPPENED,
+  AI_QUESTIONS.RECENT_SUMMARY,
+  AI_QUESTIONS.CHAPTER_SUMMARY,
+  AI_QUESTIONS.DRAMATIS_PERSONAE
 ];
 
 export function AiModal({

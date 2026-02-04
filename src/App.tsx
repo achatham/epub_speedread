@@ -15,13 +15,14 @@ import {
 } from './utils/storage';
 import { extractWordsFromDoc, type WordData } from './utils/text-processing';
 import { calculateNavigationTarget, findSentenceStart, type NavigationType } from './utils/navigation';
-import { getGeminiApiKey, setGeminiApiKey as saveGeminiApiKey, findRealEndOfBook, askAboutBook, summarizeRecent } from './utils/gemini';
+import { getGeminiApiKey, setGeminiApiKey as saveGeminiApiKey, findRealEndOfBook, askAboutBook, summarizeRecent, summarizeWhatJustHappened } from './utils/gemini';
 import { synthesizeChapterAudio, schedulePcmChunk, type AudioController } from './utils/tts';
 import { splitWord } from './utils/orp';
 import { LibraryView } from './components/LibraryView';
 import { ReaderView } from './components/ReaderView';
 import { SettingsModal, type FontFamily } from './components/SettingsModal';
 import { AiModal } from './components/AiModal';
+import { AI_QUESTIONS } from './constants';
 
 type Theme = 'light' | 'dark' | 'bedtime';
 
@@ -228,6 +229,7 @@ function App() {
     try {
       let context = '';
       let useSummaryCall = false;
+      let useWhatJustHappenedCall = false;
 
       // Find current chapter index
       let currentChapterIdx = 0;
@@ -239,12 +241,16 @@ function App() {
         }
       }
 
-      if (questionToUse === "Remind me what happened recently") {
+      if (questionToUse === AI_QUESTIONS.JUST_HAPPENED || questionToUse === AI_QUESTIONS.RECENT_SUMMARY) {
         // From start of previous chapter (if exists) to now
         const startIdx = currentChapterIdx > 0 ? sections[currentChapterIdx - 1].startIndex : 0;
         context = words.slice(startIdx, currentIndex + 1).map(w => w.text).join(' ');
-        useSummaryCall = true;
-      } else if (questionToUse === "Remind me what happened in this chapter so far") {
+        if (questionToUse === AI_QUESTIONS.JUST_HAPPENED) {
+          useWhatJustHappenedCall = true;
+        } else {
+          useSummaryCall = true;
+        }
+      } else if (questionToUse === AI_QUESTIONS.CHAPTER_SUMMARY) {
         // From start of current chapter to now
         const startIdx = sections[currentChapterIdx]?.startIndex || 0;
         context = words.slice(startIdx, currentIndex + 1).map(w => w.text).join(' ');
@@ -254,7 +260,9 @@ function App() {
         context = words.slice(0, currentIndex + 1).map(w => w.text).join(' ');
       }
 
-      const response = useSummaryCall
+      const response = useWhatJustHappenedCall
+        ? await summarizeWhatJustHappened(context)
+        : useSummaryCall
         ? await summarizeRecent(context)
         : await askAboutBook(questionToUse, context);
 
