@@ -21,6 +21,7 @@ import { StatsView } from './components/StatsView';
 import { AboutView } from './components/AboutView';
 import { AI_QUESTIONS, WPM_VANITY_RATIO } from './constants';
 import { LogIn, Info, BookOpen } from 'lucide-react';
+import { useRegisterSW } from 'virtual:pwa-register/react';
 
 type Theme = 'light' | 'dark' | 'bedtime';
 
@@ -45,6 +46,11 @@ const findQuoteIndex = (quote: string, currentWords: WordData[]): number | null 
 };
 
 function App() {
+  const {
+    needRefresh: [needRefresh],
+    updateServiceWorker,
+  } = useRegisterSW();
+
   const [library, setLibrary] = useState<BookRecord[]>([]);
   const [currentBookId, setCurrentBookId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -112,6 +118,21 @@ function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
   const chapterAudioControllerRef = useRef<AudioController | null>(null);
+
+  // Background Update: Refresh when app is hidden and idle
+  useEffect(() => {
+    if (!needRefresh) return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden' && !isPlaying && !isReadingAloud && !isSynthesizing) {
+        console.log('[PWA] Updating in background...');
+        updateServiceWorker(true);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [needRefresh, isPlaying, isReadingAloud, isSynthesizing, updateServiceWorker]);
 
   // --- Auth & Storage Init ---
   useEffect(() => {
