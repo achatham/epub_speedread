@@ -15,7 +15,7 @@ import { LibraryView } from './components/LibraryView';
 import { ReaderView } from './components/ReaderView';
 import { SettingsModal, type FontFamily } from './components/SettingsModal';
 import { AiModal } from './components/AiModal';
-import { AI_QUESTIONS } from './constants';
+import { AI_QUESTIONS, WPM_VANITY_RATIO } from './constants';
 import { LogIn } from 'lucide-react';
 
 type Theme = 'light' | 'dark' | 'bedtime';
@@ -50,7 +50,7 @@ function App() {
   const [words, setWords] = useState<WordData[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [wpm, setWpm] = useState(300);
+  const [wpm, setWpm] = useState(300 * WPM_VANITY_RATIO);
   const [bookTitle, setBookTitle] = useState('');
   const [sections, setSections] = useState<{ label: string; startIndex: number }[]>([]);
 
@@ -393,9 +393,7 @@ function App() {
         if (((window.innerWidth * 0.9) / (1.2 * maxSideChars)) < (window.innerHeight * 0.25)) multiplier *= 1.5;
         else if (currentWord.length > 8) multiplier *= 1.2;
 
-        // Shave the WPM: The displayed WPM is 15% higher than the actual base WPM used here.
-        const baseWpm = wpm / 1.15;
-        interval = (60000 / baseWpm) * multiplier;
+        interval = (60000 / wpm) * multiplier;
 
         if (sections.some(s => s.startIndex === currentIndex + 1)) callback = () => setIsChapterBreak(true);
         else callback = nextWord;
@@ -482,7 +480,12 @@ function App() {
           words={words} currentIndex={currentIndex} effectiveTotalWords={realEndIndex || words.length}
           realEndIndex={realEndIndex} isPlaying={isPlaying}
           setIsPlaying={handleSetIsPlaying}
-          wpm={wpm} onWpmChange={(n) => { setWpm(n); storageProvider.updateBookWpm(currentBookId, n); }}
+          wpm={Math.round(wpm / WPM_VANITY_RATIO)} 
+          onWpmChange={(targetWpm) => { 
+              const boosted = targetWpm * WPM_VANITY_RATIO;
+              setWpm(boosted); 
+              storageProvider.updateBookWpm(currentBookId!, boosted); 
+          }}
           theme={theme} fontFamily={fontFamily} bookTitle={bookTitle}
           onCloseBook={handleCloseBook} onSettingsClick={() => setIsSettingsOpen(true)}
           onToggleTheme={toggleTheme} onAskAiClick={() => { setAiResponse(''); setIsAskAiOpen(true); }}

@@ -1,6 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { db as firestore, storage as firebaseStorage } from './firebase';
-import { collection, doc, setDoc, getDocs, deleteDoc, getDoc, updateDoc, query, orderBy } from 'firebase/firestore';
+import { collection, doc, setDoc, getDocs, deleteDoc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 
 export interface UserSettings {
@@ -99,8 +99,10 @@ class LocalFileCache {
 // Main Storage Provider (Firestore + Local File Cache)
 export class FirestoreStorage {
   private fileCache = new LocalFileCache();
+  private userId: string;
 
-  constructor(private userId: string) {
+  constructor(userId: string) {
+    this.userId = userId;
     if (!firestore) throw new Error("Firestore not initialized");
   }
 
