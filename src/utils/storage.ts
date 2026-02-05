@@ -77,6 +77,7 @@ export interface StorageProvider {
 
   // Books
   addBook(file: File, title: string): Promise<string>;
+  putBook(book: BookRecord): Promise<void>; // Direct update/insert
   getAllBooks(): Promise<BookRecord[]>;
   getBook(id: string): Promise<BookRecord | undefined>;
   deleteBook(id: string): Promise<void>;
@@ -138,6 +139,11 @@ export class LocalStorage implements StorageProvider {
     return id;
   }
 
+  async putBook(book: BookRecord): Promise<void> {
+      const db = await this.dbPromise;
+      await db.put(STORE_NAME, book);
+  }
+
   async getAllBooks(): Promise<BookRecord[]> {
     const db = await this.dbPromise;
     const books = await db.getAll(STORE_NAME);
@@ -152,7 +158,6 @@ export class LocalStorage implements StorageProvider {
   async deleteBook(id: string): Promise<void> {
     const db = await this.dbPromise;
     await db.delete(STORE_NAME, id);
-    // Also delete sessions? For now we keep them or can implement cascade delete
   }
 
   async updateBookProgress(id: string, index: number): Promise<void> {
@@ -284,6 +289,11 @@ export class CloudStorage implements StorageProvider {
     return id;
   }
 
+  async putBook(book: BookRecord): Promise<void> {
+      await this.local.putBook(book);
+      // No need to sync back to firestore here usually, as this is used for hydration
+  }
+
   async getAllBooks(): Promise<BookRecord[]> {
     const localBooks = await this.local.getAllBooks();
     const localMap = new Map(localBooks.map(b => [b.id, b]));
@@ -321,6 +331,9 @@ export class CloudStorage implements StorageProvider {
             const blob = await response.blob();
             const file = new File([blob], `${data.meta.title}.epub`, { type: 'application/epub+zip' });
             book = { ...data, storage: { ...data.storage, localFile: file } };
+            
+            // HYDRATION: Save to local so it's not a "ghost" next time
+            await this.local.putBook(book);
           }
         }
       } catch (e) {
