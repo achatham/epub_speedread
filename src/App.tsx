@@ -109,6 +109,7 @@ function App() {
   const wordsReadInSessionRef = useRef<number>(0);
   const sessionStartIndexRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
   const chapterAudioControllerRef = useRef<AudioController | null>(null);
 
   useEffect(() => {
@@ -301,6 +302,36 @@ function App() {
     if (!isPlaying && currentBookId) storageProvider.updateBookProgress(currentBookId, currentIndex);
   }, [isPlaying, currentIndex, currentBookId, storageProvider]);
 
+  const handleSetIsPlaying = useCallback((playing: boolean) => {
+    if (playing && !isPlaying) {
+      setCurrentIndex(findSentenceStart(currentIndex, words));
+      if (isReadingAloud) {
+        if (chapterAudioControllerRef.current) chapterAudioControllerRef.current.stop();
+        setIsReadingAloud(false);
+      }
+
+      // Attempt immediate trigger for Wake Lock and Fullscreen
+      if ('wakeLock' in navigator) {
+        navigator.wakeLock.request('screen').then(lock => {
+          wakeLockRef.current = lock;
+          console.log('Wake Lock acquired via gesture');
+        }).catch(e => console.warn('Wake Lock failed via gesture', e));
+      }
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(e => console.warn('Fullscreen failed via gesture', e));
+      }
+    } else if (!playing && isPlaying) {
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+      }
+      if (wakeLockRef.current) {
+        wakeLockRef.current.release();
+        wakeLockRef.current = null;
+      }
+    }
+    setIsPlaying(playing);
+  }, [isPlaying, currentIndex, words, isReadingAloud, storageProvider]);
+
   useEffect(() => {
     if (isPlaying) {
       if (sessionStartTimeRef.current === null) {
@@ -445,11 +476,7 @@ function App() {
         <ReaderView
           words={words} currentIndex={currentIndex} effectiveTotalWords={realEndIndex || words.length}
           realEndIndex={realEndIndex} isPlaying={isPlaying}
-          setIsPlaying={(p) => {
-            if (p && !isPlaying) setCurrentIndex(findSentenceStart(currentIndex, words));
-            if (p && isReadingAloud) { if (chapterAudioControllerRef.current) chapterAudioControllerRef.current.stop(); setIsReadingAloud(false); }
-            setIsPlaying(p);
-          }}
+          setIsPlaying={handleSetIsPlaying}
           wpm={wpm} onWpmChange={(n) => { setWpm(n); storageProvider.updateBookWpm(currentBookId, n); }}
           theme={theme} fontFamily={fontFamily} bookTitle={bookTitle}
           onCloseBook={handleCloseBook} onSettingsClick={() => setIsSettingsOpen(true)}
