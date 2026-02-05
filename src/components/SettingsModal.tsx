@@ -8,6 +8,8 @@ interface SettingsModalProps {
   onClose: () => void;
   apiKey: string;
   setApiKey: (key: string) => void;
+  syncApiKey: boolean;
+  setSyncApiKey: (sync: boolean) => void;
   ttsSpeed: number;
   setTtsSpeed: (speed: number) => void;
   fontFamily: FontFamily;
@@ -23,6 +25,8 @@ export function SettingsModal({
   onClose,
   apiKey,
   setApiKey,
+  syncApiKey,
+  setSyncApiKey,
   ttsSpeed,
   setTtsSpeed,
   fontFamily,
@@ -138,6 +142,19 @@ export function SettingsModal({
               className="w-full p-2.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-transparent focus:ring-2 focus:ring-zinc-500 outline-none transition-all"
               placeholder="Enter your API key"
             />
+            <div className="mt-3 flex items-start gap-3">
+              <input
+                id="sync-api-key"
+                type="checkbox"
+                checked={syncApiKey}
+                onChange={(e) => setSyncApiKey(e.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-zinc-300 dark:border-zinc-700 text-zinc-900 focus:ring-zinc-500"
+              />
+              <label htmlFor="sync-api-key" className="text-xs opacity-70 leading-normal">
+                <strong>Sync API Key to Firestore</strong><br />
+                Enabling this syncs your key across devices. If you're uncomfortable sharing your key with this service, disable this to keep it stored only on this device.
+              </label>
+            </div>
           </div>
 
           <button

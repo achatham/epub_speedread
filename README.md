@@ -2,7 +2,7 @@
 
 [**Hosted Epub Speed Reader**](https://epub-speed-reader-82342.web.app)
 
-This is a minimalist, high-speed EPUB reader built for the web. This application uses **Rapid Serial Visual Presentation (RSVP)** to display one word at a time, allowing you to read faster by eliminating the need for eye movement across a page. It has no backends, though I may change that in the future. It will only work with DRM-free epub files.
+This is a minimalist, high-speed EPUB reader built for the web. This application uses **Rapid Serial Visual Presentation (RSVP)** to display one word at a time, allowing you to read faster by eliminating the need for eye movement across a page. It will only work with DRM-free epub files.
 
 ![Speed reading demo](docs/Speed%20Reading_optimized.webp)
 
@@ -19,6 +19,7 @@ see the content you've read so far, with instructions not to spoil anything late
 
 ![LLM Answering a question about a book](docs/LLM%20Answer_optimized.webp)
 
+
 ## Other Features
 
 - Uses an LLM to determine the "real" end of the book, used showing progress percentage and time remaining. This excludes extra content like notes, appendices, and indices.
@@ -28,6 +29,6 @@ see the content you've read so far, with instructions not to spoil anything late
 ## Tech Stack
 
 - **Frontend:** React, TypeScript, Tailwind CSS, [epub.js](https://github.com/futurepress/epub.js)
+- **Backend:** Firestore.
 - **Ebook Engine:** [epub.js](https://github.com/futurepress/epub.js)
-- **Database:** IndexedDB (via `idb`) for local storage of books and progress.
 - **Hosting:** Firebase Hosting

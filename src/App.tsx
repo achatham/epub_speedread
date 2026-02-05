@@ -73,6 +73,8 @@ function App() {
     return getGeminiApiKey() || '';
   });
 
+  const [syncApiKey, setSyncApiKey] = useState(true);
+
   const [realEndIndex, setRealEndIndex] = useState<number | null>(null);
   const [aiQuestion, setAiQuestion] = useState('');
   const [aiResponse, setAiResponse] = useState('');
@@ -135,7 +137,10 @@ function App() {
       try {
         const settings = await storageProvider.getSettings();
         if (settings) {
-          if (settings.geminiApiKey) {
+          if (settings.syncApiKey !== undefined) setSyncApiKey(settings.syncApiKey);
+          
+          // Only load API key from Firestore if syncing is enabled
+          if (settings.syncApiKey !== false && settings.geminiApiKey) {
             setGeminiApiKey(settings.geminiApiKey);
             saveGeminiApiKey(settings.geminiApiKey);
           }
@@ -450,7 +455,19 @@ function App() {
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         apiKey={geminiApiKey}
-        setApiKey={(k) => { setGeminiApiKey(k); saveGeminiApiKey(k); storageProvider.updateSettings({ geminiApiKey: k }); }}
+        setApiKey={(k) => { 
+          setGeminiApiKey(k); 
+          saveGeminiApiKey(k); 
+          storageProvider.updateSettings({ geminiApiKey: syncApiKey ? k : "" }); 
+        }}
+        syncApiKey={syncApiKey}
+        setSyncApiKey={(sync) => {
+          setSyncApiKey(sync);
+          storageProvider.updateSettings({ 
+            syncApiKey: sync,
+            geminiApiKey: sync ? geminiApiKey : "" 
+          });
+        }}
         ttsSpeed={ttsSpeed}
         setTtsSpeed={(s) => { setTtsSpeed(s); storageProvider.updateSettings({ ttsSpeed: s }); }}
         fontFamily={fontFamily}

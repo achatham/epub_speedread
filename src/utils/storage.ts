@@ -5,6 +5,7 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage
 
 export interface UserSettings {
   geminiApiKey?: string;
+  syncApiKey?: boolean;
   theme?: string;
   fontFamily?: string;
   ttsSpeed?: number;
