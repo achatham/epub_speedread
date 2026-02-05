@@ -12,6 +12,8 @@ interface SettingsModalProps {
   setSyncApiKey: (sync: boolean) => void;
   ttsSpeed: number;
   setTtsSpeed: (speed: number) => void;
+  autoLandscape: boolean;
+  setAutoLandscape: (auto: boolean) => void;
   fontFamily: FontFamily;
   setFontFamily: (font: FontFamily) => void;
   onSave: () => void;
@@ -29,6 +31,8 @@ export function SettingsModal({
   setSyncApiKey,
   ttsSpeed,
   setTtsSpeed,
+  autoLandscape,
+  setAutoLandscape,
   fontFamily,
   setFontFamily,
   onSave,
@@ -82,6 +86,22 @@ export function SettingsModal({
                   </button>
                 </div>
               )}
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-start gap-3">
+              <input
+                id="auto-landscape"
+                type="checkbox"
+                checked={autoLandscape}
+                onChange={(e) => setAutoLandscape(e.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-zinc-300 dark:border-zinc-700 text-zinc-900 focus:ring-zinc-500"
+              />
+              <label htmlFor="auto-landscape" className="text-sm opacity-70 leading-normal">
+                <strong>Auto-landscape when reading</strong><br />
+                <span className="text-xs">Automatically switch to landscape mode on mobile devices when you start reading.</span>
+              </label>
             </div>
           </div>
 

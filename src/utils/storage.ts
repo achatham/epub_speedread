@@ -9,6 +9,7 @@ export interface UserSettings {
   theme?: string;
   fontFamily?: string;
   ttsSpeed?: number;
+  autoLandscape?: boolean;
   lastUpdated: number;
 }
 
