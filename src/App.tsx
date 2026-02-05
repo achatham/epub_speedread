@@ -4,8 +4,7 @@ import {
   LocalStorage,
   CloudStorage,
   type StorageProvider,
-  type BookRecord,
-  type UserSettings
+  type BookRecord
 } from './utils/storage';
 import { auth } from './utils/firebase';
 import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, type User } from 'firebase/auth';
@@ -74,10 +73,7 @@ function App() {
   const [fontFamily, setFontFamily] = useState<FontFamily>('system');
   
   const timerRef = useRef<number | null>(null);
-  const sessionStartTimeRef = useRef<number | null>(null);
-  const wordsReadInSessionRef = useRef<number>(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
   const chapterAudioControllerRef = useRef<AudioController | null>(null);
 
   useEffect(() => {

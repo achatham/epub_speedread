@@ -181,7 +181,13 @@ export class LocalStorage implements StorageProvider {
 }
 
 export class CloudStorage implements StorageProvider {
-  constructor(private local: LocalStorage, private userId: string) {}
+  private local: LocalStorage;
+  private userId: string;
+
+  constructor(local: LocalStorage, userId: string) {
+    this.local = local;
+    this.userId = userId;
+  }
 
   private get userDocRef() {
     if (!firestore) throw new Error("Firestore not initialized");
@@ -234,8 +240,10 @@ export class CloudStorage implements StorageProvider {
 
         const book = await this.local.getBook(id);
         if (book) {
-          const cloudBook = { ...book, storage: { cloudUrl } };
-          delete cloudBook.storage.localFile; // Don't upload file blob to firestore
+          const cloudBook: any = { ...book, storage: { cloudUrl } };
+          if (cloudBook.storage) {
+            delete cloudBook.storage.localFile; // Don't upload file blob to firestore
+          }
           await setDoc(doc(this.booksCollection, id), cloudBook);
         }
       } catch (e) {
