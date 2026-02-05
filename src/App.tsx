@@ -21,6 +21,7 @@ import { StatsView } from './components/StatsView';
 import { AboutView } from './components/AboutView';
 import { AI_QUESTIONS, WPM_VANITY_RATIO } from './constants';
 import { LogIn, Info, BookOpen } from 'lucide-react';
+import { useRegisterSW } from 'virtual:pwa-register/react';
 
 type Theme = 'light' | 'dark' | 'bedtime';
 
@@ -45,6 +46,11 @@ const findQuoteIndex = (quote: string, currentWords: WordData[]): number | null 
 };
 
 function App() {
+  const {
+    needRefresh: [needRefresh],
+    updateServiceWorker,
+  } = useRegisterSW();
+
   const [library, setLibrary] = useState<BookRecord[]>([]);
   const [currentBookId, setCurrentBookId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -76,6 +82,13 @@ function App() {
   });
 
   const [syncApiKey, setSyncApiKey] = useState(true);
+  const [autoLandscape, setAutoLandscape] = useState(() => {
+    try {
+      const saved = localStorage.getItem('user_settings');
+      if (saved) return JSON.parse(saved).autoLandscape || false;
+    } catch (e) { }
+    return false;
+  });
 
   const [realEndIndex, setRealEndIndex] = useState<number | null>(null);
   const [aiQuestion, setAiQuestion] = useState('');
@@ -112,6 +125,21 @@ function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
   const chapterAudioControllerRef = useRef<AudioController | null>(null);
+
+  // Background Update: Refresh when app is hidden and idle
+  useEffect(() => {
+    if (!needRefresh) return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden' && !isPlaying && !isReadingAloud && !isSynthesizing) {
+        console.log('[PWA] Updating in background...');
+        updateServiceWorker(true);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [needRefresh, isPlaying, isReadingAloud, isSynthesizing, updateServiceWorker]);
 
   // --- Auth & Storage Init ---
   useEffect(() => {
@@ -153,6 +181,7 @@ function App() {
           if (settings.theme) setTheme(settings.theme as Theme);
           if (settings.fontFamily) setFontFamily(settings.fontFamily as FontFamily);
           if (settings.ttsSpeed) setTtsSpeed(settings.ttsSpeed);
+          if (settings.autoLandscape !== undefined) setAutoLandscape(settings.autoLandscape);
         }
 
         const [books, history] = await Promise.all([
@@ -340,7 +369,12 @@ function App() {
 
   const handleSetIsPlaying = useCallback((playing: boolean) => {
     if (playing && !isPlaying) {
-      setCurrentIndex(findSentenceStart(currentIndex, words));
+      if (isChapterBreak) {
+        setCurrentIndex(currentIndex + 1);
+        setIsChapterBreak(false);
+      } else {
+        setCurrentIndex(findSentenceStart(currentIndex, words));
+      }
       if (isReadingAloud) {
         if (chapterAudioControllerRef.current) chapterAudioControllerRef.current.stop();
         setIsReadingAloud(false);
@@ -354,11 +388,22 @@ function App() {
         }).catch(e => console.warn('Wake Lock failed via gesture', e));
       }
       if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch(e => console.warn('Fullscreen failed via gesture', e));
+        document.documentElement.requestFullscreen().then(() => {
+          if (autoLandscape && (screen.orientation as any)?.lock) {
+            (screen.orientation as any).lock('landscape').catch((e: any) => console.warn('Orientation lock failed', e));
+          }
+        }).catch(e => console.warn('Fullscreen failed via gesture', e));
+      } else {
+        if (autoLandscape && (screen.orientation as any)?.lock) {
+          (screen.orientation as any).lock('landscape').catch((e: any) => console.warn('Orientation lock failed', e));
+        }
       }
     } else if (!playing && isPlaying) {
       if (document.fullscreenElement) {
         document.exitFullscreen().catch(() => {});
+      }
+      if ((screen.orientation as any)?.unlock) {
+        (screen.orientation as any).unlock();
       }
       if (wakeLockRef.current) {
         wakeLockRef.current.release();
@@ -366,7 +411,7 @@ function App() {
       }
     }
     setIsPlaying(playing);
-  }, [isPlaying, currentIndex, words, isReadingAloud]);
+  }, [isPlaying, currentIndex, words, isReadingAloud, autoLandscape, isChapterBreak]);
 
   useEffect(() => {
     if (isPlaying) {
@@ -519,6 +564,8 @@ function App() {
         }}
         ttsSpeed={ttsSpeed}
         setTtsSpeed={(s) => { setTtsSpeed(s); storageProvider.updateSettings({ ttsSpeed: s }); }}
+        autoLandscape={autoLandscape}
+        setAutoLandscape={(a) => { setAutoLandscape(a); storageProvider.updateSettings({ autoLandscape: a }); }}
         fontFamily={fontFamily}
         setFontFamily={(f) => { setFontFamily(f); storageProvider.updateSettings({ fontFamily: f }); }}
         user={user}
