@@ -15,6 +15,7 @@
     "@google/generative-ai": "^0.24.1",
     "@tailwindcss/vite": "^4.1.18",
     "epubjs": "^0.3.93",
+    "firebase": "^12.8.0",
     "idb": "^8.0.3",
     "lucide-react": "^0.563.0",
     "react": "^19.2.0",

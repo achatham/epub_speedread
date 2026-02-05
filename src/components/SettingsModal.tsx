@@ -1,4 +1,5 @@
-import { X, Minus, Plus, Type } from 'lucide-react';
+import { X, Minus, Plus, Type, LogIn, LogOut, Cloud } from 'lucide-react';
+import type { User } from 'firebase/auth';
 
 export type FontFamily = 'system' | 'inter' | 'roboto' | 'merriweather' | 'mono';
 
@@ -12,6 +13,9 @@ interface SettingsModalProps {
   fontFamily: FontFamily;
   setFontFamily: (font: FontFamily) => void;
   onSave: () => void;
+  user?: User | null;
+  onSignIn?: () => void;
+  onSignOut?: () => void;
 }
 
 export function SettingsModal({
@@ -23,13 +27,16 @@ export function SettingsModal({
   setTtsSpeed,
   fontFamily,
   setFontFamily,
-  onSave
+  onSave,
+  user,
+  onSignIn,
+  onSignOut
 }: SettingsModalProps) {
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4 text-zinc-900 dark:text-zinc-100">
-      <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl w-full max-w-md shadow-2xl border border-zinc-200 dark:border-zinc-800">
+      <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl w-full max-w-md shadow-2xl border border-zinc-200 dark:border-zinc-800 max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-semibold">Settings</h2>
           <button onClick={onClose} className="opacity-50 hover:opacity-100">
@@ -37,6 +44,43 @@ export function SettingsModal({
           </button>
         </div>
         <div className="space-y-6">
+          
+          {/* Account Section */}
+          <div>
+             <label className="block text-sm font-medium mb-3 opacity-70 flex items-center gap-2">
+              <Cloud size={16} />
+              Sync & Account
+            </label>
+            <div className="p-4 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700">
+               {user ? (
+                   <div className="flex justify-between items-center">
+                       <div className="truncate mr-2">
+                           <div className="text-sm font-medium">{user.displayName || 'User'}</div>
+                           <div className="text-xs opacity-60 truncate">{user.email}</div>
+                       </div>
+                       <button 
+                         onClick={onSignOut}
+                         className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-md hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
+                       >
+                           <LogOut size={14} />
+                           Sign Out
+                       </button>
+                   </div>
+               ) : (
+                   <div className="flex flex-col gap-2">
+                       <p className="text-xs opacity-70 mb-2">Sign in to sync your library and progress across devices.</p>
+                       <button 
+                         onClick={onSignIn}
+                         className="flex w-full items-center justify-center gap-2 px-3 py-2 text-sm font-medium bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-md hover:opacity-90 transition-opacity"
+                       >
+                           <LogIn size={16} />
+                           Sign In with Google
+                       </button>
+                   </div>
+               )}
+            </div>
+          </div>
+
           <div>
             <label className="block text-sm font-medium mb-3 opacity-70 flex items-center gap-2">
               <Type size={16} />

@@ -1,5 +1,5 @@
 import type { RefObject } from 'react';
-import { BookOpen, Moon, Settings, Sun, Sunset, Trash2, Upload } from 'lucide-react';
+import { BookOpen, Moon, Settings, Sun, Sunset, Trash2, Upload, DownloadCloud } from 'lucide-react';
 import type { BookRecord } from '../utils/storage';
 
 type Theme = 'light' | 'dark' | 'bedtime';
@@ -61,28 +61,43 @@ export function LibraryView({
             )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 w-full max-w-5xl mb-12">
-                {library.map(book => (
-                    <div 
-                        key={book.id} 
-                        onClick={() => onSelectBook(book.id)}
-                        className={`group border rounded-lg p-6 hover:shadow-lg transition-all cursor-pointer relative ${cardBgClass}`}
-                    >
-                        <div className="flex items-start justify-between mb-4">
-                            <BookOpen size={32} className="opacity-50 group-hover:opacity-100 transition-opacity" />
-                            <button 
-                                onClick={(e) => onDeleteBook(e, book.id)}
-                                className="p-2 -mr-2 -mt-2 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 rounded-full transition-all"
-                                title="Delete book"
-                            >
-                                <Trash2 size={18} />
-                            </button>
+                {library.map(book => {
+                    const isGhost = !book.storage.localFile;
+                    return (
+                        <div 
+                            key={book.id} 
+                            onClick={() => onSelectBook(book.id)}
+                            className={`group border rounded-lg p-6 hover:shadow-lg transition-all cursor-pointer relative ${cardBgClass}`}
+                        >
+                            <div className="flex items-start justify-between mb-4">
+                                <div className="relative">
+                                    <BookOpen size={32} className={`transition-opacity ${isGhost ? 'opacity-20' : 'opacity-50 group-hover:opacity-100'}`} />
+                                    {isGhost && (
+                                        <DownloadCloud size={16} className="absolute -bottom-1 -right-1 text-blue-500" />
+                                    )}
+                                </div>
+                                <button 
+                                    onClick={(e) => onDeleteBook(e, book.id)}
+                                    className="p-2 -mr-2 -mt-2 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 rounded-full transition-all"
+                                    title="Delete book"
+                                >
+                                    <Trash2 size={18} />
+                                </button>
+                            </div>
+                            <h3 className="font-semibold text-lg line-clamp-2 h-14">{book.meta.title}</h3>
+                            <div className="flex justify-between items-center mt-2">
+                                <p className="text-xs opacity-60">
+                                    Last read: {new Date(book.progress.lastReadAt).toLocaleDateString()}
+                                </p>
+                                {isGhost && (
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-blue-500/80 bg-blue-500/10 px-1.5 py-0.5 rounded">
+                                        Cloud
+                                    </span>
+                                )}
+                            </div>
                         </div>
-                        <h3 className="font-semibold text-lg line-clamp-2 h-14">{book.title}</h3>
-                        <p className="text-sm opacity-60 mt-2">
-                             Last read: {new Date(book.timestamp).toLocaleDateString()}
-                        </p>
-                    </div>
-                ))}
+                    );
+                })}
                 
                 {/* Upload Card */}
                 <div 
