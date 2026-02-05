@@ -107,38 +107,9 @@ function App() {
   const timerRef = useRef<number | null>(null);
   const sessionStartTimeRef = useRef<number | null>(null);
   const wordsReadInSessionRef = useRef<number>(0);
+  const sessionStartIndexRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chapterAudioControllerRef = useRef<AudioController | null>(null);
-
-  useEffect(() => {
-    if (isPlaying) {
-      if (sessionStartTimeRef.current === null) {
-        sessionStartTimeRef.current = Date.now();
-        wordsReadInSessionRef.current = 0;
-      }
-    } else if (sessionStartTimeRef.current !== null) {
-      const durationMs = Date.now() - sessionStartTimeRef.current;
-      const durationMins = durationMs / 60000;
-      const wordsRead = wordsReadInSessionRef.current;
-      const avgWpm = durationMins > 0 ? Math.round(wordsRead / durationMins) : 0;
-
-      console.log(`Session Summary:
-- Duration: ${(durationMs / 1000).toFixed(1)}s
-- Words Read: ${wordsRead}
-- Set WPM: ${wpm}
-- Effective Avg WPM: ${avgWpm}`);
-      
-      sessionStartTimeRef.current = null;
-      wordsReadInSessionRef.current = 0;
-    }
-  }, [isPlaying, wpm]);
-
-  // Track words read
-  useEffect(() => {
-    if (isPlaying) {
-      wordsReadInSessionRef.current += 1;
-    }
-  }, [currentIndex, isPlaying]);
 
   useEffect(() => {
     (window as any).__loadMockWords = (mockWords: WordData[], sectionsList: {label: string, startIndex: number}[] = []) => {
@@ -329,6 +300,48 @@ function App() {
   useEffect(() => {
     if (!isPlaying && currentBookId) storageProvider.updateBookProgress(currentBookId, currentIndex);
   }, [isPlaying, currentIndex, currentBookId, storageProvider]);
+
+  useEffect(() => {
+    if (isPlaying) {
+      if (sessionStartTimeRef.current === null) {
+        sessionStartTimeRef.current = Date.now();
+        wordsReadInSessionRef.current = 0;
+        sessionStartIndexRef.current = currentIndex;
+      }
+    } else if (sessionStartTimeRef.current !== null && currentBookId) {
+      const durationMs = Date.now() - sessionStartTimeRef.current;
+      const durationMins = durationMs / 60000;
+      const wordsRead = wordsReadInSessionRef.current;
+      const avgWpm = durationMins > 0 ? Math.round(wordsRead / durationMins) : 0;
+
+      console.log(`Session Summary:
+- Duration: ${(durationMs / 1000).toFixed(1)}s
+- Words Read: ${wordsRead}
+- Set WPM: ${wpm}
+- Effective Avg WPM: ${avgWpm}`);
+
+      // Log Session to Storage
+      storageProvider.logReadingSession({
+          bookId: currentBookId,
+          startTime: sessionStartTimeRef.current,
+          endTime: Date.now(),
+          startWordIndex: sessionStartIndexRef.current || 0,
+          endWordIndex: currentIndex,
+          durationSeconds: Math.round(durationMs / 1000)
+      }).catch(e => console.error("Failed to log session", e));
+      
+      sessionStartTimeRef.current = null;
+      wordsReadInSessionRef.current = 0;
+      sessionStartIndexRef.current = null;
+    }
+  }, [isPlaying, wpm, currentBookId, storageProvider, currentIndex]);
+
+  // Track words read
+  useEffect(() => {
+    if (isPlaying) {
+      wordsReadInSessionRef.current += 1;
+    }
+  }, [currentIndex, isPlaying]);
 
   const navigate = (type: NavigationType) => {
     setIsChapterBreak(false);

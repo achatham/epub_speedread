@@ -34,6 +34,16 @@ export interface BookRecord {
   };
 }
 
+export interface ReadingSession {
+  id: string;
+  bookId: string;
+  startTime: number;
+  endTime: number;
+  startWordIndex: number;
+  endWordIndex: number;
+  durationSeconds: number;
+}
+
 export interface ChapterAudioRecord {
   id: string;
   audioChunks: ArrayBuffer[];
@@ -44,14 +54,20 @@ interface RSVPDB extends DBSchema {
     key: string;
     value: BookRecord;
   };
+  sessions: {
+    key: string;
+    value: ReadingSession;
+    indexes: { 'by-book': string };
+  };
   chapterAudio: {
     key: string;
     value: ChapterAudioRecord;
   };
 }
 
-const DB_NAME = 'epub-rsvp-db-v2'; // Bump version for new schema
+const DB_NAME = 'epub-rsvp-db-v2';
 const STORE_NAME = 'books';
+const SESSIONS_STORE_NAME = 'sessions';
 const AUDIO_STORE_NAME = 'chapterAudio';
 
 export interface StorageProvider {
@@ -69,6 +85,9 @@ export interface StorageProvider {
   updateBookRealEndQuote(id: string, quote: string): Promise<void>;
   updateBookRealEndIndex(id: string, index: number): Promise<void>;
   
+  // Sessions
+  logReadingSession(session: Omit<ReadingSession, 'id'>): Promise<void>;
+
   // Audio
   saveChapterAudio(bookId: string, chapterIndex: number, speed: number, audioChunks: ArrayBuffer[]): Promise<void>;
   getChapterAudio(bookId: string, chapterIndex: number, speed: number): Promise<ArrayBuffer[] | undefined>;
@@ -78,10 +97,16 @@ export class LocalStorage implements StorageProvider {
   private dbPromise: Promise<IDBPDatabase<RSVPDB>>;
 
   constructor() {
-    this.dbPromise = openDB<RSVPDB>(DB_NAME, 1, {
-      upgrade(db) {
-        db.createObjectStore(STORE_NAME, { keyPath: 'id' });
-        db.createObjectStore(AUDIO_STORE_NAME, { keyPath: 'id' });
+    this.dbPromise = openDB<RSVPDB>(DB_NAME, 2, { // Bump version for sessions store
+      upgrade(db, oldVersion) {
+        if (oldVersion < 1) {
+            db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+            db.createObjectStore(AUDIO_STORE_NAME, { keyPath: 'id' });
+        }
+        if (oldVersion < 2) {
+            const sessionStore = db.createObjectStore(SESSIONS_STORE_NAME, { keyPath: 'id' });
+            sessionStore.createIndex('by-book', 'bookId');
+        }
       },
     });
   }
@@ -127,6 +152,7 @@ export class LocalStorage implements StorageProvider {
   async deleteBook(id: string): Promise<void> {
     const db = await this.dbPromise;
     await db.delete(STORE_NAME, id);
+    // Also delete sessions? For now we keep them or can implement cascade delete
   }
 
   async updateBookProgress(id: string, index: number): Promise<void> {
@@ -166,6 +192,12 @@ export class LocalStorage implements StorageProvider {
     }
   }
 
+  async logReadingSession(sessionData: Omit<ReadingSession, 'id'>): Promise<void> {
+      const db = await this.dbPromise;
+      const id = crypto.randomUUID();
+      await db.put(SESSIONS_STORE_NAME, { ...sessionData, id });
+  }
+
   async saveChapterAudio(bookId: string, chapterIndex: number, speed: number, audioChunks: ArrayBuffer[]): Promise<void> {
     const db = await this.dbPromise;
     const id = `${bookId}-${chapterIndex}-${speed}`;
@@ -199,7 +231,6 @@ export class CloudStorage implements StorageProvider {
   }
 
   async getSettings(): Promise<UserSettings | null> {
-    // Merge local and cloud, latest timestamp wins
     const localSettings = await this.local.getSettings();
     if (!firestore) return localSettings;
 
@@ -242,7 +273,7 @@ export class CloudStorage implements StorageProvider {
         if (book) {
           const cloudBook: any = { ...book, storage: { cloudUrl } };
           if (cloudBook.storage) {
-            delete cloudBook.storage.localFile; // Don't upload file blob to firestore
+            delete cloudBook.storage.localFile;
           }
           await setDoc(doc(this.booksCollection, id), cloudBook);
         }
@@ -269,7 +300,6 @@ export class CloudStorage implements StorageProvider {
               ? { ...cloudBook, storage: { ...cloudBook.storage, localFile: localBook.storage.localFile } }
               : { ...cloudBook, storage: { ...cloudBook.storage, localFile: undefined } };
             localMap.set(cloudBook.id, merged);
-            // Optional: Background hydrate local DB
           }
         }
       } catch (e) {
@@ -291,7 +321,6 @@ export class CloudStorage implements StorageProvider {
             const blob = await response.blob();
             const file = new File([blob], `${data.meta.title}.epub`, { type: 'application/epub+zip' });
             book = { ...data, storage: { ...data.storage, localFile: file } };
-            // Hydrate local? 
           }
         }
       } catch (e) {
@@ -358,6 +387,18 @@ export class CloudStorage implements StorageProvider {
         console.error("Cloud index sync failed", e);
       }
     }
+  }
+
+  async logReadingSession(sessionData: Omit<ReadingSession, 'id'>): Promise<void> {
+      await this.local.logReadingSession(sessionData);
+      if (firestore) {
+          try {
+              const sessionRef = doc(collection(this.booksCollection, sessionData.bookId, 'sessions'));
+              await setDoc(sessionRef, { ...sessionData, id: sessionRef.id });
+          } catch (e) {
+              console.error("Cloud session log failed", e);
+          }
+      }
   }
 
   async saveChapterAudio(bookId: string, chapterIndex: number, speed: number, audioChunks: ArrayBuffer[]): Promise<void> {
