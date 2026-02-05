@@ -11,7 +11,7 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.png', 'icon-192.png', 'icon-512.png', 'Frankenstein.epub'],
+      includeAssets: ['favicon.png', 'icon-192.png', 'icon-512.png'],
       manifest: {
         name: 'Speed Reader',
         short_name: 'SpeedReader',

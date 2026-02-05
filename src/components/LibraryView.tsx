@@ -16,6 +16,7 @@ interface LibraryViewProps {
   fileInputRef: RefObject<HTMLInputElement | null>;
   onFileInputClick: (e: React.MouseEvent<HTMLInputElement, MouseEvent>) => void;
   onStatsClick?: () => void;
+  onLoadDemoBook?: () => void;
 }
 
 export function LibraryView({
@@ -29,7 +30,8 @@ export function LibraryView({
   onFileUpload,
   fileInputRef,
   onFileInputClick,
-  onStatsClick
+  onStatsClick,
+  onLoadDemoBook
 }: LibraryViewProps) {
      const bgClass = theme === 'bedtime' ? 'bg-black' : 'bg-white dark:bg-zinc-900';
      const textClass = theme === 'bedtime' ? 'text-stone-400' : 'text-zinc-900 dark:text-zinc-100';
@@ -64,8 +66,17 @@ export function LibraryView({
             <h1 className="text-3xl font-light mb-8 mt-12">Your Library</h1>
 
             {library.length === 0 && !isLoading && (
-                <div className="text-center opacity-50 mb-12">
+                <div className="text-center opacity-50 mb-12 flex flex-col items-center gap-4">
                     <p>No books yet. Upload one to get started.</p>
+                    {onLoadDemoBook && (
+                        <button
+                            onClick={onLoadDemoBook}
+                            className="text-sm px-4 py-2 rounded-lg bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors flex items-center gap-2"
+                        >
+                            <DownloadCloud size={16} />
+                            Try "Frankenstein"
+                        </button>
+                    )}
                 </div>
             )}
 

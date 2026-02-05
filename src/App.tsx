@@ -5,8 +5,9 @@ import {
   type BookRecord,
   type ReadingSession
 } from './utils/storage';
-import { auth } from './utils/firebase';
+import { auth, storage } from './utils/firebase';
 import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, type User } from 'firebase/auth';
+import { ref, getBytes } from 'firebase/storage';
 import { extractWordsFromDoc, type WordData } from './utils/text-processing';
 import { calculateNavigationTarget, findSentenceStart, type NavigationType } from './utils/navigation';
 import { getGeminiApiKey, setGeminiApiKey as saveGeminiApiKey, findRealEndOfBook, askAboutBook, summarizeRecent, summarizeWhatJustHappened } from './utils/gemini';
@@ -200,6 +201,25 @@ function App() {
       setLibrary(await storageProvider.getAllBooks());
       setCurrentBookId(id);
     } catch (e) { console.error(e); } finally { setIsLoading(false); }
+  };
+
+  const handleLoadDemoBook = async () => {
+    if (!storageProvider || !storage) return;
+    setIsLoading(true);
+    try {
+      const demoRef = ref(storage, 'epubs/Frankenstein.epub');
+      const bytes = await getBytes(demoRef);
+      const blob = new Blob([bytes], { type: 'application/epub+zip' });
+      const file = new File([blob], 'Frankenstein.epub', { type: 'application/epub+zip' });
+      const id = await storageProvider.addBook(file, 'Frankenstein');
+      setLibrary(await storageProvider.getAllBooks());
+      setCurrentBookId(id);
+    } catch (e) {
+      console.error("Failed to load demo book", e);
+      alert("Failed to load the demo book. Please try again or upload your own.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleDeleteBook = async (e: React.MouseEvent, id: string) => {
@@ -526,6 +546,7 @@ function App() {
           fileInputRef={fileInputRef}
           onFileInputClick={onFileInputClick}
           onStatsClick={() => setIsStatsOpen(true)}
+          onLoadDemoBook={handleLoadDemoBook}
         />
       ) : (
         <ReaderView
