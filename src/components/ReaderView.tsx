@@ -88,28 +88,17 @@ export function ReaderView({
   const idealFontSize = vh * 0.30;
 
   // Use "transportation" as a benchmark for stable sizing
-  // This prevents the font from constantly resizing for every word
   const { prefix: benchPrefix, suffix: benchSuffix } = splitWord("transportation");
-  
-  // Calculate density required for each side based on 40/60 split
-  // Left side gets 40% width, Right side gets 60% width
   const benchLeftDensity = (benchPrefix.length + 0.5) / 0.4;
   const benchRightDensity = (benchSuffix.length + 0.5) / 0.6;
   const benchMaxDensity = Math.max(benchLeftDensity, benchRightDensity);
-
-  // Divisor 0.6 assumes an average character width of ~0.6em (typical for sans-serif)
-  // This allows the text to be larger while still fitting
   const baseFittingFontSize = (vw * 0.9) / (0.6 * benchMaxDensity);
 
   const currentLeftDensity = (prefix.length + 0.5) / 0.4;
   const currentRightDensity = (suffix.length + 0.5) / 0.6;
   const currentMaxDensity = Math.max(currentLeftDensity, currentRightDensity);
   
-  // Start with the stable size (min of ideal and benchmark fit)
   let targetFontSize = Math.min(idealFontSize, baseFittingFontSize);
-
-  // Only shrink further if the current word is wider than the benchmark
-  // Add a small buffer (1.15x) to prevent jitter for words just slightly larger
   if (currentMaxDensity > benchMaxDensity * 1.15) {
       const currentFittingFontSize = (vw * 0.9) / (0.6 * currentMaxDensity);
       targetFontSize = Math.min(targetFontSize, currentFittingFontSize);
@@ -154,12 +143,9 @@ export function ReaderView({
     if (isPlaying || words.length === 0) return null;
 
     const percentage = Math.round(((currentIndex + 1) / words.length) * 100);
-    
     const nextChapterStartIndex = sections[activeChapterIdx + 1]?.startIndex || words.length;
     const wordsLeftInChapter = nextChapterStartIndex - currentIndex;
     const wordsLeftInBook = words.length - currentIndex;
-    
-    // Heuristic: +20% for punctuation/pauses
     const effectiveWpm = wpm / 1.2; 
     
     const formatDuration = (wordCount: number) => {
@@ -167,7 +153,6 @@ export function ReaderView({
         const h = Math.floor(minutes / 60);
         const m = Math.floor(minutes % 60);
         const s = Math.floor((minutes * 60) % 60);
-        
         if (h > 0) return `${h}h ${m}m`;
         if (m > 0) return `${m}m ${s}s`;
         return `${s}s`;
@@ -190,19 +175,20 @@ export function ReaderView({
   
   return (
     <div 
-      className={`flex flex-col items-center justify-center h-screen transition-colors duration-300 relative ${mainBg} ${mainText}`}
+      className={`flex flex-col items-center justify-center h-screen transition-colors duration-300 relative ${mainBg} ${mainText} ${!isPlaying ? 'cursor-pointer' : ''}`}
       style={{ fontFamily: fontStyles[fontFamily] }}
+      onClick={() => { if (!isPlaying) setIsPlaying(true); }}
     >
       {isPlaying && (
         <div 
           className="fixed inset-0 z-40 bg-transparent cursor-pointer"
-          onClick={() => setIsPlaying(false)}
+          onClick={(e) => { e.stopPropagation(); setIsPlaying(false); }}
           title="Click to pause"
         />
       )}
       
       {!isPlaying && (
-        <div className="absolute top-8 text-center w-full px-4">
+        <div className="absolute top-8 text-center w-full px-4" onClick={(e) => e.stopPropagation()}>
           <h3 className="m-0 font-normal opacity-60 text-lg truncate max-w-2xl mx-auto">{bookTitle}</h3>
           <p className="my-2 text-sm opacity-40">
             {currentIndex + 1} / {effectiveTotalWords} words
@@ -213,7 +199,7 @@ export function ReaderView({
       )}
 
       {!isPlaying && (
-        <div className="absolute top-4 right-4 flex gap-2 z-10">
+        <div className="absolute top-4 right-4 flex gap-2 z-10" onClick={(e) => e.stopPropagation()}>
           <button
             onClick={onSettingsClick}
             className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
@@ -269,7 +255,7 @@ export function ReaderView({
       </div>
 
       {/* Controls */}
-      <div className="flex flex-col gap-6 items-center w-full max-w-md px-4 relative z-50">
+      <div className="flex flex-col gap-6 items-center w-full max-w-md px-4 relative z-50" onClick={(e) => e.stopPropagation()}>
         <div className="w-full space-y-3">
           {/* Chapter Progress */}
           <div
@@ -367,7 +353,7 @@ export function ReaderView({
 
             <button
               className={`border-none p-2 px-4 rounded-md cursor-pointer flex items-center gap-2 transition-all ${theme === 'bedtime' ? 'bg-stone-800 text-stone-200 hover:bg-stone-700' : 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200'}`}
-              onClick={() => setIsPlaying(!isPlaying)}
+              onClick={(e) => { e.stopPropagation(); setIsPlaying(!isPlaying); }}
               title={isPlaying ? "Pause" : "Play"}
               aria-label={isPlaying ? "Pause" : "Play"}
             >
@@ -462,7 +448,7 @@ export function ReaderView({
       {!isPlaying && (
         <button
           className="absolute bottom-8 opacity-30 hover:opacity-60 transition-opacity background-none border-none cursor-pointer text-inherit"
-          onClick={onCloseBook}
+          onClick={(e) => { e.stopPropagation(); onCloseBook(); }}
         >
           Close Book
         </button>
