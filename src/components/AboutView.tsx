@@ -1,4 +1,3 @@
-import React from 'react';
 import { ArrowLeft, BookOpen, Brain, Mic, Type, Library } from 'lucide-react';
 
 interface AboutViewProps {

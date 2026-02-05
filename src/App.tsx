@@ -20,7 +20,7 @@ import { AiModal } from './components/AiModal';
 import { StatsView } from './components/StatsView';
 import { AboutView } from './components/AboutView';
 import { AI_QUESTIONS, WPM_VANITY_RATIO } from './constants';
-import { LogIn, Info } from 'lucide-react';
+import { LogIn, Info, BookOpen } from 'lucide-react';
 
 type Theme = 'light' | 'dark' | 'bedtime';
 
