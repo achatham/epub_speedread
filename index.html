@@ -9,6 +9,26 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Roboto:wght@300;400;500;700&family=Merriweather:wght@300;400;700&display=swap" rel="stylesheet">
     <title>epub_rsvp</title>
+    <style>
+      html { background-color: #18181b; } /* Matches zinc-900 */
+    </style>
+    <script>
+      (function() {
+        try {
+          var settings = JSON.parse(localStorage.getItem('user_settings'));
+          var theme = settings ? settings.theme : null;
+          if (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            theme = 'dark';
+          }
+          if (theme === 'dark' || theme === 'bedtime') {
+            document.documentElement.classList.add('dark');
+            if (theme === 'bedtime') document.documentElement.style.backgroundColor = '#000';
+          } else if (theme === 'light') {
+            document.documentElement.style.backgroundColor = '#fff';
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

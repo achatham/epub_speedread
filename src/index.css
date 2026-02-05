@@ -19,6 +19,10 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+html {
+  @apply bg-white dark:bg-zinc-900;
+}
+
 body {
   @apply bg-white text-zinc-900 dark:bg-zinc-900 dark:text-zinc-100 transition-colors duration-300;
   margin: 0;
