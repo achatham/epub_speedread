@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ePub from 'epubjs';
 import {
   FirestoreStorage,
-  type BookRecord
+  type BookRecord,
+  type ReadingSession
 } from './utils/storage';
 import { auth } from './utils/firebase';
 import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, type User } from 'firebase/auth';
@@ -15,6 +16,7 @@ import { LibraryView } from './components/LibraryView';
 import { ReaderView } from './components/ReaderView';
 import { SettingsModal, type FontFamily } from './components/SettingsModal';
 import { AiModal } from './components/AiModal';
+import { StatsView } from './components/StatsView';
 import { AI_QUESTIONS, WPM_VANITY_RATIO } from './constants';
 import { LogIn } from 'lucide-react';
 
@@ -56,9 +58,21 @@ function App() {
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAskAiOpen, setIsAskAiOpen] = useState(false);
+  const [isStatsOpen, setIsStatsOpen] = useState(false);
+  const [sessions, setSessions] = useState<ReadingSession[]>([]);
 
-  const [ttsSpeed, setTtsSpeed] = useState(2.0);
-  const [geminiApiKey, setGeminiApiKey] = useState('');
+  const [ttsSpeed, setTtsSpeed] = useState(() => {
+    try {
+      const saved = localStorage.getItem('user_settings');
+      if (saved) return JSON.parse(saved).ttsSpeed || 2.0;
+    } catch (e) { }
+    return 2.0;
+  });
+
+  const [geminiApiKey, setGeminiApiKey] = useState(() => {
+    return getGeminiApiKey() || '';
+  });
+
   const [realEndIndex, setRealEndIndex] = useState<number | null>(null);
   const [aiQuestion, setAiQuestion] = useState('');
   const [aiResponse, setAiResponse] = useState('');
@@ -105,6 +119,7 @@ function App() {
       } else {
         setStorageProvider(null);
         setLibrary([]);
+        setSessions([]);
         setIsLoading(false);
       }
     });
@@ -129,8 +144,13 @@ function App() {
           if (settings.ttsSpeed) setTtsSpeed(settings.ttsSpeed);
         }
 
-        const books = await storageProvider.getAllBooks();
+        const [books, history] = await Promise.all([
+            storageProvider.getAllBooks(),
+            storageProvider.getSessions()
+        ]);
+        
         setLibrary(books);
+        setSessions(history);
       } catch (err) {
         console.error('Failed to load storage data', err);
       } finally {
@@ -347,6 +367,9 @@ function App() {
           startWordIndex: sessionStartIndexRef.current || 0,
           endWordIndex: currentIndex,
           durationSeconds: Math.round(durationMs / 1000)
+        }).then(() => {
+            // Refresh sessions list
+            storageProvider.getSessions().then(setSessions);
         }).catch(e => console.error("Failed to log session", e));
       } else {
         console.log("Session too short to log (< 10s)");
@@ -356,7 +379,7 @@ function App() {
       wordsReadInSessionRef.current = 0;
       sessionStartIndexRef.current = null;
     }
-  }, [isPlaying, wpm, currentBookId, storageProvider, currentIndex]);
+  }, [isPlaying, wpm, currentBookId, storageProvider, currentIndex, bookTitle]);
 
   // Track words read
   useEffect(() => {
@@ -390,23 +413,12 @@ function App() {
         else if (currentWord.endsWith(',') || currentWord.endsWith(';') || currentWord.endsWith(':')) multiplier = 1.5;
         const { prefix, suffix } = splitWord(currentWord);
         const maxSideChars = Math.max(prefix.length + 0.5, suffix.length + 0.5);
-        
-        // Calculate a baseline fitting size for a standard long word on this screen width
-        const { prefix: benchPrefix, suffix: benchSuffix } = splitWord("transportation");
-        const benchMax = Math.max(benchPrefix.length + 0.5, benchSuffix.length + 0.5);
-        const baselineSize = (window.innerWidth * 0.9) / (1.2 * benchMax);
-        
-        // Calculate the fitting size for the CURRENT word
-        const currentFittingSize = (window.innerWidth * 0.9) / (1.2 * maxSideChars);
+        if (((window.innerWidth * 0.9) / (1.2 * maxSideChars)) < (window.innerHeight * 0.25)) multiplier *= 1.5;
+        else if (currentWord.length > 8) multiplier *= 1.2;
 
-        // Only apply scaling penalty if this word is an outlier (shrunk > 20% vs baseline)
-        if (currentFittingSize < baselineSize * 0.8) {
-          multiplier *= 1.5;
-        } else if (currentWord.length > 8) {
-          multiplier *= 1.2;
-        }
-
-        interval = (60000 / wpm) * multiplier;
+        // Shave the WPM: The displayed WPM is 15% higher than the actual base WPM used here.
+        const baseWpm = wpm / WPM_VANITY_RATIO;
+        interval = (60000 / baseWpm) * multiplier;
 
         if (sections.some(s => s.startIndex === currentIndex + 1)) callback = () => setIsChapterBreak(true);
         else callback = nextWord;
@@ -477,6 +489,15 @@ function App() {
         ttsSpeed={ttsSpeed}
       />
 
+      <StatsView 
+        isOpen={isStatsOpen}
+        onClose={() => setIsStatsOpen(false)}
+        sessions={sessions}
+        books={library}
+        activeBookId={currentBookId}
+        theme={theme}
+      />
+
       {!currentBookId ? (
         <LibraryView
           library={library} isLoading={isLoading} theme={theme}
@@ -487,6 +508,7 @@ function App() {
           onFileUpload={handleFileUpload}
           fileInputRef={fileInputRef}
           onFileInputClick={onFileInputClick}
+          onStatsClick={() => setIsStatsOpen(true)}
         />
       ) : (
         <ReaderView
@@ -531,6 +553,7 @@ function App() {
           }}
           isReadingAloud={isReadingAloud} isSynthesizing={isSynthesizing} isChapterBreak={isChapterBreak}
           upcomingChapterTitle={sections.find(s => s.startIndex === currentIndex + 1)?.label || ''}
+          onStatsClick={() => setIsStatsOpen(true)}
         />
       )}
     </>

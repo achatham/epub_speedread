@@ -246,6 +246,20 @@ export class FirestoreStorage {
     await setDoc(sessionRef, { ...sessionData, id: sessionRef.id });
   }
 
+  async getSessions(bookId?: string): Promise<ReadingSession[]> {
+    try {
+      const snapshot = await getDocs(this.sessionsCollection);
+      let sessions = snapshot.docs.map(d => d.data() as ReadingSession);
+      if (bookId) {
+        sessions = sessions.filter(s => s.bookId === bookId);
+      }
+      return sessions.sort((a, b) => b.startTime - a.startTime);
+    } catch (e) {
+      console.error("Firestore getSessions failed", e);
+      return [];
+    }
+  }
+
   async saveChapterAudio(bookId: string, chapterIndex: number, speed: number, audioChunks: ArrayBuffer[]): Promise<void> {
     const id = `${bookId}-${chapterIndex}-${speed}`;
     await this.fileCache.saveAudio(id, audioChunks);

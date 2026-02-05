@@ -1,4 +1,4 @@
-import { Minus, Moon, Pause, Play, Plus, Settings, Settings2, SkipBack, Sparkles, Sun, Sunset, Volume2, Loader2, Square } from 'lucide-react';
+import { Minus, Moon, Pause, Play, Plus, Settings, Settings2, SkipBack, Sparkles, Sun, Sunset, Volume2, Loader2, Square, BarChart2 } from 'lucide-react';
 import type { WordData } from '../utils/text-processing';
 import { splitWord } from '../utils/orp';
 import type { FontFamily } from './SettingsModal';
@@ -35,6 +35,7 @@ interface ReaderViewProps {
   isSynthesizing: boolean;
   isChapterBreak: boolean;
   upcomingChapterTitle: string;
+  onStatsClick?: () => void;
 }
 
 export function ReaderView({
@@ -66,7 +67,8 @@ export function ReaderView({
   isReadingAloud,
   isSynthesizing,
   isChapterBreak,
-  upcomingChapterTitle
+  upcomingChapterTitle,
+  onStatsClick
 }: ReaderViewProps) {
   if (words.length === 0) {
     return (
@@ -200,6 +202,13 @@ export function ReaderView({
 
       {!isPlaying && (
         <div className="absolute top-4 right-4 flex gap-2 z-10" onClick={(e) => e.stopPropagation()}>
+          <button
+            onClick={onStatsClick}
+            className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+            title="Reading Stats"
+          >
+            <BarChart2 size={24} />
+          </button>
           <button
             onClick={onSettingsClick}
             className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
