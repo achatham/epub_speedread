@@ -10,7 +10,11 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Roboto:wght@300;400;500;700&family=Merriweather:wght@300;400;700&display=swap" rel="stylesheet">
     <title>epub_rsvp</title>
     <style>
-      html { background-color: #18181b; } /* Matches zinc-900 */
+      /* Prevent initial background flicker */
+      html, body { background-color: #fff; }
+      @media (prefers-color-scheme: dark) {
+        html, body { background-color: #18181b; }
+      }
     </style>
     <script>
       (function() {
@@ -22,7 +26,12 @@
           }
           if (theme === 'dark' || theme === 'bedtime') {
             document.documentElement.classList.add('dark');
-            if (theme === 'bedtime') document.documentElement.style.backgroundColor = '#000';
+            var bg = theme === 'bedtime' ? '#000' : '#18181b';
+            document.documentElement.style.backgroundColor = bg;
+            // Also set on body to be safe
+            document.addEventListener('DOMContentLoaded', function() {
+              document.body.style.backgroundColor = bg;
+            });
           } else if (theme === 'light') {
             document.documentElement.style.backgroundColor = '#fff';
           }

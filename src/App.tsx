@@ -57,8 +57,20 @@ function App() {
   
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAskAiOpen, setIsAskAiOpen] = useState(false);
-  const [ttsSpeed, setTtsSpeed] = useState(2.0);
-  const [geminiApiKey, setGeminiApiKey] = useState('');
+  
+  // Initialize from localStorage immediately
+  const [ttsSpeed, setTtsSpeed] = useState(() => {
+    try {
+      const saved = localStorage.getItem('user_settings');
+      if (saved) return JSON.parse(saved).ttsSpeed || 2.0;
+    } catch (e) {}
+    return 2.0;
+  });
+  
+  const [geminiApiKey, setGeminiApiKey] = useState(() => {
+    return getGeminiApiKey() || '';
+  });
+
   const [realEndIndex, setRealEndIndex] = useState<number | null>(null);
   const [aiQuestion, setAiQuestion] = useState('');
   const [aiResponse, setAiResponse] = useState('');
@@ -69,8 +81,28 @@ function App() {
 
   const [isTocOpen, setIsTocOpen] = useState(false);
   const [isNavOpen, setIsNavOpen] = useState(false);
-  const [theme, setTheme] = useState<Theme>('light');
-  const [fontFamily, setFontFamily] = useState<FontFamily>('system');
+  
+  const [theme, setTheme] = useState<Theme>(() => {
+    try {
+      const saved = localStorage.getItem('user_settings');
+      if (saved) {
+        const theme = JSON.parse(saved).theme;
+        if (theme) return theme as Theme;
+      }
+    } catch (e) {}
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      return 'dark';
+    }
+    return 'light';
+  });
+
+  const [fontFamily, setFontFamily] = useState<FontFamily>(() => {
+    try {
+      const saved = localStorage.getItem('user_settings');
+      if (saved) return JSON.parse(saved).fontFamily || 'system';
+    } catch (e) {}
+    return 'system';
+  });
   
   const timerRef = useRef<number | null>(null);
   const sessionStartTimeRef = useRef<number | null>(null);
