@@ -390,8 +390,21 @@ function App() {
         else if (currentWord.endsWith(',') || currentWord.endsWith(';') || currentWord.endsWith(':')) multiplier = 1.5;
         const { prefix, suffix } = splitWord(currentWord);
         const maxSideChars = Math.max(prefix.length + 0.5, suffix.length + 0.5);
-        if (((window.innerWidth * 0.9) / (1.2 * maxSideChars)) < (window.innerHeight * 0.25)) multiplier *= 1.5;
-        else if (currentWord.length > 8) multiplier *= 1.2;
+        
+        // Calculate a baseline fitting size for a standard long word on this screen width
+        const { prefix: benchPrefix, suffix: benchSuffix } = splitWord("transportation");
+        const benchMax = Math.max(benchPrefix.length + 0.5, benchSuffix.length + 0.5);
+        const baselineSize = (window.innerWidth * 0.9) / (1.2 * benchMax);
+        
+        // Calculate the fitting size for the CURRENT word
+        const currentFittingSize = (window.innerWidth * 0.9) / (1.2 * maxSideChars);
+
+        // Only apply scaling penalty if this word is an outlier (shrunk > 20% vs baseline)
+        if (currentFittingSize < baselineSize * 0.8) {
+          multiplier *= 1.5;
+        } else if (currentWord.length > 8) {
+          multiplier *= 1.2;
+        }
 
         interval = (60000 / wpm) * multiplier;
 
