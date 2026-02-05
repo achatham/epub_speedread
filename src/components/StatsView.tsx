@@ -49,33 +49,47 @@ export function StatsView({
     const activeBook = books.find(b => b.id === activeBookId);
     if (!activeBook) return null;
 
-    // We'll use the total words in the book as the 100% mark
-    // Wait, we don't have totalWords easily available in BookRecord if not currently loaded.
-    // We can use the max endWordIndex found in any session as a proxy, or check progress.
-    // Actually, BookRecord.progress.wordIndex is our current max.
-    // Let's assume the largest index we've seen + some buffer if it's not the end.
-    const maxIndex = Math.max(activeBook.progress.wordIndex, ...filteredSessions.map(s => s.endWordIndex));
+    // Use the actual/estimated end index for the 100% baseline
+    // If we have a realEndIndex from AI, use that. Otherwise use current wordIndex or max seen.
+    const bookTotalWords = activeBook.analysis.realEndIndex || activeBook.progress.wordIndex || 1;
+    const maxIndex = Math.max(bookTotalWords, ...filteredSessions.map(s => s.endWordIndex));
     
     // Sort sessions chronologically for the chart
     const chrono = [...filteredSessions].sort((a, b) => a.startTime - b.startTime);
     
     const width = 400;
-    const height = 150;
-    const padding = 20;
+    const height = 180;
+    const paddingLeft = 40;
+    const paddingRight = 20;
+    const paddingTop = 20;
+    const paddingBottom = 30;
 
     const points = chrono.map((s, i) => {
-        const x = padding + (i / (chrono.length - 1)) * (width - padding * 2);
-        const y = height - padding - (s.endWordIndex / maxIndex) * (height - padding * 2);
+        const x = paddingLeft + (i / (chrono.length - 1)) * (width - paddingLeft - paddingRight);
+        const y = height - paddingBottom - (s.endWordIndex / maxIndex) * (height - paddingTop - paddingBottom);
         return `${x},${y}`;
     }).join(' ');
 
     return (
-      <div className="relative w-full">
+      <div className="relative w-full group/chart">
         <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto overflow-visible">
           {/* Axis */}
-          <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="currentColor" strokeWidth="1" opacity="0.2" />
-          <line x1={padding} y1={padding} x2={padding} y2={height - padding} stroke="currentColor" strokeWidth="1" opacity="0.2" />
+          <line x1={paddingLeft} y1={height - paddingBottom} x2={width - paddingRight} y2={height - paddingBottom} stroke="currentColor" strokeWidth="1" opacity="0.2" />
+          <line x1={paddingLeft} y1={paddingTop} x2={paddingLeft} y2={height - paddingBottom} stroke="currentColor" strokeWidth="1" opacity="0.2" />
           
+          {/* Y-Axis Labels */}
+          {[0, 0.25, 0.5, 0.75, 1].map(tick => {
+              const y = height - paddingBottom - tick * (height - paddingTop - paddingBottom);
+              return (
+                  <g key={tick}>
+                    <line x1={paddingLeft - 5} y1={y} x2={paddingLeft} y2={y} stroke="currentColor" strokeWidth="1" opacity="0.2" />
+                    <text x={paddingLeft - 10} y={y} textAnchor="end" alignmentBaseline="middle" className="text-[10px] fill-current opacity-40 font-mono">
+                        {Math.round(tick * 100)}%
+                    </text>
+                  </g>
+              );
+          })}
+
           {/* Line */}
           <polyline
             fill="none"
@@ -86,17 +100,31 @@ export function StatsView({
             points={points}
           />
           
-          {/* Dots */}
+          {/* Dots with Tooltips */}
           {chrono.map((s, i) => {
-             const x = padding + (i / (chrono.length - 1)) * (width - padding * 2);
-             const y = height - padding - (s.endWordIndex / maxIndex) * (height - padding * 2);
+             const x = paddingLeft + (i / (chrono.length - 1)) * (width - paddingLeft - paddingRight);
+             const y = height - paddingBottom - (s.endWordIndex / maxIndex) * (height - paddingTop - paddingBottom);
+             const percent = Math.round((s.endWordIndex / maxIndex) * 100);
+             const dateStr = new Date(s.startTime).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+             
              return (
-                <circle key={i} cx={x} cy={y} r="4" fill="currentColor" />
+                <g key={i} className="group/point">
+                    <circle cx={x} cy={y} r="4" fill="currentColor" className="transition-all group-hover/point:r-6" />
+                    {/* Tooltip trigger area */}
+                    <circle cx={x} cy={y} r="12" fill="transparent" className="cursor-pointer" />
+                    {/* Simple SVG Tooltip */}
+                    <g className="opacity-0 group-hover/point:opacity-100 pointer-events-none transition-opacity">
+                        <rect x={x - 30} y={y - 35} width="60" height="25" rx="4" className="fill-zinc-800 dark:fill-zinc-100" />
+                        <text x={x} y={y - 18} textAnchor="middle" className="text-[9px] font-bold fill-white dark:fill-zinc-900">
+                            {dateStr}: {percent}%
+                        </text>
+                    </g>
+                </g>
              );
           })}
         </svg>
-        <div className="flex justify-between text-[10px] opacity-50 mt-2 px-4">
-            <span>Started</span>
+        <div className="flex justify-between text-[10px] opacity-50 mt-2" style={{ paddingLeft: `${paddingLeft}px` }}>
+            <span>Start</span>
             <span>Progress through {activeBook.meta.title}</span>
             <span>Now</span>
         </div>
