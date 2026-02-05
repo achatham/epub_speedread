@@ -1,6 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { db as firestore, storage as firebaseStorage } from './firebase';
-import { collection, doc, setDoc, getDocs, deleteDoc, getDoc, updateDoc } from 'firebase/firestore';
+import { collection, doc, setDoc, getDocs, deleteDoc, getDoc, updateDoc, query, orderBy } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 
 export interface UserSettings {
@@ -30,7 +30,7 @@ export interface BookRecord {
   };
   storage: {
     cloudUrl?: string;
-    localFile?: File | Blob;
+    localFile?: File | Blob; // Not stored in Firestore, attached at runtime
   };
 }
 
@@ -45,195 +45,67 @@ export interface ReadingSession {
   durationSeconds: number;
 }
 
-export interface ChapterAudioRecord {
-  id: string;
-  audioChunks: ArrayBuffer[];
-}
-
-interface RSVPDB extends DBSchema {
-  books: {
+// Keep local cache for heavy assets (EPUBs + Audio)
+interface FileCacheDB extends DBSchema {
+  files: {
     key: string;
-    value: BookRecord;
-  };
-  sessions: {
-    key: string;
-    value: ReadingSession;
-    indexes: { 'by-book': string; 'by-time': number };
+    value: Blob; // Keyed by bookId
   };
   chapterAudio: {
     key: string;
-    value: ChapterAudioRecord;
+    value: { id: string; audioChunks: ArrayBuffer[] };
   };
 }
 
-const DB_NAME = 'epub-rsvp-db-v2';
-const STORE_NAME = 'books';
-const SESSIONS_STORE_NAME = 'sessions';
-const AUDIO_STORE_NAME = 'chapterAudio';
+const DB_NAME = 'epub-rsvp-files';
+const FILE_STORE = 'files';
+const AUDIO_STORE = 'chapterAudio';
 
-export interface StorageProvider {
-  // User Settings
-  getSettings(): Promise<UserSettings | null>;
-  updateSettings(settings: Partial<UserSettings>): Promise<void>;
-
-  // Books
-  addBook(file: File, title: string): Promise<string>;
-  putBook(book: BookRecord): Promise<void>;
-  getAllBooks(): Promise<BookRecord[]>;
-  getBook(id: string): Promise<BookRecord | undefined>;
-  deleteBook(id: string): Promise<void>;
-  updateBookProgress(id: string, index: number): Promise<void>;
-  updateBookWpm(id: string, wpm: number): Promise<void>;
-  updateBookRealEndQuote(id: string, quote: string): Promise<void>;
-  updateBookRealEndIndex(id: string, index: number): Promise<void>;
-  
-  // Sessions
-  logReadingSession(session: Omit<ReadingSession, 'id'>): Promise<void>;
-
-  // Audio
-  saveChapterAudio(bookId: string, chapterIndex: number, speed: number, audioChunks: ArrayBuffer[]): Promise<void>;
-  getChapterAudio(bookId: string, chapterIndex: number, speed: number): Promise<ArrayBuffer[] | undefined>;
-}
-
-export class LocalStorage implements StorageProvider {
-  private dbPromise: Promise<IDBPDatabase<RSVPDB>>;
+// Helper for local file caching
+class LocalFileCache {
+  private dbPromise: Promise<IDBPDatabase<FileCacheDB>>;
 
   constructor() {
-    this.dbPromise = openDB<RSVPDB>(DB_NAME, 3, { // Bump version for sessions index update
-      upgrade(db, oldVersion, _newVersion, transaction) {
-        if (oldVersion < 1) {
-            db.createObjectStore(STORE_NAME, { keyPath: 'id' });
-            db.createObjectStore(AUDIO_STORE_NAME, { keyPath: 'id' });
-        }
-        if (oldVersion < 2) {
-            const sessionStore = db.createObjectStore(SESSIONS_STORE_NAME, { keyPath: 'id' });
-            sessionStore.createIndex('by-book', 'bookId');
-        }
-        if (oldVersion < 3) {
-            const sessionStore = transaction.objectStore(SESSIONS_STORE_NAME);
-            sessionStore.createIndex('by-time', 'startTime');
-        }
+    this.dbPromise = openDB<FileCacheDB>(DB_NAME, 1, {
+      upgrade(db) {
+        db.createObjectStore(FILE_STORE);
+        db.createObjectStore(AUDIO_STORE, { keyPath: 'id' });
       },
     });
   }
 
-  async getSettings(): Promise<UserSettings | null> {
-    const saved = localStorage.getItem('user_settings');
-    return saved ? JSON.parse(saved) : null;
+  async getFile(bookId: string): Promise<Blob | undefined> {
+    return (await this.dbPromise).get(FILE_STORE, bookId);
   }
 
-  async updateSettings(settings: Partial<UserSettings>): Promise<void> {
-    const current = await this.getSettings() || { lastUpdated: 0 };
-    const updated = { ...current, ...settings, lastUpdated: Date.now() };
-    localStorage.setItem('user_settings', JSON.stringify(updated));
+  async saveFile(bookId: string, file: Blob): Promise<void> {
+    await (await this.dbPromise).put(FILE_STORE, file, bookId);
   }
 
-  async addBook(file: File, title: string): Promise<string> {
-    const db = await this.dbPromise;
-    const id = crypto.randomUUID();
-    const now = Date.now();
-    const book: BookRecord = {
-      id,
-      meta: { title, addedAt: now },
-      progress: { wordIndex: 0, lastReadAt: now },
-      settings: { wpm: 300 },
-      analysis: {},
-      storage: { localFile: file }
-    };
-    await db.put(STORE_NAME, book);
-    return id;
+  async deleteFile(bookId: string): Promise<void> {
+    await (await this.dbPromise).delete(FILE_STORE, bookId);
   }
 
-  async putBook(book: BookRecord): Promise<void> {
-      const db = await this.dbPromise;
-      await db.put(STORE_NAME, book);
-  }
-
-  async getAllBooks(): Promise<BookRecord[]> {
-    const db = await this.dbPromise;
-    const books = await db.getAll(STORE_NAME);
-    return books.sort((a, b) => b.meta.addedAt - a.meta.addedAt);
-  }
-
-  async getBook(id: string): Promise<BookRecord | undefined> {
-    const db = await this.dbPromise;
-    return db.get(STORE_NAME, id);
-  }
-
-  async deleteBook(id: string): Promise<void> {
-    const db = await this.dbPromise;
-    await db.delete(STORE_NAME, id);
-  }
-
-  async updateBookProgress(id: string, index: number): Promise<void> {
-    const db = await this.dbPromise;
-    const book = await db.get(STORE_NAME, id);
-    if (book) {
-      book.progress.wordIndex = index;
-      book.progress.lastReadAt = Date.now();
-      await db.put(STORE_NAME, book);
-    }
-  }
-
-  async updateBookWpm(id: string, wpm: number): Promise<void> {
-    const db = await this.dbPromise;
-    const book = await db.get(STORE_NAME, id);
-    if (book) {
-      book.settings.wpm = wpm;
-      await db.put(STORE_NAME, book);
-    }
-  }
-
-  async updateBookRealEndQuote(id: string, quote: string): Promise<void> {
-    const db = await this.dbPromise;
-    const book = await db.get(STORE_NAME, id);
-    if (book) {
-      book.analysis.realEndQuote = quote;
-      await db.put(STORE_NAME, book);
-    }
-  }
-
-  async updateBookRealEndIndex(id: string, index: number): Promise<void> {
-    const db = await this.dbPromise;
-    const book = await db.get(STORE_NAME, id);
-    if (book) {
-      book.analysis.realEndIndex = index;
-      await db.put(STORE_NAME, book);
-    }
-  }
-
-  async logReadingSession(sessionData: Omit<ReadingSession, 'id'>): Promise<void> {
-      const db = await this.dbPromise;
-      const id = crypto.randomUUID();
-      await db.put(SESSIONS_STORE_NAME, { ...sessionData, id });
-  }
-
-  async saveChapterAudio(bookId: string, chapterIndex: number, speed: number, audioChunks: ArrayBuffer[]): Promise<void> {
-    const db = await this.dbPromise;
-    const id = `${bookId}-${chapterIndex}-${speed}`;
-    await db.put(AUDIO_STORE_NAME, { id, audioChunks });
-  }
-
-  async getChapterAudio(bookId: string, chapterIndex: number, speed: number): Promise<ArrayBuffer[] | undefined> {
-    const db = await this.dbPromise;
-    const id = `${bookId}-${chapterIndex}-${speed}`;
-    const record = await db.get(AUDIO_STORE_NAME, id);
+  async getAudio(id: string): Promise<ArrayBuffer[] | undefined> {
+    const record = await (await this.dbPromise).get(AUDIO_STORE, id);
     return record?.audioChunks;
+  }
+
+  async saveAudio(id: string, audioChunks: ArrayBuffer[]): Promise<void> {
+    await (await this.dbPromise).put(AUDIO_STORE, { id, audioChunks });
   }
 }
 
-export class CloudStorage implements StorageProvider {
-  private local: LocalStorage;
-  private userId: string;
+// Main Storage Provider (Firestore + Local File Cache)
+export class FirestoreStorage {
+  private fileCache = new LocalFileCache();
 
-  constructor(local: LocalStorage, userId: string) {
-    this.local = local;
-    this.userId = userId;
+  constructor(private userId: string) {
+    if (!firestore) throw new Error("Firestore not initialized");
   }
 
   private get userDocRef() {
-    if (!firestore) throw new Error("Firestore not initialized");
-    return doc(firestore, 'users', this.userId);
+    return doc(firestore!, 'users', this.userId);
   }
 
   private get booksCollection() {
@@ -245,194 +117,140 @@ export class CloudStorage implements StorageProvider {
   }
 
   async getSettings(): Promise<UserSettings | null> {
-    const localSettings = await this.local.getSettings();
-    if (!firestore) return localSettings;
-
     try {
       const snap = await getDoc(this.userDocRef);
       if (snap.exists()) {
-        const cloudSettings = snap.data() as UserSettings;
-        if (!localSettings || cloudSettings.lastUpdated > localSettings.lastUpdated) {
-          await this.local.updateSettings(cloudSettings);
-          return cloudSettings;
-        }
+        return snap.data() as UserSettings;
       }
     } catch (e) {
-      console.error("Cloud settings fetch failed", e);
+      console.error("Firestore settings fetch failed", e);
     }
-    return localSettings;
+    return null;
   }
 
   async updateSettings(settings: Partial<UserSettings>): Promise<void> {
-    await this.local.updateSettings(settings);
-    if (firestore) {
-      try {
-        const updated = await this.local.getSettings();
-        await setDoc(this.userDocRef, updated, { merge: true });
-      } catch (e) {
-        console.error("Cloud settings sync failed", e);
-      }
+    try {
+      await setDoc(this.userDocRef, { ...settings, lastUpdated: Date.now() }, { merge: true });
+    } catch (e) {
+      console.error("Firestore settings sync failed", e);
     }
   }
 
   async addBook(file: File, title: string): Promise<string> {
-    const id = await this.local.addBook(file, title);
-    if (firestore && firebaseStorage) {
-      try {
+    const id = crypto.randomUUID();
+    const now = Date.now();
+
+    // 1. Upload to Firebase Storage
+    if (firebaseStorage) {
         const storageRef = ref(firebaseStorage, `users/${this.userId}/books/${id}.epub`);
         await uploadBytes(storageRef, file);
         const cloudUrl = await getDownloadURL(storageRef);
 
-        const book = await this.local.getBook(id);
-        if (book) {
-          const cloudBook: any = { ...book, storage: { cloudUrl } };
-          if (cloudBook.storage) {
-            delete cloudBook.storage.localFile;
-          }
-          await setDoc(doc(this.booksCollection, id), cloudBook);
-        }
-      } catch (e) {
-        console.error("Cloud sync failed for addBook", e);
-      }
+        // 2. Create Firestore Metadata
+        const bookMeta: BookRecord = {
+            id,
+            meta: { title, addedAt: now },
+            progress: { wordIndex: 0, lastReadAt: now },
+            settings: { wpm: 300 },
+            analysis: {},
+            storage: { cloudUrl }
+        };
+        // Remove localFile before sending to Firestore
+        delete (bookMeta.storage as any).localFile;
+        await setDoc(doc(this.booksCollection, id), bookMeta);
     }
+
+    // 3. Cache file locally for immediate use
+    await this.fileCache.saveFile(id, file);
     return id;
   }
 
-  async putBook(book: BookRecord): Promise<void> {
-      await this.local.putBook(book);
-  }
-
   async getAllBooks(): Promise<BookRecord[]> {
-    const localBooks = await this.local.getAllBooks();
-    const localMap = new Map(localBooks.map(b => [b.id, b]));
-    console.log(`[Storage] Local books found: ${localBooks.length}`);
-
-    if (firestore) {
-      try {
-        console.log(`[Storage] Fetching cloud books for user: ${this.userId}`);
-        const snapshot = await getDocs(this.booksCollection);
-        const cloudBooks = snapshot.docs.map(d => d.data() as BookRecord);
-        console.log(`[Storage] Cloud books found: ${cloudBooks.length}`);
-
-        for (const cloudBook of cloudBooks) {
-          const localBook = localMap.get(cloudBook.id);
-          if (!localBook || cloudBook.progress.lastReadAt > localBook.progress.lastReadAt) {
-            const merged = localBook
-              ? { ...cloudBook, storage: { ...cloudBook.storage, localFile: localBook.storage.localFile } }
-              : { ...cloudBook, storage: { ...cloudBook.storage, localFile: undefined } };
-            localMap.set(cloudBook.id, merged);
-            
-            // HYDRATION: Ensure metadata is saved locally immediately
-            await this.local.putBook(merged);
+    try {
+      const snapshot = await getDocs(this.booksCollection);
+      const books = snapshot.docs.map(d => d.data() as BookRecord);
+      
+      // Attach local files if cached
+      for (const book of books) {
+          const cached = await this.fileCache.getFile(book.id);
+          if (cached) {
+              book.storage.localFile = cached;
           }
-        }
-      } catch (e) {
-        console.error("[Storage] Cloud fetch failed:", e);
       }
+      return books.sort((a, b) => b.progress.lastReadAt - a.progress.lastReadAt);
+    } catch (e) {
+      console.error("Firestore getAllBooks failed", e);
+      return [];
     }
-    const finalBooks = Array.from(localMap.values()).sort((a, b) => b.progress.lastReadAt - a.progress.lastReadAt);
-    console.log(`[Storage] Total merged books: ${finalBooks.length}`);
-    return finalBooks;
   }
 
   async getBook(id: string): Promise<BookRecord | undefined> {
-    let book = await this.local.getBook(id);
-    if (!book && firestore) {
-      try {
-        const snap = await getDoc(doc(this.booksCollection, id));
-        if (snap.exists()) {
-          const data = snap.data() as BookRecord;
-          if (data.storage.cloudUrl) {
-            const response = await fetch(data.storage.cloudUrl);
-            const blob = await response.blob();
-            const file = new File([blob], `${data.meta.title}.epub`, { type: 'application/epub+zip' });
-            book = { ...data, storage: { ...data.storage, localFile: file } };
-            await this.local.putBook(book);
-          }
-        }
-      } catch (e) {
-        console.error("Failed to fetch cloud book", e);
+    try {
+      // 1. Get Metadata
+      const snap = await getDoc(doc(this.booksCollection, id));
+      if (!snap.exists()) return undefined;
+      const book = snap.data() as BookRecord;
+
+      // 2. Get File (Cache -> Cloud)
+      let file = await this.fileCache.getFile(id);
+      if (!file && book.storage.cloudUrl) {
+          console.log(`[Storage] Downloading ${book.meta.title} from cloud...`);
+          const response = await fetch(book.storage.cloudUrl);
+          const blob = await response.blob();
+          file = new File([blob], `${book.meta.title}.epub`, { type: 'application/epub+zip' });
+          await this.fileCache.saveFile(id, file);
       }
+      book.storage.localFile = file;
+      return book;
+    } catch (e) {
+      console.error("Firestore getBook failed", e);
+      return undefined;
     }
-    return book;
   }
 
   async deleteBook(id: string): Promise<void> {
-    await this.local.deleteBook(id);
-    if (firestore && firebaseStorage) {
-      try {
-        await deleteDoc(doc(this.booksCollection, id));
-        await deleteObject(ref(firebaseStorage, `users/${this.userId}/books/${id}.epub`));
-      } catch (e) {
-        console.warn("Cloud delete failed", e);
+    try {
+      await deleteDoc(doc(this.booksCollection, id));
+      await this.fileCache.deleteFile(id);
+      if (firebaseStorage) {
+          await deleteObject(ref(firebaseStorage, `users/${this.userId}/books/${id}.epub`));
       }
+    } catch (e) {
+      console.error("Delete failed", e);
     }
   }
 
   async updateBookProgress(id: string, index: number): Promise<void> {
-    await this.local.updateBookProgress(id, index);
-    if (firestore) {
-      try {
-        await updateDoc(doc(this.booksCollection, id), {
-          'progress.wordIndex': index,
-          'progress.lastReadAt': Date.now()
-        });
-      } catch (e) {
-        console.error("Cloud progress sync failed", e);
-      }
-    }
+    await updateDoc(doc(this.booksCollection, id), {
+      'progress.wordIndex': index,
+      'progress.lastReadAt': Date.now()
+    });
   }
 
   async updateBookWpm(id: string, wpm: number): Promise<void> {
-    await this.local.updateBookWpm(id, wpm);
-    if (firestore) {
-      try {
-        await updateDoc(doc(this.booksCollection, id), { 'settings.wpm': wpm });
-      } catch (e) {
-        console.error("Cloud wpm sync failed", e);
-      }
-    }
+    await updateDoc(doc(this.booksCollection, id), { 'settings.wpm': wpm });
   }
 
   async updateBookRealEndQuote(id: string, quote: string): Promise<void> {
-    await this.local.updateBookRealEndQuote(id, quote);
-    if (firestore) {
-      try {
-        await updateDoc(doc(this.booksCollection, id), { 'analysis.realEndQuote': quote });
-      } catch (e) {
-        console.error("Cloud quote sync failed", e);
-      }
-    }
+    await updateDoc(doc(this.booksCollection, id), { 'analysis.realEndQuote': quote });
   }
 
   async updateBookRealEndIndex(id: string, index: number): Promise<void> {
-    await this.local.updateBookRealEndIndex(id, index);
-    if (firestore) {
-      try {
-        await updateDoc(doc(this.booksCollection, id), { 'analysis.realEndIndex': index });
-      } catch (e) {
-        console.error("Cloud index sync failed", e);
-      }
-    }
+    await updateDoc(doc(this.booksCollection, id), { 'analysis.realEndIndex': index });
   }
 
   async logReadingSession(sessionData: Omit<ReadingSession, 'id'>): Promise<void> {
-    await this.local.logReadingSession(sessionData);
-    if (firestore) {
-      try {
-        const sessionRef = doc(this.sessionsCollection);
-        await setDoc(sessionRef, { ...sessionData, id: sessionRef.id });
-      } catch (e) {
-        console.error("Cloud session log failed", e);
-      }
-    }
+    const sessionRef = doc(this.sessionsCollection);
+    await setDoc(sessionRef, { ...sessionData, id: sessionRef.id });
   }
 
   async saveChapterAudio(bookId: string, chapterIndex: number, speed: number, audioChunks: ArrayBuffer[]): Promise<void> {
-    return this.local.saveChapterAudio(bookId, chapterIndex, speed, audioChunks);
+    const id = `${bookId}-${chapterIndex}-${speed}`;
+    await this.fileCache.saveAudio(id, audioChunks);
   }
 
   async getChapterAudio(bookId: string, chapterIndex: number, speed: number): Promise<ArrayBuffer[] | undefined> {
-    return this.local.getChapterAudio(bookId, chapterIndex, speed);
+    const id = `${bookId}-${chapterIndex}-${speed}`;
+    return this.fileCache.getAudio(id);
   }
 }

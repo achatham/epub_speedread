@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ePub from 'epubjs';
 import {
-  LocalStorage,
-  CloudStorage,
-  type StorageProvider,
+  FirestoreStorage,
   type BookRecord
 } from './utils/storage';
 import { auth } from './utils/firebase';
@@ -18,6 +16,7 @@ import { ReaderView } from './components/ReaderView';
 import { SettingsModal, type FontFamily } from './components/SettingsModal';
 import { AiModal } from './components/AiModal';
 import { AI_QUESTIONS } from './constants';
+import { LogIn } from 'lucide-react';
 
 type Theme = 'light' | 'dark' | 'bedtime';
 
@@ -46,7 +45,7 @@ function App() {
   const [currentBookId, setCurrentBookId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
-  const [storageProvider, setStorageProvider] = useState<StorageProvider>(() => new LocalStorage());
+  const [storageProvider, setStorageProvider] = useState<FirestoreStorage | null>(null);
 
   const [words, setWords] = useState<WordData[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -58,19 +57,8 @@ function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAskAiOpen, setIsAskAiOpen] = useState(false);
 
-  // Initialize from localStorage immediately
-  const [ttsSpeed, setTtsSpeed] = useState(() => {
-    try {
-      const saved = localStorage.getItem('user_settings');
-      if (saved) return JSON.parse(saved).ttsSpeed || 2.0;
-    } catch (e) { }
-    return 2.0;
-  });
-
-  const [geminiApiKey, setGeminiApiKey] = useState(() => {
-    return getGeminiApiKey() || '';
-  });
-
+  const [ttsSpeed, setTtsSpeed] = useState(2.0);
+  const [geminiApiKey, setGeminiApiKey] = useState('');
   const [realEndIndex, setRealEndIndex] = useState<number | null>(null);
   const [aiQuestion, setAiQuestion] = useState('');
   const [aiResponse, setAiResponse] = useState('');
@@ -96,13 +84,7 @@ function App() {
     return 'light';
   });
 
-  const [fontFamily, setFontFamily] = useState<FontFamily>(() => {
-    try {
-      const saved = localStorage.getItem('user_settings');
-      if (saved) return JSON.parse(saved).fontFamily || 'system';
-    } catch (e) { }
-    return 'system';
-  });
+  const [fontFamily, setFontFamily] = useState<FontFamily>('system');
 
   const timerRef = useRef<number | null>(null);
   const sessionStartTimeRef = useRef<number | null>(null);
@@ -112,26 +94,27 @@ function App() {
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
   const chapterAudioControllerRef = useRef<AudioController | null>(null);
 
-  useEffect(() => {
-    (window as any).__loadMockWords = (mockWords: WordData[], sectionsList: { label: string, startIndex: number }[] = []) => {
-      setWords(mockWords);
-      setBookTitle("Mock Book");
-      setSections(sectionsList.length > 0 ? sectionsList : [{ label: 'Start', startIndex: 0 }]);
-      setCurrentBookId("mock");
-      setIsLoading(false);
-    };
-  }, []);
-
+  // --- Auth & Storage Init ---
   useEffect(() => {
     if (!auth) return;
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
-      setStorageProvider(u ? new CloudStorage(new LocalStorage(), u.uid) : new LocalStorage());
+      if (u) {
+        const provider = new FirestoreStorage(u.uid);
+        setStorageProvider(provider);
+      } else {
+        setStorageProvider(null);
+        setLibrary([]);
+        setIsLoading(false);
+      }
     });
     return unsubscribe;
   }, []);
 
+  // --- Load Data ---
   useEffect(() => {
+    if (!storageProvider) return;
+    
     const init = async () => {
       setIsLoading(true);
       try {
@@ -168,7 +151,7 @@ function App() {
   const toggleTheme = () => {
     const nextTheme: Theme = theme === 'light' ? 'dark' : theme === 'dark' ? 'bedtime' : 'light';
     setTheme(nextTheme);
-    storageProvider.updateSettings({ theme: nextTheme });
+    storageProvider?.updateSettings({ theme: nextTheme });
   };
 
   const handleSignIn = async () => {
@@ -183,6 +166,7 @@ function App() {
   const onFileInputClick = (e: React.MouseEvent<HTMLInputElement>) => { (e.target as HTMLInputElement).value = ''; };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!storageProvider) return;
     const file = e.target.files?.[0];
     if (!file) return;
     setIsLoading(true);
@@ -195,6 +179,7 @@ function App() {
 
   const handleDeleteBook = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
+    if (!storageProvider) return;
     if (confirm('Delete this book?')) {
       await storageProvider.deleteBook(id);
       setLibrary(await storageProvider.getAllBooks());
@@ -203,7 +188,7 @@ function App() {
 
   const handleCloseBook = async () => {
     setIsPlaying(false);
-    if (currentBookId) {
+    if (currentBookId && storageProvider) {
       await storageProvider.updateBookProgress(currentBookId, currentIndex);
       setLibrary(await storageProvider.getAllBooks());
     }
@@ -212,6 +197,7 @@ function App() {
   };
 
   const processBook = useCallback(async (bookRecord: BookRecord) => {
+    if (!storageProvider) return;
     try {
       let file = bookRecord.storage.localFile;
       if (!file) {
@@ -287,7 +273,7 @@ function App() {
   }, [storageProvider]);
 
   useEffect(() => {
-    if (currentBookId && currentBookId !== 'mock') {
+    if (currentBookId && currentBookId !== 'mock' && storageProvider) {
       setIsLoading(true);
       const record = library.find(b => b.id === currentBookId);
       if (record) processBook(record).then(() => setIsLoading(false));
@@ -299,7 +285,7 @@ function App() {
   }, [currentBookId, processBook, library, storageProvider]);
 
   useEffect(() => {
-    if (!isPlaying && currentBookId) storageProvider.updateBookProgress(currentBookId, currentIndex);
+    if (!isPlaying && currentBookId && storageProvider) storageProvider.updateBookProgress(currentBookId, currentIndex);
   }, [isPlaying, currentIndex, currentBookId, storageProvider]);
 
   const handleSetIsPlaying = useCallback((playing: boolean) => {
@@ -330,7 +316,7 @@ function App() {
       }
     }
     setIsPlaying(playing);
-  }, [isPlaying, currentIndex, words, isReadingAloud, storageProvider]);
+  }, [isPlaying, currentIndex, words, isReadingAloud]);
 
   useEffect(() => {
     if (isPlaying) {
@@ -339,7 +325,7 @@ function App() {
         wordsReadInSessionRef.current = 0;
         sessionStartIndexRef.current = currentIndex;
       }
-    } else if (sessionStartTimeRef.current !== null && currentBookId) {
+    } else if (sessionStartTimeRef.current !== null && currentBookId && storageProvider) {
       const durationMs = Date.now() - sessionStartTimeRef.current;
       const durationMins = durationMs / 60000;
       const wordsRead = wordsReadInSessionRef.current;
@@ -351,16 +337,21 @@ function App() {
 - Set WPM: ${wpm}
 - Effective Avg WPM: ${avgWpm}`);
 
-      // Log Session to Storage
-      storageProvider.logReadingSession({
-        bookId: currentBookId,
-        startTime: sessionStartTimeRef.current,
-        endTime: Date.now(),
-        startWordIndex: sessionStartIndexRef.current || 0,
-        endWordIndex: currentIndex,
-        durationSeconds: Math.round(durationMs / 1000)
-      }).catch(e => console.error("Failed to log session", e));
-
+      // Log Session to Storage (only if longer than 10 seconds)
+      if (durationMs >= 10000) {
+        storageProvider.logReadingSession({
+          bookId: currentBookId,
+          bookTitle: bookTitle,
+          startTime: sessionStartTimeRef.current,
+          endTime: Date.now(),
+          startWordIndex: sessionStartIndexRef.current || 0,
+          endWordIndex: currentIndex,
+          durationSeconds: Math.round(durationMs / 1000)
+        }).catch(e => console.error("Failed to log session", e));
+      } else {
+        console.log("Session too short to log (< 10s)");
+      }
+      
       sessionStartTimeRef.current = null;
       wordsReadInSessionRef.current = 0;
       sessionStartIndexRef.current = null;
@@ -403,8 +394,6 @@ function App() {
         else if (currentWord.length > 8) multiplier *= 1.2;
 
         // Shave the WPM: The displayed WPM is 15% higher than the actual base WPM used here.
-        // We end up adding delays for long words and punctuation, and this makes it so the wpm
-        // the user thinks they're selecting more closely matches what they'll actually do.
         const baseWpm = wpm / 1.15;
         interval = (60000 / baseWpm) * multiplier;
 
@@ -415,6 +404,22 @@ function App() {
     }
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, [isPlaying, wpm, words, currentIndex, nextWord, sections, isChapterBreak]);
+
+  if (!user || !storageProvider) {
+    return (
+      <div className={`flex flex-col items-center justify-center min-h-screen ${theme === 'bedtime' ? 'bg-black text-stone-400' : 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100'}`}>
+        <h1 className="text-2xl font-light mb-8">Speed Reader</h1>
+        <p className="mb-8 opacity-70">Please sign in to access your library.</p>
+        <button 
+          onClick={handleSignIn}
+          className="flex items-center gap-2 px-6 py-3 text-sm font-medium bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg hover:opacity-90 transition-opacity"
+        >
+          <LogIn size={20} />
+          Sign In with Google
+        </button>
+      </div>
+    );
+  }
 
   return (
     <>
