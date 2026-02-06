@@ -26,9 +26,11 @@ export function extractWordsFromDoc(doc: Document): WordData[] {
     
     // Replace em-dashes and en-dashes with padded versions to ensure they split into separate words
     // "word—word" -> "word — word"
+    // Also split hyphenated words, keeping the hyphen on the preceding word
     const processedBuffer = currentTextBuffer
         .replace(/—/g, ' — ')
-        .replace(/–/g, ' – ');
+        .replace(/–/g, ' – ')
+        .replace(/(\w)-(\w)/g, '$1- $2');
 
     const rawWords = processedBuffer
         .replace(/\s+/g, ' ')

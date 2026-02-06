@@ -25,6 +25,23 @@ import { useRegisterSW } from 'virtual:pwa-register/react';
 
 type Theme = 'light' | 'dark' | 'bedtime';
 
+const MOCK_USER = { uid: 'mock-user' };
+const MOCK_STORAGE = {
+  getSettings: async () => ({}),
+  getAllBooks: async () => [],
+  getSessions: async () => [],
+  updateBookProgress: async () => {},
+  updateBookWpm: async () => {},
+  updateSettings: async () => {},
+  logReadingSession: async () => {},
+  updateBookRealEndIndex: async () => {},
+  updateBookRealEndQuote: async () => {},
+  getChapterAudio: async () => null,
+  saveChapterAudio: async () => {},
+  deleteBook: async () => {},
+  getBook: async () => null,
+};
+
 const findQuoteIndex = (quote: string, currentWords: WordData[]): number | null => {
   const quoteWords = quote.split(/\s+/).filter(w => w.length > 0);
   if (quoteWords.length > 0) {
@@ -117,6 +134,48 @@ function App() {
   });
 
   const [fontFamily, setFontFamily] = useState<FontFamily>('system');
+
+  // Test Hook for Playwright
+  useEffect(() => {
+    (window as any).__loadMockWords = (mockWords: any[], mockSections?: any[]) => {
+      const processedWords = mockWords.map(w => ({
+        text: w.text,
+        isParagraphStart: typeof w.isParagraphStart === 'boolean' ? w.isParagraphStart : (w.paragraphIndex === 0 && w.sentenceIndex === 0),
+        isSentenceStart: typeof w.isSentenceStart === 'boolean' ? w.isSentenceStart : w.sentenceIndex === 0
+      }));
+
+      setWords(processedWords);
+      setSections(mockSections || [{ label: 'Mock Chapter', startIndex: 0 }]);
+      setCurrentIndex(0);
+      setCurrentBookId('mock');
+      setIsPlaying(false);
+      setUser(u => u || (MOCK_USER as any));
+      setStorageProvider(p => p || (MOCK_STORAGE as any));
+      setIsLoading(false);
+    };
+  }, []);
+
+  const [rotationTrigger, setRotationTrigger] = useState(0);
+  const lastRotationTimeRef = useRef(0);
+
+  useEffect(() => {
+    const handleRotation = () => {
+      lastRotationTimeRef.current = Date.now();
+      setRotationTrigger(prev => prev + 1);
+    };
+
+    if (screen.orientation) {
+      screen.orientation.addEventListener('change', handleRotation);
+    }
+    window.addEventListener('orientationchange', handleRotation);
+
+    return () => {
+      if (screen.orientation) {
+        screen.orientation.removeEventListener('change', handleRotation);
+      }
+      window.removeEventListener('orientationchange', handleRotation);
+    };
+  }, []);
 
   const timerRef = useRef<number | null>(null);
   const sessionStartTimeRef = useRef<number | null>(null);
@@ -478,6 +537,14 @@ function App() {
 
   useEffect(() => {
     if (isPlaying && words.length > 0) {
+      const timeSinceRotation = Date.now() - lastRotationTimeRef.current;
+      if (timeSinceRotation < 500) {
+        timerRef.current = window.setTimeout(() => {
+          setRotationTrigger(prev => prev + 1);
+        }, 501 - timeSinceRotation);
+        return;
+      }
+
       let interval: number; let callback: () => void;
       if (isChapterBreak) {
         interval = 3000; callback = () => { setIsChapterBreak(false); nextWord(); };
@@ -501,7 +568,7 @@ function App() {
       timerRef.current = window.setTimeout(callback, interval);
     }
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [isPlaying, wpm, words, currentIndex, nextWord, sections, isChapterBreak]);
+  }, [isPlaying, wpm, words, currentIndex, nextWord, sections, isChapterBreak, rotationTrigger]);
 
   if (isLoading && !user) {
     return (
