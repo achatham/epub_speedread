@@ -104,28 +104,34 @@ export class AudioBookPlayer {
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
     this.audioCtx = new AudioContextClass({ sampleRate: 24000 });
     
+    console.log(`[AudioPlayer] Starting playback. Chapter Start: ${globalChapterStart}, Current UI Index: ${initialWordIndex}`);
+
     // Start Session Tracking
     this.sessionStart = { index: initialWordIndex, time: Date.now() };
 
     let nextStartTime = this.audioCtx.currentTime;
     let hasStarted = false;
 
-    // Filter chunks to start from approximately where the user is (if they are mid-chapter)
-    // Find the first chunk that contains or follows the current index
-    // However, for simplicity and ensuring continuity, we usually play from start of chapter 
-    // OR we could find the chunk that corresponds to 'currentWordIndex'.
-    // Given the current UI behavior (Read Chapter), it usually starts from the beginning of the chapter 
-    // unless we implement specific logic. The previous implementation passed `cWords` which was the WHOLE chapter.
-    // If we want to resume mid-chapter, we should filter `chunks` based on `startIndex`.
-    
-    // Let's iterate and schedule
-    for (const chunk of chunks) {
-      if (this.stopRequested) break;
+    // Filter chunks to start from where the user is
+    const relevantChunks = chunks.filter(chunk => {
+        const chunkEndIndex = globalChapterStart + chunk.startIndex + chunk.wordCount;
+        const isRelevant = chunkEndIndex > initialWordIndex;
+        if (!isRelevant) {
+            console.log(`[AudioPlayer] Skipping chunk (${chunk.startIndex}-${chunk.startIndex + chunk.wordCount}) - already passed.`);
+        }
+        return isRelevant;
+    });
 
-      // Skip chunks that are completely before our current position if we wanted to support resume.
-      // But the current 'onReadChapter' logic in App.tsx always passed the full chapter words.
-      // To support resuming, we'd check: if (globalChapterStart + chunk.startIndex + chunk.wordCount < initialWordIndex) continue;
-      // For now, mirroring previous behavior: Play all.
+    if (relevantChunks.length === 0) {
+        console.log(`[AudioPlayer] No relevant chunks found after index ${initialWordIndex}.`);
+        this.stop(callbacks);
+        return;
+    }
+
+    console.log(`[AudioPlayer] Playing ${relevantChunks.length} chunks starting from global index ${globalChapterStart + relevantChunks[0].startIndex}`);
+
+    for (const chunk of relevantChunks) {
+      if (this.stopRequested) break;
       
       if (this.audioCtx.state === 'suspended') {
         await this.audioCtx.resume();
@@ -141,6 +147,7 @@ export class AudioBookPlayer {
       
       const timeoutId = window.setTimeout(() => {
         if (!this.stopRequested) {
+          console.log(`[AudioPlayer] Syncing UI to word index: ${chunkGlobalIndex}`);
           callbacks.onProgress(chunkGlobalIndex);
         }
       }, Math.max(0, delay));
