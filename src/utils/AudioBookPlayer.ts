@@ -180,24 +180,15 @@ export class AudioBookPlayer {
     if (this.sessionStart && callbacks) {
       const endTime = Date.now();
       const durationMs = endTime - this.sessionStart.time;
+      console.log(`[AudioPlayer] Stopping. Total duration: ${Math.round(durationMs / 1000)}s`);
+
       // Only log if duration is significant (> 10s)
       if (durationMs >= 10000) {
-        // We need the LAST played index. 
-        // The App tracks currentIndex via onProgress. 
-        // We can pass `endTime` and let App handle logic, OR pass calculated stats.
-        // But `endWordIndex` depends on where we stopped.
-        // The `onProgress` updated the App's index. So App has the `currentIndex`.
-        // We pass the session START info, App combines with CURRENT info.
-        
-        // Actually, the class doesn't know the final `currentIndex` unless we track it internally 
-        // or ask for it. The cleaner way is for `onSessionFinished` to provide the start/time info
-        // and let the consumer (App) finalize it with its current state, OR we track the last `onProgress` value.
-        // Let's rely on the callbacks structure.
         callbacks.onSessionFinished({
             startTime: this.sessionStart.time,
             endTime,
             startWordIndex: this.sessionStart.index,
-            endWordIndex: -1, // Consumer should fill this with current index
+            endWordIndex: -1, // App will fill this with its current state
             durationSeconds: Math.round(durationMs / 1000)
         });
       }
