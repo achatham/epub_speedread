@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { getAggregationPlan } from './stats';
 import type { ReadingSession } from './storage';
 
@@ -6,7 +6,7 @@ import type { ReadingSession } from './storage';
 if (!global.crypto) {
     (global as any).crypto = {};
 }
-global.crypto.randomUUID = () => 'mock-uuid-' + Math.random();
+(global.crypto as any).randomUUID = () => '00000000-0000-0000-0000-000000000000';
 
 describe('stats aggregation', () => {
     const book1 = 'book-1';
