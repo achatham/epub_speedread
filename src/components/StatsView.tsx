@@ -34,7 +34,7 @@ export function StatsView({
   
   // Progress Calculation (Simplified: 300 words = 1 page)
   const WORDS_PER_PAGE = 300;
-  const totalWordsRead = filteredSessions.reduce((acc, s) => acc + Math.max(0, s.endWordIndex - s.startWordIndex), 0);
+  const totalWordsRead = filteredSessions.reduce((acc, s) => acc + (s.wordsRead || Math.max(0, s.endWordIndex - s.startWordIndex)), 0);
   const totalPagesRead = Math.round(totalWordsRead / WORDS_PER_PAGE);
 
   // Chart Logic (Simple SVG Sparkline)
@@ -200,7 +200,7 @@ export function StatsView({
                         {Math.floor(session.durationSeconds / 60)}m {session.durationSeconds % 60}s
                       </td>
                       <td className="py-3 text-right opacity-60">
-                        {Math.round(Math.max(0, session.endWordIndex - session.startWordIndex) / WORDS_PER_PAGE)}
+                        {Math.round((session.wordsRead || Math.max(0, session.endWordIndex - session.startWordIndex)) / WORDS_PER_PAGE)}
                       </td>
                     </tr>
                   ))}

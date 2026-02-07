@@ -36,6 +36,7 @@ const MOCK_STORAGE = {
   logReadingSession: async () => {},
   updateBookRealEndIndex: async () => {},
   updateBookRealEndQuote: async () => {},
+  aggregateSessions: async () => {},
   getChapterAudio: async () => null,
   saveChapterAudio: async () => {},
   deleteBook: async () => {},
@@ -137,7 +138,7 @@ function App() {
 
   // Test Hook for Playwright
   useEffect(() => {
-    (window as any).__loadMockWords = (mockWords: any[], mockSections?: any[]) => {
+    (window as any).__loadMockWords = (mockWords: any[], mockSections?: any[], mockSessions?: any[]) => {
       const processedWords = mockWords.map(w => ({
         text: w.text,
         isParagraphStart: typeof w.isParagraphStart === 'boolean' ? w.isParagraphStart : (w.paragraphIndex === 0 && w.sentenceIndex === 0),
@@ -146,6 +147,7 @@ function App() {
 
       setWords(processedWords);
       setSections(mockSections || [{ label: 'Mock Chapter', startIndex: 0 }]);
+      if (mockSessions) setSessions(mockSessions);
       setCurrentIndex(0);
       setCurrentBookId('mock');
       setIsPlaying(false);
@@ -271,6 +273,14 @@ function App() {
     const nextTheme: Theme = theme === 'light' ? 'dark' : theme === 'dark' ? 'bedtime' : 'light';
     setTheme(nextTheme);
     storageProvider?.updateSettings({ theme: nextTheme });
+  };
+
+  const handleOpenStats = async () => {
+    if (storageProvider) {
+      await storageProvider.aggregateSessions();
+      setSessions(await storageProvider.getSessions());
+    }
+    setIsStatsOpen(true);
   };
 
   const handleSignIn = async () => {
@@ -499,6 +509,7 @@ function App() {
           endTime: Date.now(),
           startWordIndex: sessionStartIndexRef.current || 0,
           endWordIndex: currentIndex,
+          wordsRead: wordsRead,
           durationSeconds: Math.round(durationMs / 1000)
         }).then(() => {
             // Refresh sessions list
@@ -687,7 +698,7 @@ function App() {
           onFileUpload={handleFileUpload}
           fileInputRef={fileInputRef}
           onFileInputClick={onFileInputClick}
-          onStatsClick={() => setIsStatsOpen(true)}
+          onStatsClick={handleOpenStats}
           onLoadDemoBook={handleLoadDemoBook}
         />
       ) : (
@@ -735,7 +746,7 @@ function App() {
           upcomingChapterTitle={isChapterBreak
             ? (sections.slice().reverse().find(s => s.startIndex <= currentIndex)?.label || '')
             : (sections.find(s => s.startIndex === currentIndex + 1)?.label || '')}
-          onStatsClick={() => setIsStatsOpen(true)}
+          onStatsClick={handleOpenStats}
         />
       )}
     </>
