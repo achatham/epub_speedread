@@ -142,10 +142,11 @@ export function ReaderView({
   const getProgressStats = () => {
     if (isPlaying || words.length === 0) return null;
 
-    const percentage = Math.round(((currentIndex + 1) / words.length) * 100);
+    // Use effectiveTotalWords (which respects realEndIndex) for book-wide stats
+    const percentage = Math.round((Math.min(currentIndex + 1, effectiveTotalWords) / effectiveTotalWords) * 100);
     const nextChapterStartIndex = sections[activeChapterIdx + 1]?.startIndex || words.length;
-    const wordsLeftInChapter = nextChapterStartIndex - currentIndex;
-    const wordsLeftInBook = words.length - currentIndex;
+    const wordsLeftInChapter = Math.max(0, nextChapterStartIndex - currentIndex);
+    const wordsLeftInBook = Math.max(0, effectiveTotalWords - currentIndex);
     const effectiveWpm = wpm / 1.2; 
     
     const formatDuration = (wordCount: number) => {
@@ -155,7 +156,7 @@ export function ReaderView({
         const s = Math.floor((minutes * 60) % 60);
         if (h > 0) return `${h}h ${m}m`;
         if (m > 0) return `${m}m ${s}s`;
-        return `${s}s`;
+        return `${Math.round(s)}s`;
     };
 
     return (
@@ -163,7 +164,7 @@ export function ReaderView({
             <div className="flex gap-4 justify-center">
                 <span>{percentage}% Complete</span>
                 <span>•</span>
-                <span>Page {Math.floor(currentIndex / 300) + 1} of {Math.ceil(words.length / 300)}</span>
+                <span>Page {Math.floor(currentIndex / 300) + 1} of {Math.ceil(effectiveTotalWords / 300)}</span>
             </div>
             <div className="flex gap-4 justify-center font-mono opacity-80">
                 <span>Chapter: {formatDuration(wordsLeftInChapter)} left</span>
