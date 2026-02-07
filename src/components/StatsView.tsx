@@ -81,6 +81,9 @@ export function StatsView({
         return `${x},${y}`;
     }).join(' ');
 
+    const startDateStr = new Date(pointsData[0].time).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    const endDateStr = new Date(pointsData[pointsData.length - 1].time).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+
     return (
       <div className="relative w-full group/chart">
         <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto overflow-visible">
@@ -134,10 +137,10 @@ export function StatsView({
              );
           })}
         </svg>
-        <div className="flex justify-between text-[10px] opacity-50 mt-2" style={{ paddingLeft: `${paddingLeft}px` }}>
-            <span>Start</span>
-            <span>Progress through {chartBook.meta.title}</span>
-            <span>Now</span>
+        <div className="flex justify-between text-[10px] opacity-50 mt-2" style={{ paddingLeft: `${paddingLeft}px`, paddingRight: `${paddingRight}px` }}>
+            <span>{startDateStr}</span>
+            <span className="hidden sm:inline">Progress: {chartBook.meta.title}</span>
+            <span>{endDateStr}</span>
         </div>
       </div>
     );
