@@ -99,4 +99,15 @@ describe('extractWordsFromDoc', () => {
       
       expect(words[2].isParagraphStart).toBe(true);
   });
+
+  it('should split hyphenated words, keeping the hyphen on the preceding word', () => {
+    const html = '<p>The well-known multi-hyphenated-word is here.</p>';
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const words = extractWordsFromDoc(doc);
+
+    const texts = words.map(w => w.text);
+    expect(texts).toEqual([
+      'The', 'well-', 'known', 'multi-', 'hyphenated-', 'word', 'is', 'here.'
+    ]);
+  });
 });
