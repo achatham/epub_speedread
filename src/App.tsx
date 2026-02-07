@@ -429,7 +429,6 @@ function App() {
   const handleSetIsPlaying = useCallback((playing: boolean) => {
     if (playing && !isPlaying) {
       if (isChapterBreak) {
-        setCurrentIndex(currentIndex + 1);
         setIsChapterBreak(false);
       } else {
         setCurrentIndex(findSentenceStart(currentIndex, words));
@@ -547,7 +546,7 @@ function App() {
 
       let interval: number; let callback: () => void;
       if (isChapterBreak) {
-        interval = 3000; callback = () => { setIsChapterBreak(false); nextWord(); };
+        interval = 3000; callback = () => setIsChapterBreak(false);
       } else {
         const currentWord = words[currentIndex].text || '';
         let multiplier = 1;
@@ -562,7 +561,7 @@ function App() {
         const baseWpm = wpm / WPM_VANITY_RATIO;
         interval = (60000 / baseWpm) * multiplier;
 
-        if (sections.some(s => s.startIndex === currentIndex + 1)) callback = () => setIsChapterBreak(true);
+        if (sections.some(s => s.startIndex === currentIndex + 1)) callback = () => { setCurrentIndex(prev => prev + 1); setIsChapterBreak(true); };
         else callback = nextWord;
       }
       timerRef.current = window.setTimeout(callback, interval);
@@ -733,7 +732,9 @@ function App() {
             } catch { setIsSynthesizing(false); setIsReadingAloud(false); }
           }}
           isReadingAloud={isReadingAloud} isSynthesizing={isSynthesizing} isChapterBreak={isChapterBreak}
-          upcomingChapterTitle={sections.find(s => s.startIndex === currentIndex + 1)?.label || ''}
+          upcomingChapterTitle={isChapterBreak
+            ? (sections.slice().reverse().find(s => s.startIndex <= currentIndex)?.label || '')
+            : (sections.find(s => s.startIndex === currentIndex + 1)?.label || '')}
           onStatsClick={() => setIsStatsOpen(true)}
         />
       )}
