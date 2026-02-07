@@ -107,17 +107,30 @@ export function extractWordsFromDoc(doc: Document): WordData[] {
   return words;
 }
 
-export function chunkWordsByParagraph(words: WordData[], minWords: number = 300): string[] {
-  const chunks: string[] = [];
+export interface TextChunk {
+  text: string;
+  startIndex: number;
+  wordCount: number;
+}
+
+export function chunkWordsByParagraph(words: WordData[], minWords: number = 300): TextChunk[] {
+  const chunks: TextChunk[] = [];
   let currentChunkWords: string[] = [];
   let count = 0;
+  let chunkStartIndex = 0;
 
-  for (const word of words) {
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i];
     if (word.isParagraphStart && count >= minWords) {
       if (currentChunkWords.length > 0) {
-        chunks.push(currentChunkWords.join(' '));
+        chunks.push({
+          text: currentChunkWords.join(' '),
+          startIndex: chunkStartIndex,
+          wordCount: count
+        });
         currentChunkWords = [];
         count = 0;
+        chunkStartIndex = i;
       }
     }
     currentChunkWords.push(word.text);
@@ -125,37 +138,57 @@ export function chunkWordsByParagraph(words: WordData[], minWords: number = 300)
   }
 
   if (currentChunkWords.length > 0) {
-    chunks.push(currentChunkWords.join(' '));
+    chunks.push({
+      text: currentChunkWords.join(' '),
+      startIndex: chunkStartIndex,
+      wordCount: count
+    });
   }
 
   return chunks;
 }
 
-export function chunkTextByParagraph(text: string, minWords: number = 300): string[] {
-  // Split by paragraph markers (common in markdown or plain text)
+export function chunkTextByParagraph(text: string, minWords: number = 300): TextChunk[] {
+  // Split by paragraph markers
   const paragraphs = text.split(/\n+/);
-  const chunks: string[] = [];
+  const chunks: TextChunk[] = [];
   let currentChunk: string[] = [];
   let currentWordCount = 0;
+  let chunkStartIndex = 0;
+  let totalWordIndex = 0;
 
   for (const para of paragraphs) {
     const trimmedPara = para.trim();
-    if (!trimmedPara) continue;
+    if (!trimmedPara) {
+        // Still need to account for the split result in some way? 
+        // For simple text split, words are what matter.
+        continue;
+    }
 
     const wordsInPara = trimmedPara.split(/\s+/).filter(w => w.length > 0);
 
     if (currentWordCount >= minWords && currentChunk.length > 0) {
-      chunks.push(currentChunk.join('\n\n'));
+      chunks.push({
+        text: currentChunk.join('\n\n'),
+        startIndex: chunkStartIndex,
+        wordCount: currentWordCount
+      });
       currentChunk = [];
+      chunkStartIndex = totalWordIndex;
       currentWordCount = 0;
     }
 
     currentChunk.push(trimmedPara);
     currentWordCount += wordsInPara.length;
+    totalWordIndex += wordsInPara.length;
   }
 
   if (currentChunk.length > 0) {
-    chunks.push(currentChunk.join('\n\n'));
+    chunks.push({
+      text: currentChunk.join('\n\n'),
+      startIndex: chunkStartIndex,
+      wordCount: currentWordCount
+    });
   }
 
   return chunks;

@@ -11,8 +11,8 @@ import { ref, getBytes } from 'firebase/storage';
 import { extractWordsFromDoc, type WordData } from './utils/text-processing';
 import { calculateNavigationTarget, findSentenceStart, type NavigationType } from './utils/navigation';
 import { getGeminiApiKey, setGeminiApiKey as saveGeminiApiKey, findRealEndOfBook, askAboutBook, summarizeRecent, summarizeWhatJustHappened } from './utils/gemini';
-import { synthesizeChapterAudio, schedulePcmChunk, type AudioController } from './utils/tts';
 import { splitWord } from './utils/orp';
+import { AudioBookPlayer } from './utils/AudioBookPlayer';
 import { LibraryView } from './components/LibraryView';
 import { ReaderView } from './components/ReaderView';
 import { SettingsModal, type FontFamily } from './components/SettingsModal';
@@ -185,7 +185,21 @@ function App() {
   const sessionStartIndexRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
-  const chapterAudioControllerRef = useRef<AudioController | null>(null);
+  const audioPlayerRef = useRef<AudioBookPlayer | null>(null);
+
+  // Initialize Player
+  useEffect(() => {
+    if (storageProvider) {
+      audioPlayerRef.current = new AudioBookPlayer(storageProvider, geminiApiKey);
+    }
+  }, [storageProvider]);
+
+  // Update API Key
+  useEffect(() => {
+    if (audioPlayerRef.current) {
+      audioPlayerRef.current.updateApiKey(geminiApiKey);
+    }
+  }, [geminiApiKey]);
 
   // Background Update: Refresh when app is hidden and idle
   useEffect(() => {
@@ -444,7 +458,7 @@ function App() {
         setCurrentIndex(findSentenceStart(currentIndex, words));
       }
       if (isReadingAloud) {
-        if (chapterAudioControllerRef.current) chapterAudioControllerRef.current.stop();
+        audioPlayerRef.current?.stop();
         setIsReadingAloud(false);
       }
 
@@ -510,7 +524,8 @@ function App() {
           startWordIndex: sessionStartIndexRef.current || 0,
           endWordIndex: currentIndex,
           wordsRead: wordsRead,
-          durationSeconds: Math.round(durationMs / 1000)
+          durationSeconds: Math.round(durationMs / 1000),
+          type: 'reading'
         }).then(() => {
             // Refresh sessions list
             storageProvider.getSessions().then(setSessions);
@@ -720,27 +735,55 @@ function App() {
           isNavOpen={isNavOpen} toggleNav={() => setIsNavOpen(!isNavOpen)}
           isTocOpen={isTocOpen} toggleToc={() => setIsTocOpen(!isTocOpen)}
           onReadChapter={async () => {
-            if (isReadingAloud || isSynthesizing) { if (chapterAudioControllerRef.current) chapterAudioControllerRef.current.stop(); setIsReadingAloud(false); setIsSynthesizing(false); return; }
-            let cIdx = -1; for (let i = 0; i < sections.length; i++) if (sections[i].startIndex <= currentIndex) cIdx = i; else break;
-            const cStart = sections[cIdx]?.startIndex || 0; const cEnd = sections[cIdx + 1]?.startIndex || words.length;
-            const cWords = words.slice(cStart, cEnd); if (cWords.length === 0) return;
+            if (audioPlayerRef.current?.isActive) {
+              audioPlayerRef.current.stop();
+              return;
+            }
+
+            let cIdx = -1; 
+            for (let i = 0; i < sections.length; i++) {
+              if (sections[i].startIndex <= currentIndex) cIdx = i; else break;
+            }
+            
+            const cStart = sections[cIdx]?.startIndex || 0; 
+            const cEnd = sections[cIdx + 1]?.startIndex || words.length;
+            const cWords = words.slice(cStart, cEnd); 
+            
+            if (cWords.length === 0) return;
+            
             setIsPlaying(false);
-            try {
-              let chunks = await storageProvider.getChapterAudio(currentBookId, cIdx, ttsSpeed);
-              if (!chunks) {
-                setIsSynthesizing(true); const ak = getGeminiApiKey(); if (!ak) return alert("API Key required");
-                chunks = await synthesizeChapterAudio(cWords, ttsSpeed, ak);
-                if (chunks.length > 0) await storageProvider.saveChapterAudio(currentBookId, cIdx, ttsSpeed, chunks);
-                setIsSynthesizing(false);
+            
+            audioPlayerRef.current?.playChapter(
+              currentBookId!,
+              cIdx,
+              cWords,
+              cStart,
+              currentIndex,
+              ttsSpeed,
+              {
+                onProgress: (idx) => setCurrentIndex(idx),
+                onStateChange: (state) => {
+                  setIsSynthesizing(state.isSynthesizing);
+                  setIsReadingAloud(state.isPlaying);
+                },
+                onSessionFinished: (stats) => {
+                  if (storageProvider && currentBookId) {
+                    storageProvider.logReadingSession({
+                      bookId: currentBookId,
+                      bookTitle: bookTitle,
+                      startTime: stats.startTime,
+                      endTime: stats.endTime,
+                      startWordIndex: stats.startWordIndex,
+                      endWordIndex: currentIndex, // Use latest index from state
+                      wordsRead: Math.max(0, currentIndex - stats.startWordIndex),
+                      durationSeconds: stats.durationSeconds,
+                      type: 'listening'
+                    }).then(() => storageProvider.getSessions().then(setSessions));
+                  }
+                },
+                onError: (msg) => alert(msg)
               }
-              if (chunks?.length) {
-                const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-                setIsReadingAloud(true); const st = { stop: false, next: ctx.currentTime, start: false };
-                chapterAudioControllerRef.current = { stop: () => { st.stop = true; ctx.close(); } };
-                for (let ch of chunks) { if (st.stop) break; if (ctx.state === 'suspended') await ctx.resume(); if (st.next < ctx.currentTime) st.next = ctx.currentTime; st.next += schedulePcmChunk(ctx, ch, st.next); st.start = true; }
-                const iv = setInterval(() => { if (st.stop) return clearInterval(iv); if (st.start && ctx.currentTime >= st.next) { clearInterval(iv); setIsReadingAloud(false); ctx.close(); chapterAudioControllerRef.current = null; } }, 200);
-              }
-            } catch { setIsSynthesizing(false); setIsReadingAloud(false); }
+            );
           }}
           isReadingAloud={isReadingAloud} isSynthesizing={isSynthesizing} isChapterBreak={isChapterBreak}
           upcomingChapterTitle={isChapterBreak

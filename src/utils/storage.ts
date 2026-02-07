@@ -47,6 +47,13 @@ export interface ReadingSession {
   endWordIndex: number;
   wordsRead: number;
   durationSeconds: number;
+  type: 'reading' | 'listening';
+}
+
+export interface AudioChunk {
+  audio: ArrayBuffer;
+  startIndex: number;
+  wordCount: number;
 }
 
 // Keep local cache for heavy assets (EPUBs + Audio)
@@ -57,7 +64,7 @@ interface FileCacheDB extends DBSchema {
   };
   chapterAudio: {
     key: string;
-    value: { id: string; audioChunks: ArrayBuffer[] };
+    value: { id: string; chunks: AudioChunk[] };
   };
 }
 
@@ -90,13 +97,13 @@ class LocalFileCache {
     await (await this.dbPromise).delete(FILE_STORE, bookId);
   }
 
-  async getAudio(id: string): Promise<ArrayBuffer[] | undefined> {
+  async getAudio(id: string): Promise<AudioChunk[] | undefined> {
     const record = await (await this.dbPromise).get(AUDIO_STORE, id);
-    return record?.audioChunks;
+    return record?.chunks;
   }
 
-  async saveAudio(id: string, audioChunks: ArrayBuffer[]): Promise<void> {
-    await (await this.dbPromise).put(AUDIO_STORE, { id, audioChunks });
+  async saveAudio(id: string, chunks: AudioChunk[]): Promise<void> {
+    await (await this.dbPromise).put(AUDIO_STORE, { id, chunks });
   }
 }
 
@@ -286,12 +293,12 @@ export class FirestoreStorage {
     }
   }
 
-  async saveChapterAudio(bookId: string, chapterIndex: number, speed: number, audioChunks: ArrayBuffer[]): Promise<void> {
+  async saveChapterAudio(bookId: string, chapterIndex: number, speed: number, chunks: AudioChunk[]): Promise<void> {
     const id = `${bookId}-${chapterIndex}-${speed}`;
-    await this.fileCache.saveAudio(id, audioChunks);
+    await this.fileCache.saveAudio(id, chunks);
   }
 
-  async getChapterAudio(bookId: string, chapterIndex: number, speed: number): Promise<ArrayBuffer[] | undefined> {
+  async getChapterAudio(bookId: string, chapterIndex: number, speed: number): Promise<AudioChunk[] | undefined> {
     const id = `${bookId}-${chapterIndex}-${speed}`;
     return this.fileCache.getAudio(id);
   }

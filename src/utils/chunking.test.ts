@@ -20,8 +20,8 @@ describe('chunkWordsByParagraph', () => {
     // Chunk 2: Para3W1 Para3W2
     const chunks = chunkWordsByParagraph(words, 3);
     expect(chunks).toHaveLength(2);
-    expect(chunks[0]).toBe('Para1W1 Para1W2 Para2W1 Para2W2');
-    expect(chunks[1]).toBe('Para3W1 Para3W2');
+    expect(chunks[0].text).toBe('Para1W1 Para1W2 Para2W1 Para2W2');
+    expect(chunks[1].text).toBe('Para3W1 Para3W2');
   });
 
   it('should keep a single long paragraph as one chunk', () => {
@@ -33,7 +33,7 @@ describe('chunkWordsByParagraph', () => {
     ];
     const chunks = chunkWordsByParagraph(words, 2);
     expect(chunks).toHaveLength(1);
-    expect(chunks[0]).toBe('W1 W2 W3 W4');
+    expect(chunks[0].text).toBe('W1 W2 W3 W4');
   });
 
   it('should handle empty input', () => {
@@ -57,15 +57,15 @@ Para 3 has five words.`;
     // Chunk 2: Para 3...
     const chunks = chunkTextByParagraph(text, 6);
     expect(chunks).toHaveLength(2);
-    expect(chunks[0]).toContain('Para 1');
-    expect(chunks[0]).toContain('Para 2');
-    expect(chunks[1]).toBe('Para 3 has five words.');
+    expect(chunks[0].text).toContain('Para 1');
+    expect(chunks[0].text).toContain('Para 2');
+    expect(chunks[1].text).toBe('Para 3 has five words.');
   });
 
   it('should handle multiple newlines as paragraph separators', () => {
       const text = "P1\n\n\n\nP2\n\nP3";
       const chunks = chunkTextByParagraph(text, 1);
       expect(chunks).toHaveLength(3);
-      expect(chunks).toEqual(['P1', 'P2', 'P3']);
+      expect(chunks.map(c => c.text)).toEqual(['P1', 'P2', 'P3']);
   });
 });

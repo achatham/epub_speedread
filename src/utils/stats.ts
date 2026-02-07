@@ -4,9 +4,10 @@ export function getAggregationPlan(sessions: ReadingSession[]): { deleteIds: str
   const groups = new Map<string, ReadingSession[]>();
 
   for (const s of sessions) {
-    // Group by bookId and local date
+    // Group by bookId, local date, and type
     const date = new Date(s.startTime).toLocaleDateString();
-    const key = `${s.bookId}-${date}`;
+    const type = s.type || 'reading';
+    const key = `${s.bookId}-${date}-${type}`;
     if (!groups.has(key)) {
       groups.set(key, []);
     }
@@ -31,7 +32,8 @@ export function getAggregationPlan(sessions: ReadingSession[]): { deleteIds: str
         startWordIndex: first.startWordIndex,
         endWordIndex: last.endWordIndex,
         wordsRead: group.reduce((acc, s) => acc + (s.wordsRead || Math.max(0, s.endWordIndex - s.startWordIndex)), 0),
-        durationSeconds: group.reduce((acc, s) => acc + s.durationSeconds, 0)
+        durationSeconds: group.reduce((acc, s) => acc + s.durationSeconds, 0),
+        type: first.type || 'reading'
       };
 
       deleteIds.push(...group.map(s => s.id));

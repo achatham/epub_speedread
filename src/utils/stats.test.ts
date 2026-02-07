@@ -28,7 +28,8 @@ describe('stats aggregation', () => {
                 startWordIndex: 0,
                 endWordIndex: 100,
                 wordsRead: 100,
-                durationSeconds: 60
+                durationSeconds: 60,
+                type: 'reading'
             },
             {
                 id: 's2',
@@ -39,7 +40,8 @@ describe('stats aggregation', () => {
                 startWordIndex: 100,
                 endWordIndex: 250,
                 wordsRead: 150,
-                durationSeconds: 90
+                durationSeconds: 90,
+                type: 'reading'
             }
         ];
 
@@ -69,7 +71,8 @@ describe('stats aggregation', () => {
                 startWordIndex: 0,
                 endWordIndex: 100,
                 wordsRead: 100,
-                durationSeconds: 60
+                durationSeconds: 60,
+                type: 'reading'
             },
             {
                 id: 's2',
@@ -80,7 +83,8 @@ describe('stats aggregation', () => {
                 startWordIndex: 0,
                 endWordIndex: 100,
                 wordsRead: 100,
-                durationSeconds: 60
+                durationSeconds: 60,
+                type: 'reading'
             }
         ];
 
@@ -100,7 +104,8 @@ describe('stats aggregation', () => {
                 startWordIndex: 100,
                 endWordIndex: 200,
                 wordsRead: 100,
-                durationSeconds: 60
+                durationSeconds: 60,
+                type: 'reading'
             },
             {
                 id: 's2',
@@ -111,7 +116,8 @@ describe('stats aggregation', () => {
                 startWordIndex: 0,
                 endWordIndex: 100,
                 wordsRead: 100,
-                durationSeconds: 60
+                durationSeconds: 60,
+                type: 'reading'
             }
         ];
 
@@ -131,7 +137,8 @@ describe('stats aggregation', () => {
                 startWordIndex: 0,
                 endWordIndex: 100,
                 // wordsRead missing
-                durationSeconds: 60
+                durationSeconds: 60,
+                type: 'reading'
             },
             {
                 id: 's2',
@@ -142,7 +149,8 @@ describe('stats aggregation', () => {
                 startWordIndex: 100,
                 endWordIndex: 250,
                 wordsRead: 150,
-                durationSeconds: 90
+                durationSeconds: 90,
+                type: 'reading'
             }
         ];
 

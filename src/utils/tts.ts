@@ -2,10 +2,12 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { getGeminiApiKey } from './gemini';
 import { calculateCost } from './pricing';
 import { chunkTextByParagraph, chunkWordsByParagraph, type WordData } from './text-processing';
+import type { AudioChunk } from './storage';
 
 export interface AudioController {
     stop: () => void;
     onEnded?: () => void;
+    onChunkStarted?: (metadata: { startIndex: number, wordCount: number }) => void;
 }
 
 export async function synthesizeSpeech(text: string, speed: number = 2.0): Promise<AudioController | null> {
@@ -29,7 +31,7 @@ export async function synthesizeSpeech(text: string, speed: number = 2.0): Promi
     return controller;
 }
 
-export async function synthesizeChapterAudio(wordsOrText: WordData[] | string, speed: number, apiKey: string): Promise<ArrayBuffer[]> {
+export async function synthesizeChapterAudio(wordsOrText: WordData[] | string, speed: number, apiKey: string): Promise<AudioChunk[]> {
     const chunks = typeof wordsOrText === 'string'
         ? chunkTextByParagraph(wordsOrText, 300)
         : chunkWordsByParagraph(wordsOrText, 300);
@@ -42,10 +44,18 @@ export async function synthesizeChapterAudio(wordsOrText: WordData[] | string, s
     // Dummy controller that is never stopped
     const controller = { state: { isStopped: false } };
 
-    const tasks = chunks.map((chunkText, index) => fetchChunkAudio(model, chunkText, index, controller, speed));
+    const tasks = chunks.map(async (chunk, index) => {
+        const audio = await fetchChunkAudio(model, chunk.text, index, controller, speed);
+        if (!audio) return null;
+        return {
+            audio,
+            startIndex: chunk.startIndex,
+            wordCount: chunk.wordCount
+        };
+    });
     const results = await Promise.all(tasks);
 
-    return results.filter((b): b is ArrayBuffer => b !== null);
+    return results.filter((b): b is AudioChunk => b !== null);
 }
 
 async function getAudioContext(): Promise<AudioContext | null> {
@@ -135,7 +145,15 @@ async function processChunks(fullText: string, apiKey: string, audioCtx: AudioCo
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-preview-tts" });
 
     // 2. Create promise tasks for all chunks
-    const tasks = chunks.map((chunkText, index) => fetchChunkAudio(model, chunkText, index, controller, speed));
+    const tasks = chunks.map(async (chunk, index) => {
+        const audio = await fetchChunkAudio(model, chunk.text, index, controller, speed);
+        if (!audio) return null;
+        return {
+            audio,
+            startIndex: chunk.startIndex,
+            wordCount: chunk.wordCount
+        };
+    });
 
     // 3. Sequential playback loop
     // No monitor interval needed here, we check in the loop and final check
@@ -153,10 +171,10 @@ async function processChunks(fullText: string, apiKey: string, audioCtx: AudioCo
         if (controller.state.isStopped) break;
 
         try {
-            const pcmData = await tasks[i];
+            const chunkData = await tasks[i];
 
             if (controller.state.isStopped) break;
-            if (pcmData) {
+            if (chunkData && chunkData.audio) {
                 // Check context state
                 if (audioCtx.state === 'suspended') {
                     await audioCtx.resume();
@@ -170,7 +188,22 @@ async function processChunks(fullText: string, apiKey: string, audioCtx: AudioCo
                 }
 
                 console.log(`Scheduling chunk ${i} at ${controller.state.nextStartTime.toFixed(2)}s`);
-                const duration = schedulePcmChunk(audioCtx, pcmData, controller.state.nextStartTime);
+                
+                // Track progress
+                if (controller.onChunkStarted) {
+                    // Schedule the callback to align with audio start
+                    const delay = (controller.state.nextStartTime - audioCtx.currentTime) * 1000;
+                    setTimeout(() => {
+                        if (!controller.state.isStopped) {
+                            controller.onChunkStarted({ 
+                                startIndex: chunkData.startIndex, 
+                                wordCount: chunkData.wordCount 
+                            });
+                        }
+                    }, Math.max(0, delay));
+                }
+
+                const duration = schedulePcmChunk(audioCtx, chunkData.audio, controller.state.nextStartTime);
                 controller.state.nextStartTime += duration;
                 controller.state.hasStarted = true;
             }

@@ -1,4 +1,4 @@
-import { X, Clock, BookOpen, BarChart2, TrendingUp } from 'lucide-react';
+import { X, Clock, BookOpen, BarChart2, TrendingUp, Volume2 } from 'lucide-react';
 import type { ReadingSession, BookRecord } from '../utils/storage';
 
 interface StatsViewProps {
@@ -34,13 +34,23 @@ export function StatsView({
     ? sessions.filter(s => s.bookId === activeBookId)
     : sessions;
 
-  const totalSeconds = filteredSessions.reduce((acc, s) => acc + s.durationSeconds, 0);
-  const totalMinutes = Math.round(totalSeconds / 60);
+  // Split totals by type
+  const readSessions = filteredSessions.filter(s => (s.type || 'reading') === 'reading');
+  const listenSessions = filteredSessions.filter(s => s.type === 'listening');
+
+  const totalReadSeconds = readSessions.reduce((acc, s) => acc + s.durationSeconds, 0);
+  const totalListenSeconds = listenSessions.reduce((acc, s) => acc + s.durationSeconds, 0);
+  
+  const totalReadMinutes = Math.round(totalReadSeconds / 60);
+  const totalListenMinutes = Math.round(totalListenSeconds / 60);
   
   // Progress Calculation (Simplified: 300 words = 1 page)
   const WORDS_PER_PAGE = 300;
-  const totalWordsRead = filteredSessions.reduce((acc, s) => acc + (s.wordsRead || Math.max(0, s.endWordIndex - s.startWordIndex)), 0);
+  const totalWordsRead = readSessions.reduce((acc, s) => acc + (s.wordsRead || Math.max(0, s.endWordIndex - s.startWordIndex)), 0);
+  const totalWordsHeard = listenSessions.reduce((acc, s) => acc + (s.wordsRead || Math.max(0, s.endWordIndex - s.startWordIndex)), 0);
+  
   const totalPagesRead = Math.round(totalWordsRead / WORDS_PER_PAGE);
+  const totalPagesHeard = Math.round(totalWordsHeard / WORDS_PER_PAGE);
 
   // Chart Logic (Simple SVG Sparkline)
   // X = Time, Y = Completion %
@@ -121,16 +131,24 @@ export function StatsView({
              const percent = Math.round((p.index / maxIndex) * 100);
              const dateStr = new Date(p.time).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
              
+             // Find original session for type
+             const session = chartSessions.find(s => s.endTime === p.time);
+             const isListen = session?.type === 'listening';
+             
              return (
                 <g key={i} className="group/point">
-                    <circle cx={x} cy={y} r="4" fill="currentColor" className="transition-all group-hover/point:r-6" />
+                    <circle 
+                        cx={x} cy={y} r="4" 
+                        fill={isListen ? '#a855f7' : (theme === 'bedtime' ? '#d97706' : '#ef4444')} 
+                        className="transition-all group-hover/point:r-6" 
+                    />
                     {/* Tooltip trigger area */}
                     <circle cx={x} cy={y} r="12" fill="transparent" className="cursor-pointer" />
                     {/* Simple SVG Tooltip */}
                     <g className="opacity-0 group-hover/point:opacity-100 pointer-events-none transition-opacity">
-                        <rect x={x - 30} y={y - 35} width="60" height="25" rx="4" className="fill-zinc-800 dark:fill-zinc-100" />
+                        <rect x={x - 45} y={y - 35} width="90" height="25" rx="4" className="fill-zinc-800 dark:fill-zinc-100" />
                         <text x={x} y={y - 18} textAnchor="middle" className="text-[9px] font-bold fill-white dark:fill-zinc-900">
-                            {dateStr}: {percent}%
+                            {dateStr} ({isListen ? '👂' : '📖'}): {percent}%
                         </text>
                     </g>
                 </g>
@@ -164,16 +182,26 @@ export function StatsView({
         <div className="flex-1 overflow-y-auto p-6 space-y-8">
           
           {/* Summary Cards */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className={`p-4 rounded-xl ${cardBgClass} flex flex-col items-center justify-center text-center`}>
-                <Clock size={20} className="mb-2 opacity-50" />
-                <span className="text-2xl font-bold">{totalMinutes}</span>
-                <span className="text-xs uppercase tracking-wider opacity-50">Minutes Read</span>
+                <BookOpen size={20} className="mb-2 opacity-50 text-blue-500" />
+                <span className="text-xl font-bold">{totalReadMinutes}</span>
+                <span className="text-[10px] uppercase tracking-wider opacity-50">Read Mins</span>
             </div>
             <div className={`p-4 rounded-xl ${cardBgClass} flex flex-col items-center justify-center text-center`}>
-                <BookOpen size={20} className="mb-2 opacity-50" />
-                <span className="text-2xl font-bold">{totalPagesRead}</span>
-                <span className="text-xs uppercase tracking-wider opacity-50">Pages Read</span>
+                <Volume2 size={20} className="mb-2 opacity-50 text-purple-500" />
+                <span className="text-xl font-bold">{totalListenMinutes}</span>
+                <span className="text-[10px] uppercase tracking-wider opacity-50">Listen Mins</span>
+            </div>
+            <div className={`p-4 rounded-xl ${cardBgClass} flex flex-col items-center justify-center text-center`}>
+                <Clock size={20} className="mb-2 opacity-50" />
+                <span className="text-xl font-bold">{totalReadMinutes + totalListenMinutes}</span>
+                <span className="text-[10px] uppercase tracking-wider opacity-50">Total Mins</span>
+            </div>
+            <div className={`p-4 rounded-xl ${cardBgClass} flex flex-col items-center justify-center text-center`}>
+                <TrendingUp size={20} className="mb-2 opacity-50" />
+                <span className="text-xl font-bold">{totalPagesRead + totalPagesHeard}</span>
+                <span className="text-[10px] uppercase tracking-wider opacity-50">Total Pages</span>
             </div>
           </div>
 
@@ -206,7 +234,12 @@ export function StatsView({
                 <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
                   {filteredSessions.slice(0, 10).map((session) => (
                     <tr key={session.id} className="group hover:bg-zinc-100/50 dark:hover:bg-zinc-800/50 transition-colors">
-                      <td className="py-3 pr-4 font-medium truncate max-w-[150px]">{session.bookTitle}</td>
+                      <td className="py-3 pr-4 font-medium truncate max-w-[150px]">
+                        <div className="flex items-center gap-2">
+                          {(session.type || 'reading') === 'listening' ? <Volume2 size={14} className="text-purple-500 shrink-0" /> : <BookOpen size={14} className="text-blue-500 shrink-0" />}
+                          <span className="truncate">{session.bookTitle}</span>
+                        </div>
+                      </td>
                       <td className="py-3 opacity-60">
                         {new Date(session.startTime).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                       </td>
