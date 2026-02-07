@@ -716,7 +716,7 @@ function App() {
           onCloseBook={handleCloseBook} onSettingsClick={() => setIsSettingsOpen(true)}
           onToggleTheme={toggleTheme} onAskAiClick={() => { setAiResponse(''); setIsAskAiOpen(true); }}
           isAskAiOpen={isAskAiOpen} sections={sections} setCurrentIndex={setCurrentIndex}
-          navigate={navigate} onDeleteBook={async () => { await storageProvider.deleteBook(currentBookId); setLibrary(await storageProvider.getAllBooks()); setCurrentBookId(null); }}
+          navigate={navigate}
           isNavOpen={isNavOpen} toggleNav={() => setIsNavOpen(!isNavOpen)}
           isTocOpen={isTocOpen} toggleToc={() => setIsTocOpen(!isTocOpen)}
           onReadChapter={async () => {
