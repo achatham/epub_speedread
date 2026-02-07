@@ -24,6 +24,11 @@ export function StatsView({
   const textClass = theme === 'bedtime' ? 'text-stone-400' : 'text-zinc-900 dark:text-zinc-100';
   const cardBgClass = theme === 'bedtime' ? 'bg-zinc-900/50' : 'bg-zinc-50 dark:bg-zinc-800/50';
 
+  // 1. Determine which book to show the trend for
+  const chartBookId = activeBookId || (sessions.length > 0 ? sessions[0].bookId : null);
+  const chartBook = chartBookId ? books.find(b => b.id === chartBookId) : null;
+  const chartSessions = chartBookId ? sessions.filter(s => s.bookId === chartBookId) : [];
+
   // Filter sessions for the active book if provided, otherwise show all
   const filteredSessions = activeBookId 
     ? sessions.filter(s => s.bookId === activeBookId)
@@ -40,22 +45,28 @@ export function StatsView({
   // Chart Logic (Simple SVG Sparkline)
   // X = Time, Y = Completion %
   const renderProgressChart = () => {
-    if (!activeBookId || filteredSessions.length < 2) return (
+    if (!chartBook || chartSessions.length === 0) return (
         <div className="h-32 flex items-center justify-center opacity-40 italic text-sm">
-            Need at least 2 sessions to show progress trend.
+            No progress data available.
         </div>
     );
 
-    const activeBook = books.find(b => b.id === activeBookId);
-    if (!activeBook) return null;
-
     // Use the actual/estimated end index for the 100% baseline
     // If we have a realEndIndex from AI, use that. Otherwise use current wordIndex or max seen.
-    const bookTotalWords = activeBook.analysis.realEndIndex || activeBook.progress.wordIndex || 1;
-    const maxIndex = Math.max(bookTotalWords, ...filteredSessions.map(s => s.endWordIndex));
+    const bookTotalWords = chartBook.analysis.realEndIndex || chartBook.progress.wordIndex || 1;
+    const maxIndex = Math.max(bookTotalWords, ...chartSessions.map(s => s.endWordIndex));
     
     // Sort sessions chronologically for the chart
-    const chrono = [...filteredSessions].sort((a, b) => a.startTime - b.startTime);
+    const chrono = [...chartSessions].sort((a, b) => a.startTime - b.startTime);
+    
+    // If only one session, use its start and end points
+    let pointsData = chrono.map(s => ({ index: s.endWordIndex, time: s.endTime }));
+    if (pointsData.length === 1) {
+        pointsData = [
+            { index: chrono[0].startWordIndex, time: chrono[0].startTime },
+            { index: chrono[0].endWordIndex, time: chrono[0].endTime }
+        ];
+    }
     
     const width = 400;
     const height = 180;
@@ -64,9 +75,9 @@ export function StatsView({
     const paddingTop = 20;
     const paddingBottom = 30;
 
-    const points = chrono.map((s, i) => {
-        const x = paddingLeft + (i / (chrono.length - 1)) * (width - paddingLeft - paddingRight);
-        const y = height - paddingBottom - (s.endWordIndex / maxIndex) * (height - paddingTop - paddingBottom);
+    const points = pointsData.map((p, i) => {
+        const x = paddingLeft + (i / (pointsData.length - 1)) * (width - paddingLeft - paddingRight);
+        const y = height - paddingBottom - (p.index / maxIndex) * (height - paddingTop - paddingBottom);
         return `${x},${y}`;
     }).join(' ');
 
@@ -101,11 +112,11 @@ export function StatsView({
           />
           
           {/* Dots with Tooltips */}
-          {chrono.map((s, i) => {
-             const x = paddingLeft + (i / (chrono.length - 1)) * (width - paddingLeft - paddingRight);
-             const y = height - paddingBottom - (s.endWordIndex / maxIndex) * (height - paddingTop - paddingBottom);
-             const percent = Math.round((s.endWordIndex / maxIndex) * 100);
-             const dateStr = new Date(s.startTime).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+          {pointsData.map((p, i) => {
+             const x = paddingLeft + (i / (pointsData.length - 1)) * (width - paddingLeft - paddingRight);
+             const y = height - paddingBottom - (p.index / maxIndex) * (height - paddingTop - paddingBottom);
+             const percent = Math.round((p.index / maxIndex) * 100);
+             const dateStr = new Date(p.time).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
              
              return (
                 <g key={i} className="group/point">
@@ -125,7 +136,7 @@ export function StatsView({
         </svg>
         <div className="flex justify-between text-[10px] opacity-50 mt-2" style={{ paddingLeft: `${paddingLeft}px` }}>
             <span>Start</span>
-            <span>Progress through {activeBook.meta.title}</span>
+            <span>Progress through {chartBook.meta.title}</span>
             <span>Now</span>
         </div>
       </div>
@@ -163,12 +174,12 @@ export function StatsView({
             </div>
           </div>
 
-          {/* Progress Chart (Only if book selected) */}
-          {activeBookId && (
+          {/* Progress Chart */}
+          {chartBook && (
             <div className="space-y-4">
                 <h3 className="text-sm font-medium opacity-70 flex items-center gap-2">
                     <TrendingUp size={16} />
-                    Book Progress Trend
+                    {activeBookId ? 'Book Progress Trend' : `Recent Progress: ${chartBook.meta.title}`}
                 </h3>
                 <div className={`p-6 rounded-xl ${cardBgClass}`}>
                     {renderProgressChart()}
