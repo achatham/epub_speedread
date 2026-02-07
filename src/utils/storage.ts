@@ -1,7 +1,8 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { db as firestore, storage as firebaseStorage } from './firebase';
-import { collection, doc, setDoc, getDocs, deleteDoc, getDoc, updateDoc } from 'firebase/firestore';
+import { collection, doc, setDoc, getDocs, deleteDoc, getDoc, updateDoc, runTransaction } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { getAggregationPlan } from './stats';
 
 export interface UserSettings {
   geminiApiKey?: string;
@@ -44,6 +45,7 @@ export interface ReadingSession {
   endTime: number;
   startWordIndex: number;
   endWordIndex: number;
+  wordsRead: number;
   durationSeconds: number;
 }
 
@@ -185,6 +187,28 @@ export class FirestoreStorage {
     } catch (e) {
       console.error("Firestore getAllBooks failed", e);
       return [];
+    }
+  }
+
+  async aggregateSessions(): Promise<void> {
+    if (!firestore) return;
+    try {
+      const sessions = await this.getSessions();
+      const { deleteIds, createSessions } = getAggregationPlan(sessions);
+
+      if (deleteIds.length === 0) return;
+
+      await runTransaction(firestore, async (transaction) => {
+        for (const id of deleteIds) {
+          transaction.delete(doc(this.sessionsCollection, id));
+        }
+        for (const s of createSessions) {
+          transaction.set(doc(this.sessionsCollection, s.id), s);
+        }
+      });
+      console.log(`[Storage] Aggregated ${deleteIds.length} sessions into ${createSessions.length} entries.`);
+    } catch (e) {
+      console.error("Aggregation transaction failed", e);
     }
   }
 

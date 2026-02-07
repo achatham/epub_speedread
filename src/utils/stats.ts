@@ -1,0 +1,43 @@
+import type { ReadingSession } from './storage';
+
+export function getAggregationPlan(sessions: ReadingSession[]): { deleteIds: string[], createSessions: ReadingSession[] } {
+  const groups = new Map<string, ReadingSession[]>();
+
+  for (const s of sessions) {
+    // Group by bookId and local date
+    const date = new Date(s.startTime).toLocaleDateString();
+    const key = `${s.bookId}-${date}`;
+    if (!groups.has(key)) {
+      groups.set(key, []);
+    }
+    groups.get(key)!.push(s);
+  }
+
+  const deleteIds: string[] = [];
+  const createSessions: ReadingSession[] = [];
+
+  for (const [_, group] of groups) {
+    if (group.length > 1) {
+      const sorted = [...group].sort((a, b) => a.startTime - b.startTime);
+      const first = sorted[0];
+      const last = sorted[sorted.length - 1];
+
+      const aggregated: ReadingSession = {
+        id: crypto.randomUUID(),
+        bookId: first.bookId,
+        bookTitle: first.bookTitle,
+        startTime: first.startTime,
+        endTime: Math.max(...group.map(s => s.endTime)),
+        startWordIndex: first.startWordIndex,
+        endWordIndex: last.endWordIndex,
+        wordsRead: group.reduce((acc, s) => acc + (s.wordsRead || Math.max(0, s.endWordIndex - s.startWordIndex)), 0),
+        durationSeconds: group.reduce((acc, s) => acc + s.durationSeconds, 0)
+      };
+
+      deleteIds.push(...group.map(s => s.id));
+      createSessions.push(aggregated);
+    }
+  }
+
+  return { deleteIds, createSessions };
+}
