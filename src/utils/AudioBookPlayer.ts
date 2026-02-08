@@ -196,7 +196,7 @@ export class AudioBookPlayer {
       if (hasStarted && now >= totalPlaybackEndTime) {
         this.stop();
       }
-    }, 2000);
+    }, 5000);
   }
 
   stop() {
