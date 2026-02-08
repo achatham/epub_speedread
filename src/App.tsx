@@ -92,7 +92,7 @@ function App() {
     try {
       const saved = localStorage.getItem('user_settings');
       if (saved) return JSON.parse(saved).ttsSpeed || 2.0;
-    } catch (e) { }
+    } catch { }
     return 2.0;
   });
 
@@ -105,7 +105,7 @@ function App() {
     try {
       const saved = localStorage.getItem('user_settings');
       if (saved) return JSON.parse(saved).autoLandscape || false;
-    } catch (e) { }
+    } catch { }
     return false;
   });
 
@@ -128,7 +128,7 @@ function App() {
         const theme = JSON.parse(saved).theme;
         if (theme) return theme as Theme;
       }
-    } catch (e) { }
+    } catch { }
     if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
       return 'dark';
     }
@@ -375,7 +375,6 @@ function App() {
       const metadata = await book.loaded.metadata;
       setBookTitle(metadata.title || bookRecord.meta.title);
 
-      // @ts-ignore
       await book.loaded.navigation;
       let allWords: WordData[] = [];
       const spine = book.spine as any;
@@ -397,9 +396,7 @@ function App() {
           }
         }
       }
-
       const loadedSections: { label: string; startIndex: number }[] = [];
-      // @ts-ignore
       const toc = book.navigation.toc;
 
       // Helper to match TOC hrefs to our spine start indices

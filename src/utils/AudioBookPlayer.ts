@@ -230,7 +230,7 @@ export class AudioBookPlayer {
 
   private cleanup() {
     if (this.audioCtx) {
-      try { this.audioCtx.close(); } catch {}
+      try { this.audioCtx.close(); } catch { /* ignore close errors */ }
       this.audioCtx = null;
     }
     if (this.monitorInterval) {

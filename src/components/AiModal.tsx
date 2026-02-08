@@ -49,9 +49,9 @@ export function AiModal({
               audioRef.current.stop();
               audioRef.current = null;
           }
-          setIsPlayingAudio(false);
+          if (isPlayingAudio) setIsPlayingAudio(false);
       }
-  }, [isOpen, aiResponse]);
+  }, [isOpen, aiResponse, isPlayingAudio]);
 
   const handleToggleAudio = async () => {
       if (isPlayingAudio) {
