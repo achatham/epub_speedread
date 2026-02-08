@@ -21,13 +21,15 @@ export class AudioBookPlayer {
   private sessionStart: { index: number; time: number } | null = null;
   private monitorInterval: number | null = null;
   private activeTimeouts: number[] = [];
+  private lastReportedIndex: number = -1;
+  private activeCallbacks: PlayerCallbacks | null = null;
   
+  private storage: FirestoreStorage;
+  private apiKey: string;
+
   // Track state internally to prevent race conditions
   private _isSynthesizing = false;
   private _isPlaying = false;
-
-  private storage: FirestoreStorage;
-  private apiKey: string;
 
   constructor(
     storage: FirestoreStorage,
@@ -57,6 +59,8 @@ export class AudioBookPlayer {
     // Reset state
     this.stop();
     this.stopRequested = false;
+    this.activeCallbacks = callbacks;
+    this.lastReportedIndex = currentWordIndex;
     this.updateState(true, false, callbacks);
 
     try {
@@ -85,13 +89,13 @@ export class AudioBookPlayer {
         await this.playAudioChunks(chunks, globalStartIndex, currentWordIndex, callbacks);
       } else {
         // No audio generated?
-        this.stop(callbacks);
+        this.stop();
       }
 
     } catch (e: any) {
       console.error("AudioPlayer Error:", e);
       callbacks.onError(e.message || "Failed to play audio");
-      this.stop(callbacks);
+      this.stop();
     }
   }
 
@@ -124,7 +128,7 @@ export class AudioBookPlayer {
 
     if (relevantChunks.length === 0) {
         console.log(`[AudioPlayer] No relevant chunks found after index ${initialWordIndex}.`);
-        this.stop(callbacks);
+        this.stop();
         return;
     }
 
@@ -148,6 +152,7 @@ export class AudioBookPlayer {
       const timeoutId = window.setTimeout(() => {
         if (!this.stopRequested) {
           console.log(`[AudioPlayer] Syncing UI to word index: ${chunkGlobalIndex}`);
+          this.lastReportedIndex = chunkGlobalIndex;
           callbacks.onProgress(chunkGlobalIndex);
         }
       }, Math.max(0, delay));
@@ -168,19 +173,20 @@ export class AudioBookPlayer {
 
       if (hasStarted && this.audioCtx && this.audioCtx.currentTime >= nextStartTime) {
         // Finished naturally
-        this.stop(callbacks);
+        this.stop();
       }
     }, 200);
   }
 
-  stop(callbacks?: PlayerCallbacks) {
+  stop() {
     this.stopRequested = true;
+    const callbacks = this.activeCallbacks;
     
     // Log Session if valid
     if (this.sessionStart && callbacks) {
       const endTime = Date.now();
       const durationMs = endTime - this.sessionStart.time;
-      console.log(`[AudioPlayer] Stopping. Total duration: ${Math.round(durationMs / 1000)}s`);
+      console.log(`[AudioPlayer] Stopping. Final index: ${this.lastReportedIndex}, duration: ${Math.round(durationMs / 1000)}s`);
 
       // Only log if duration is significant (> 10s)
       if (durationMs >= 10000) {
@@ -188,7 +194,7 @@ export class AudioBookPlayer {
             startTime: this.sessionStart.time,
             endTime,
             startWordIndex: this.sessionStart.index,
-            endWordIndex: -1, // App will fill this with its current state
+            endWordIndex: this.lastReportedIndex,
             durationSeconds: Math.round(durationMs / 1000)
         });
       }
@@ -198,6 +204,7 @@ export class AudioBookPlayer {
     if (callbacks) {
         this.updateState(false, false, callbacks);
     }
+    this.activeCallbacks = null;
   }
 
   private cleanup() {

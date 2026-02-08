@@ -768,16 +768,15 @@ function App() {
                 },
                 onSessionFinished: (stats) => {
                   if (storageProvider && currentBookId) {
-                    const finalIndex = currentIndex;
-                    console.log(`[App] Finalizing listening session. End Word Index: ${finalIndex}`);
+                    console.log(`[App] Finalizing listening session. End Word Index: ${stats.endWordIndex}`);
                     storageProvider.logReadingSession({
                       bookId: currentBookId,
                       bookTitle: bookTitle,
                       startTime: stats.startTime,
                       endTime: stats.endTime,
                       startWordIndex: stats.startWordIndex,
-                      endWordIndex: finalIndex, 
-                      wordsRead: Math.max(0, finalIndex - stats.startWordIndex),
+                      endWordIndex: stats.endWordIndex, 
+                      wordsRead: Math.max(0, stats.endWordIndex - stats.startWordIndex),
                       durationSeconds: stats.durationSeconds,
                       type: 'listening'
                     }).then(() => storageProvider.getSessions().then(setSessions));
