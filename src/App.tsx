@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import ePub from 'epubjs';
 import {
   FirestoreStorage,
   type BookRecord,
@@ -8,9 +7,10 @@ import {
 import { auth, storage } from './utils/firebase';
 import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, type User } from 'firebase/auth';
 import { ref, getBytes } from 'firebase/storage';
-import { extractWordsFromDoc, type WordData } from './utils/text-processing';
+import { type WordData } from './utils/text-processing';
 import { calculateNavigationTarget, findSentenceStart, type NavigationType } from './utils/navigation';
-import { getGeminiApiKey, setGeminiApiKey as saveGeminiApiKey, findRealEndOfBook, askAboutBook, summarizeRecent, summarizeWhatJustHappened } from './utils/gemini';
+import { getGeminiApiKey, setGeminiApiKey as saveGeminiApiKey, askAboutBook, summarizeRecent, summarizeWhatJustHappened } from './utils/gemini';
+import { processEbook } from './utils/ebook';
 import { splitWord } from './utils/orp';
 import { AudioBookPlayer } from './utils/AudioBookPlayer';
 import { LibraryView } from './components/LibraryView';
@@ -21,7 +21,7 @@ import { StatsView } from './components/StatsView';
 import { AboutView } from './components/AboutView';
 import { AI_QUESTIONS, WPM_VANITY_RATIO } from './constants';
 import { LogIn, Info, BookOpen } from 'lucide-react';
-import { useRegisterSW } from 'virtual:pwa-register/react';
+import { useDeviceLogic } from './hooks/useDeviceLogic';
 
 type Theme = 'light' | 'dark' | 'bedtime';
 
@@ -44,32 +44,7 @@ const MOCK_STORAGE = {
   getBook: async () => null,
 };
 
-const findQuoteIndex = (quote: string, currentWords: WordData[]): number | null => {
-  const quoteWords = quote.split(/\s+/).filter(w => w.length > 0);
-  if (quoteWords.length > 0) {
-    for (let i = currentWords.length - quoteWords.length; i >= 0; i--) {
-      let match = true;
-      for (let j = 0; j < quoteWords.length; j++) {
-        const wordText = currentWords[i + j].text.toLowerCase().replace(/[^\w]/g, '');
-        if (wordText !== quoteWords[j]) {
-          match = false;
-          break;
-        }
-      }
-      if (match) {
-        return i + quoteWords.length;
-      }
-    }
-  }
-  return null;
-};
-
 function App() {
-  const {
-    needRefresh: [needRefresh],
-    updateServiceWorker,
-  } = useRegisterSW();
-
   const [library, setLibrary] = useState<BookRecord[]>([]);
   const [currentBookId, setCurrentBookId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -121,6 +96,12 @@ function App() {
   const [isNavOpen, setIsNavOpen] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
 
+  const { rotationTrigger, lastRotationTime } = useDeviceLogic({ 
+    isPlaying, 
+    isReadingAloud, 
+    isSynthesizing 
+  });
+
   const [theme, setTheme] = useState<Theme>(() => {
     try {
       const saved = localStorage.getItem('user_settings');
@@ -158,28 +139,6 @@ function App() {
     };
   }, []);
 
-  const [rotationTrigger, setRotationTrigger] = useState(0);
-  const lastRotationTimeRef = useRef(0);
-
-  useEffect(() => {
-    const handleRotation = () => {
-      lastRotationTimeRef.current = Date.now();
-      setRotationTrigger(prev => prev + 1);
-    };
-
-    if (screen.orientation) {
-      screen.orientation.addEventListener('change', handleRotation);
-    }
-    window.addEventListener('orientationchange', handleRotation);
-
-    return () => {
-      if (screen.orientation) {
-        screen.orientation.removeEventListener('change', handleRotation);
-      }
-      window.removeEventListener('orientationchange', handleRotation);
-    };
-  }, []);
-
   const timerRef = useRef<number | null>(null);
   const sessionStartTimeRef = useRef<number | null>(null);
   const wordsReadInSessionRef = useRef<number>(0);
@@ -201,21 +160,6 @@ function App() {
       audioPlayerRef.current.updateApiKey(geminiApiKey);
     }
   }, [geminiApiKey]);
-
-  // Background Update: Refresh when app is hidden and idle
-  useEffect(() => {
-    if (!needRefresh) return;
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden' && !isPlaying && !isReadingAloud && !isSynthesizing) {
-        console.log('[PWA] Updating in background...');
-        updateServiceWorker(true);
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [needRefresh, isPlaying, isReadingAloud, isSynthesizing, updateServiceWorker]);
 
   // --- Auth & Storage Init ---
   useEffect(() => {
@@ -362,117 +306,23 @@ function App() {
   const processBook = useCallback(async (bookRecord: BookRecord) => {
     if (!storageProvider) return;
     try {
-      let file = bookRecord.storage.localFile;
-      if (!file) {
-        const fullBook = await storageProvider.getBook(bookRecord.id);
-        if (!fullBook?.storage.localFile) throw new Error("File missing");
-        file = fullBook.storage.localFile;
+      const result = await processEbook(bookRecord, storageProvider);
+      
+      setBookTitle(result.title);
+      setWords(result.words);
+      setSections(result.sections);
+      setCurrentIndex(result.wordIndex);
+      setWpm(result.wpm);
+      setRealEndIndex(result.realEndIndex);
+
+      if (result.realEndQuote) {
+        // Just to update the local library state if needed
+        setLibrary(prev => prev.map(b => b.id === bookRecord.id ? { ...b, analysis: { ...b.analysis, realEndQuote: result.realEndQuote } } : b));
       }
-
-      const arrayBuffer = await file.arrayBuffer();
-      const book = ePub(arrayBuffer);
-      await book.ready;
-      const metadata = await book.loaded.metadata;
-      setBookTitle(metadata.title || bookRecord.meta.title);
-
-      await book.loaded.navigation;
-      let allWords: WordData[] = [];
-      const spine = book.spine as any;
-      const hrefToStartIndex: Record<string, number> = {};
-
-      for (let i = 0; i < (spine.length || 0); i++) {
-        const item = spine.get(i);
-        if (item) {
-          const cleanHref = item.href.split('#')[0];
-          if (!(cleanHref in hrefToStartIndex)) hrefToStartIndex[cleanHref] = allWords.length;
-          const contents = await book.load(item.href);
-          let doc: Document | null = null;
-          if (typeof contents === 'string') {
-            doc = new DOMParser().parseFromString(contents, 'application/xhtml+xml');
-          } else if (contents instanceof Document) { doc = contents; }
-          if (doc?.body) {
-            const sectionWords = extractWordsFromDoc(doc);
-            if (sectionWords.length > 0) allWords = [...allWords, ...sectionWords];
-          }
-        }
-      }
-      const loadedSections: { label: string; startIndex: number }[] = [];
-      const toc = book.navigation.toc;
-
-      // Helper to match TOC hrefs to our spine start indices
-      const getStartIndexForHref = (href: string) => {
-        if (!href) return undefined;
-        const cleanHref = href.split('#')[0];
-        // Try exact match first
-        if (hrefToStartIndex[cleanHref] !== undefined) return hrefToStartIndex[cleanHref];
-        
-        // Try matching just the filename if it's a path mismatch
-        const filename = cleanHref.split('/').pop();
-        if (filename) {
-          const spineMatch = Object.keys(hrefToStartIndex).find(k => k.split('/').pop() === filename);
-          if (spineMatch) return hrefToStartIndex[spineMatch];
-        }
-        return undefined;
-      };
-
-      const flattenToc = (items: any[]) => {
-        items.forEach(item => {
-          const startIndex = getStartIndexForHref(item.href);
-          if (startIndex !== undefined) loadedSections.push({ label: item.label.trim(), startIndex });
-          if (item.subitems?.length > 0) flattenToc(item.subitems);
-        });
-      };
-
-      if (toc?.length > 0) {
-        flattenToc(toc);
-      }
-
-      // Fallback: If TOC yielded no valid sections or is empty, use spine items as chapters
-      if (loadedSections.length === 0) {
-        console.log("[App] No chapters found in TOC, falling back to spine items.");
-        for (let i = 0; i < (spine.length || 0); i++) {
-          const item = spine.get(i);
-          if (item) {
-            const cleanHref = item.href.split('#')[0];
-            const startIndex = hrefToStartIndex[cleanHref];
-            if (startIndex !== undefined) {
-              // Try to find a meaningful label, or just use "Section X"
-              loadedSections.push({ label: `Section ${i + 1}`, startIndex });
-            }
-          }
-        }
-      }
-
-      // If still empty, add a default
-      if (loadedSections.length === 0) loadedSections.push({ label: 'Start', startIndex: 0 });
-
-      setWords(allWords); setSections(loadedSections);
-      setCurrentIndex(bookRecord.progress.wordIndex || 0);
-      setWpm(bookRecord.settings.wpm || 300);
-
-      if (bookRecord.meta.totalWords === undefined) {
-        storageProvider.updateBookTotalWords(bookRecord.id, allWords.length);
-        setLibrary(prev => prev.map(b => b.id === bookRecord.id ? { ...b, meta: { ...b.meta, totalWords: allWords.length } } : b));
-      }
-
-      if (bookRecord.analysis.realEndIndex !== undefined) {
-        setRealEndIndex(bookRecord.analysis.realEndIndex);
-      } else if (bookRecord.analysis.realEndQuote) {
-        const idx = findQuoteIndex(bookRecord.analysis.realEndQuote, allWords);
-        if (idx !== null) { setRealEndIndex(idx); storageProvider.updateBookRealEndIndex(bookRecord.id, idx); }
-      } else {
-        const apiKey = getGeminiApiKey();
-        if (apiKey && loadedSections.length > 0) {
-          findRealEndOfBook(loadedSections.map(s => s.label), allWords.map(w => w.text).join(' ')).then(quote => {
-            if (quote) {
-              storageProvider.updateBookRealEndQuote(bookRecord.id, quote);
-              const idx = findQuoteIndex(quote, allWords);
-              if (idx !== null) { setRealEndIndex(idx); storageProvider.updateBookRealEndIndex(bookRecord.id, idx); }
-            }
-          });
-        }
-      }
-    } catch (e) { console.error(e); setCurrentBookId(null); }
+    } catch (e) {
+      console.error("Book processing failed", e);
+      setCurrentBookId(null);
+    }
   }, [storageProvider]);
 
   useEffect(() => {
@@ -603,11 +453,9 @@ function App() {
 
   useEffect(() => {
     if (isPlaying && words.length > 0) {
-      const timeSinceRotation = Date.now() - lastRotationTimeRef.current;
+      const timeSinceRotation = Date.now() - lastRotationTime;
       if (timeSinceRotation < 500) {
-        timerRef.current = window.setTimeout(() => {
-          setRotationTrigger(prev => prev + 1);
-        }, 501 - timeSinceRotation);
+        // Just let the effect re-run naturally since it depends on rotationTrigger
         return;
       }
 
