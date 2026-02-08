@@ -257,7 +257,7 @@ export function ReaderView({
           </>
         ) : (
           <div className={`text-xl leading-relaxed text-center px-8 ${theme === 'bedtime' ? 'text-stone-500' : 'text-zinc-500 dark:text-zinc-400'}`}>
-            {words.slice(currentIndex, currentIndex + 15).map(w => w.text).join(' ')}...
+            {words.slice(currentIndex, currentIndex + 30).map(w => w.text).join(' ')}...
           </div>
         )}
       </div>
