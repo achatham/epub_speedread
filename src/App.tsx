@@ -400,15 +400,53 @@ function App() {
       const loadedSections: { label: string; startIndex: number }[] = [];
       // @ts-ignore
       const toc = book.navigation.toc;
+
+      // Helper to match TOC hrefs to our spine start indices
+      const getStartIndexForHref = (href: string) => {
+        if (!href) return undefined;
+        const cleanHref = href.split('#')[0];
+        // Try exact match first
+        if (hrefToStartIndex[cleanHref] !== undefined) return hrefToStartIndex[cleanHref];
+        
+        // Try matching just the filename if it's a path mismatch
+        const filename = cleanHref.split('/').pop();
+        if (filename) {
+          const spineMatch = Object.keys(hrefToStartIndex).find(k => k.split('/').pop() === filename);
+          if (spineMatch) return hrefToStartIndex[spineMatch];
+        }
+        return undefined;
+      };
+
       const flattenToc = (items: any[]) => {
         items.forEach(item => {
-          const cleanHref = item.href?.split('#')[0];
-          const startIndex = hrefToStartIndex[cleanHref];
+          const startIndex = getStartIndexForHref(item.href);
           if (startIndex !== undefined) loadedSections.push({ label: item.label.trim(), startIndex });
           if (item.subitems?.length > 0) flattenToc(item.subitems);
         });
       };
-      if (toc?.length > 0) flattenToc(toc); else loadedSections.push({ label: 'Start', startIndex: 0 });
+
+      if (toc?.length > 0) {
+        flattenToc(toc);
+      }
+
+      // Fallback: If TOC yielded no valid sections or is empty, use spine items as chapters
+      if (loadedSections.length === 0) {
+        console.log("[App] No chapters found in TOC, falling back to spine items.");
+        for (let i = 0; i < (spine.length || 0); i++) {
+          const item = spine.get(i);
+          if (item) {
+            const cleanHref = item.href.split('#')[0];
+            const startIndex = hrefToStartIndex[cleanHref];
+            if (startIndex !== undefined) {
+              // Try to find a meaningful label, or just use "Section X"
+              loadedSections.push({ label: `Section ${i + 1}`, startIndex });
+            }
+          }
+        }
+      }
+
+      // If still empty, add a default
+      if (loadedSections.length === 0) loadedSections.push({ label: 'Start', startIndex: 0 });
 
       setWords(allWords); setSections(loadedSections);
       setCurrentIndex(bookRecord.progress.wordIndex || 0);
