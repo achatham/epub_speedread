@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { Minus, Moon, Pause, Play, Plus, Settings, Settings2, SkipBack, Sparkles, Sun, Sunset, Volume2, Loader2, Square, BarChart2 } from 'lucide-react';
 import type { WordData } from '../utils/text-processing';
 import { splitWord } from '../utils/orp';
@@ -68,6 +69,14 @@ export function ReaderView({
   upcomingChapterTitle,
   onStatsClick
 }: ReaderViewProps) {
+  const activeChapterRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (isTocOpen && activeChapterRef.current) {
+      activeChapterRef.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }, [isTocOpen]);
+
   if (words.length === 0) {
     return (
       <div className={`flex flex-col items-center justify-center h-screen ${theme === 'bedtime' ? 'bg-black text-stone-400' : 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100'}`}>
@@ -318,7 +327,7 @@ export function ReaderView({
                 <SkipBack size={20} />
               </button>
               {isNavOpen && (
-                <div className={`absolute bottom-14 left-0 w-64 border rounded-lg shadow-xl z-50 flex flex-col p-1 overflow-y-auto max-h-[calc(100vh-5rem)] ${theme === 'bedtime' ? 'bg-black border-zinc-800' : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700'}`}>
+                <div className={`absolute bottom-full mb-2 left-0 w-64 border rounded-lg shadow-xl z-50 flex flex-col p-1 overflow-y-auto max-h-[70vh] ${theme === 'bedtime' ? 'bg-black border-zinc-800' : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700'}`}>
                   <div className={`px-3 py-2 text-xs font-semibold uppercase tracking-wider border-b mb-1 ${theme === 'bedtime' ? 'text-stone-600 border-zinc-900' : 'text-zinc-500 dark:text-zinc-400 border-zinc-100 dark:border-zinc-800'}`}>
                     Navigate
                   </div>
@@ -383,7 +392,7 @@ export function ReaderView({
               </button>
 
               {isTocOpen && (
-                <div className={`absolute bottom-14 right-0 w-80 max-h-[calc(100vh-5rem)] overflow-y-auto border rounded-lg shadow-xl z-50 flex flex-col p-2 gap-1 ${theme === 'bedtime' ? 'bg-black border-zinc-800' : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700'}`}>
+                <div className={`absolute bottom-full mb-2 right-0 w-80 max-h-[70vh] overflow-y-auto border rounded-lg shadow-xl z-50 flex flex-col p-2 gap-1 ${theme === 'bedtime' ? 'bg-black border-zinc-800' : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700'}`}>
                   <div className={`px-3 py-2 text-xs font-semibold uppercase tracking-wider border-b mb-1 sticky top-0 z-10 ${theme === 'bedtime' ? 'text-stone-600 border-zinc-900 bg-black' : 'text-zinc-500 dark:text-zinc-400 border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900'}`}>
                     Table of Contents
                   </div>
@@ -395,6 +404,7 @@ export function ReaderView({
                       return (
                         <button
                           key={idx}
+                          ref={isCurrent ? activeChapterRef : null}
                           className={`text-left px-3 py-2.5 text-sm rounded-md transition-colors leading-normal ${isCurrent
                               ? (theme === 'bedtime' ? 'bg-zinc-900 text-amber-600 font-bold' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-bold')
                               : (theme === 'bedtime' ? 'text-stone-400 hover:bg-zinc-900' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300')
