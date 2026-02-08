@@ -23,6 +23,12 @@ export class AudioBookPlayer {
   private activeTimeouts: number[] = [];
   private lastReportedIndex: number = -1;
   private activeCallbacks: PlayerCallbacks | null = null;
+  private scheduledChunks: { 
+    startTime: number; 
+    endTime: number; 
+    globalStartIndex: number; 
+    wordCount: number 
+  }[] = [];
   
   private storage: FirestoreStorage;
   private apiKey: string;
@@ -134,6 +140,8 @@ export class AudioBookPlayer {
 
     console.log(`[AudioPlayer] Playing ${relevantChunks.length} chunks starting from global index ${globalChapterStart + relevantChunks[0].startIndex}`);
 
+    this.scheduledChunks = [];
+
     for (const chunk of relevantChunks) {
       if (this.stopRequested) break;
       
@@ -145,37 +153,50 @@ export class AudioBookPlayer {
         nextStartTime = this.audioCtx.currentTime;
       }
 
-      // Schedule Progress Update
-      const chunkGlobalIndex = globalChapterStart + chunk.startIndex;
-      const delay = (nextStartTime - this.audioCtx.currentTime) * 1000;
-      
-      const timeoutId = window.setTimeout(() => {
-        if (!this.stopRequested) {
-          console.log(`[AudioPlayer] Syncing UI to word index: ${chunkGlobalIndex}`);
-          this.lastReportedIndex = chunkGlobalIndex;
-          callbacks.onProgress(chunkGlobalIndex);
-        }
-      }, Math.max(0, delay));
-      this.activeTimeouts.push(timeoutId);
-
       // Schedule Audio
       const duration = schedulePcmChunk(this.audioCtx, chunk.audio, nextStartTime);
+      
+      // Track timing for interpolation
+      this.scheduledChunks.push({
+        startTime: nextStartTime,
+        endTime: nextStartTime + duration,
+        globalStartIndex: globalChapterStart + chunk.startIndex,
+        wordCount: chunk.wordCount
+      });
+
       nextStartTime += duration;
       hasStarted = true;
     }
 
-    // Monitor for completion
+    // Monitor for completion and granular progress
+    const totalPlaybackEndTime = nextStartTime;
     this.monitorInterval = window.setInterval(() => {
-      if (this.stopRequested) {
+      if (this.stopRequested || !this.audioCtx) {
         this.cleanup();
         return;
       }
 
-      if (hasStarted && this.audioCtx && this.audioCtx.currentTime >= nextStartTime) {
-        // Finished naturally
+      const now = this.audioCtx.currentTime;
+
+      // 1. Calculate Granular Progress
+      const active = this.scheduledChunks.find(c => now >= c.startTime && now < c.endTime);
+      if (active) {
+        const elapsed = now - active.startTime;
+        const duration = active.endTime - active.startTime;
+        const subIndex = Math.floor((elapsed / duration) * active.wordCount);
+        const granularIndex = active.globalStartIndex + subIndex;
+        
+        if (granularIndex !== this.lastReportedIndex) {
+          this.lastReportedIndex = granularIndex;
+          callbacks.onProgress(granularIndex);
+        }
+      }
+
+      // 2. Check for natural completion
+      if (hasStarted && now >= totalPlaybackEndTime) {
         this.stop();
       }
-    }, 200);
+    }, 2000);
   }
 
   stop() {
@@ -218,6 +239,7 @@ export class AudioBookPlayer {
     }
     this.activeTimeouts.forEach(t => clearTimeout(t));
     this.activeTimeouts = [];
+    this.scheduledChunks = [];
     this.sessionStart = null;
     this._isPlaying = false;
     this._isSynthesizing = false;
