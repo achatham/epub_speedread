@@ -79,9 +79,9 @@ function App() {
   const [autoLandscape, setAutoLandscape] = useState(() => {
     try {
       const saved = localStorage.getItem('user_settings');
-      if (saved) return JSON.parse(saved).autoLandscape || false;
+      if (saved) return JSON.parse(saved).autoLandscape ?? true;
     } catch { }
-    return false;
+    return true;
   });
 
   const [realEndIndex, setRealEndIndex] = useState<number | null>(null);
@@ -261,7 +261,7 @@ function App() {
     try {
       const id = await storageProvider.addBook(file, file.name.replace(/\.epub$/i, ''));
       setLibrary(await storageProvider.getAllBooks());
-      setCurrentBookId(id);
+      handleSelectBook(id);
     } catch (e) { console.error(e); } finally { setIsLoading(false); }
   };
 
@@ -275,7 +275,7 @@ function App() {
       const file = new File([blob], 'Frankenstein.epub', { type: 'application/epub+zip' });
       const id = await storageProvider.addBook(file, 'Frankenstein');
       setLibrary(await storageProvider.getAllBooks());
-      setCurrentBookId(id);
+      handleSelectBook(id);
     } catch (e) {
       console.error("Failed to load demo book", e);
       alert("Failed to load the demo book. Please try again or upload your own.");
@@ -293,6 +293,23 @@ function App() {
     }
   };
 
+  const handleSelectBook = async (id: string) => {
+    setCurrentBookId(id);
+    if (autoLandscape) {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().then(() => {
+          if ((screen.orientation as any)?.lock) {
+            (screen.orientation as any).lock('landscape').catch((e: any) => console.warn('Orientation lock failed', e));
+          }
+        }).catch(e => console.warn('Fullscreen failed via gesture', e));
+      } else {
+        if ((screen.orientation as any)?.lock) {
+          (screen.orientation as any).lock('landscape').catch((e: any) => console.warn('Orientation lock failed', e));
+        }
+      }
+    }
+  };
+
   const handleCloseBook = async () => {
     setIsPlaying(false);
     if (currentBookId && storageProvider) {
@@ -301,6 +318,13 @@ function App() {
     }
     setWords([]); setSections([]); setCurrentIndex(0); setBookTitle('');
     setCurrentBookId(null); setRealEndIndex(null);
+
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => { });
+    }
+    if ((screen.orientation as any)?.unlock) {
+      (screen.orientation as any).unlock();
+    }
   };
 
   const processBook = useCallback(async (bookRecord: BookRecord) => {
@@ -372,12 +396,6 @@ function App() {
         }
       }
     } else if (!playing && isPlaying) {
-      if (document.fullscreenElement) {
-        document.exitFullscreen().catch(() => {});
-      }
-      if ((screen.orientation as any)?.unlock) {
-        (screen.orientation as any).unlock();
-      }
       if (wakeLockRef.current) {
         wakeLockRef.current.release();
         wakeLockRef.current = null;
@@ -597,7 +615,7 @@ function App() {
           library={library} isLoading={isLoading} theme={theme}
           onSettingsClick={() => setIsSettingsOpen(true)}
           onToggleTheme={toggleTheme}
-          onSelectBook={setCurrentBookId}
+          onSelectBook={handleSelectBook}
           onDeleteBook={handleDeleteBook}
           onFileUpload={handleFileUpload}
           fileInputRef={fileInputRef}
