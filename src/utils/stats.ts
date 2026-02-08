@@ -17,7 +17,7 @@ export function getAggregationPlan(sessions: ReadingSession[]): { deleteIds: str
   const deleteIds: string[] = [];
   const createSessions: ReadingSession[] = [];
 
-  for (const [_, group] of groups) {
+  for (const group of groups.values()) {
     if (group.length > 1) {
       const sorted = [...group].sort((a, b) => a.startTime - b.startTime);
       const first = sorted[0];

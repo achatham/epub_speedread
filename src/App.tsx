@@ -36,6 +36,7 @@ const MOCK_STORAGE = {
   logReadingSession: async () => {},
   updateBookRealEndIndex: async () => {},
   updateBookRealEndQuote: async () => {},
+  updateBookTotalWords: async () => {},
   aggregateSessions: async () => {},
   getChapterAudio: async () => null,
   saveChapterAudio: async () => {},
@@ -91,7 +92,7 @@ function App() {
     try {
       const saved = localStorage.getItem('user_settings');
       if (saved) return JSON.parse(saved).ttsSpeed || 2.0;
-    } catch (e) { }
+    } catch { }
     return 2.0;
   });
 
@@ -104,7 +105,7 @@ function App() {
     try {
       const saved = localStorage.getItem('user_settings');
       if (saved) return JSON.parse(saved).autoLandscape || false;
-    } catch (e) { }
+    } catch { }
     return false;
   });
 
@@ -127,7 +128,7 @@ function App() {
         const theme = JSON.parse(saved).theme;
         if (theme) return theme as Theme;
       }
-    } catch (e) { }
+    } catch { }
     if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
       return 'dark';
     }
@@ -374,7 +375,6 @@ function App() {
       const metadata = await book.loaded.metadata;
       setBookTitle(metadata.title || bookRecord.meta.title);
 
-      // @ts-ignore
       await book.loaded.navigation;
       let allWords: WordData[] = [];
       const spine = book.spine as any;
@@ -396,9 +396,7 @@ function App() {
           }
         }
       }
-
       const loadedSections: { label: string; startIndex: number }[] = [];
-      // @ts-ignore
       const toc = book.navigation.toc;
 
       // Helper to match TOC hrefs to our spine start indices
@@ -451,6 +449,11 @@ function App() {
       setWords(allWords); setSections(loadedSections);
       setCurrentIndex(bookRecord.progress.wordIndex || 0);
       setWpm(bookRecord.settings.wpm || 300);
+
+      if (bookRecord.meta.totalWords === undefined) {
+        storageProvider.updateBookTotalWords(bookRecord.id, allWords.length);
+        setLibrary(prev => prev.map(b => b.id === bookRecord.id ? { ...b, meta: { ...b.meta, totalWords: allWords.length } } : b));
+      }
 
       if (bookRecord.analysis.realEndIndex !== undefined) {
         setRealEndIndex(bookRecord.analysis.realEndIndex);

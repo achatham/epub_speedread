@@ -44,8 +44,8 @@ try {
 
     storage = getStorage(app);
   }
-} catch (error) {
-  console.error("Firebase initialization failed:", error);
+} catch {
+  console.error("Firebase initialization failed");
 }
 
 export { auth, db, storage, app };

@@ -15,12 +15,13 @@ export function calculateNavigationTarget(
     case 'book':
       targetIndex = 0;
       break;
-    case 'chapter':
+    case 'chapter': {
       const currentSection = sections.reduce((prev, curr) => {
         return (curr.startIndex <= currentIndex && curr.startIndex > prev.startIndex) ? curr : prev;
       }, sections[0] || { startIndex: 0 });
       targetIndex = currentSection.startIndex;
       break;
+    }
     case 'prev-paragraph':
       if (words[currentIndex].isParagraphStart) {
         for (let i = currentIndex - 1; i >= 0; i--) {
