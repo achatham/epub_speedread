@@ -185,7 +185,7 @@ export function ReaderView({
   
   return (
     <div 
-      className={`flex flex-col items-center justify-center h-screen transition-colors duration-300 relative ${mainBg} ${mainText} ${!isPlaying ? 'cursor-pointer' : ''}`}
+      className={`flex flex-col items-center justify-center h-screen transition-colors duration-300 relative ${mainBg} ${mainText} ${!isPlaying ? 'cursor-pointer landscape:flex-row landscape:items-stretch landscape:justify-start' : ''}`}
       style={{ fontFamily: fontStyles[fontFamily] }}
       onClick={() => { if (!isPlaying) setIsPlaying(true); }}
     >
@@ -198,18 +198,20 @@ export function ReaderView({
       )}
       
       {!isPlaying && (
-        <div className="absolute top-8 text-center w-full px-4" onClick={(e) => e.stopPropagation()}>
-          <h3 className="m-0 font-normal opacity-60 text-lg truncate max-w-2xl mx-auto">{bookTitle}</h3>
-          <p className="my-2 text-sm opacity-40">
+        <div className="absolute top-8 text-center w-full px-4 landscape:top-4 landscape:left-28 landscape:text-left landscape:w-auto landscape:px-0 z-20" onClick={(e) => e.stopPropagation()}>
+          <h3 className="m-0 font-normal opacity-60 text-lg truncate max-w-2xl mx-auto landscape:mx-0 landscape:max-w-md">{bookTitle}</h3>
+          <p className="my-2 text-sm opacity-40 landscape:my-1 landscape:text-xs">
             {currentIndex + 1} / {effectiveTotalWords} words
             {realEndIndex && currentIndex >= realEndIndex && " (Back Matter)"}
           </p>
-          {getProgressStats()}
+          <div className="landscape:hidden">
+            {getProgressStats()}
+          </div>
         </div>
       )}
 
       {!isPlaying && (
-        <div className="absolute top-4 right-4 flex gap-2 z-10" onClick={(e) => e.stopPropagation()}>
+        <div className="absolute top-4 right-4 flex gap-2 z-20 landscape:top-2 landscape:right-2" onClick={(e) => e.stopPropagation()}>
           <button
             onClick={onStatsClick}
             className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
@@ -235,7 +237,7 @@ export function ReaderView({
       )}
 
       {/* RSVP Display or Text Preview */}
-      <div className={`relative flex items-center justify-center w-full ${isPlaying ? '' : 'max-w-2xl'} border-t border-b my-8 ${theme === 'bedtime' ? 'border-zinc-900' : 'border-zinc-200 dark:border-zinc-800'}`} style={{ minHeight: isPlaying ? Math.max(120, currentFontSize * 1.5) : '120px' }}>
+      <div className={`relative flex items-center justify-center w-full ${isPlaying ? '' : 'max-w-2xl landscape:max-w-none landscape:my-2 landscape:flex-1 landscape:mx-12'} border-t border-b my-8 ${theme === 'bedtime' ? 'border-zinc-900' : 'border-zinc-200 dark:border-zinc-800'}`} style={{ minHeight: isPlaying ? Math.max(120, currentFontSize * 1.5) : '120px' }}>
         {isPlaying ? (
           <>
             {!isChapterBreak && (
@@ -265,15 +267,20 @@ export function ReaderView({
             )}
           </>
         ) : (
-          <div className={`text-xl leading-relaxed text-center px-8 ${theme === 'bedtime' ? 'text-stone-500' : 'text-zinc-500 dark:text-zinc-400'}`}>
+          <div className={`text-xl leading-relaxed text-center px-8 landscape:text-base landscape:leading-snug ${theme === 'bedtime' ? 'text-stone-500' : 'text-zinc-500 dark:text-zinc-400'}`}>
             {words.slice(currentIndex, currentIndex + 30).map(w => w.text).join(' ')}...
           </div>
         )}
       </div>
 
       {/* Controls */}
-      <div className="flex flex-col gap-6 items-center w-full max-w-md px-4 relative z-50" onClick={(e) => e.stopPropagation()}>
-        <div className="w-full space-y-3">
+      <div
+        className={`flex flex-col gap-6 items-center relative z-50
+          ${isPlaying ? 'w-full max-w-md px-4' : 'landscape:fixed landscape:left-0 landscape:top-0 landscape:bottom-0 landscape:w-24 landscape:max-w-[96px] landscape:bg-white landscape:dark:bg-zinc-900 landscape:border-r landscape:border-zinc-200 landscape:dark:border-zinc-800 landscape:justify-center landscape:gap-4 landscape:px-2 portrait:w-full portrait:max-w-md portrait:px-4 landscape:pointer-events-none'}
+          ${!isPlaying && theme === 'bedtime' ? 'landscape:bg-black landscape:border-zinc-900' : ''}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className={`w-full space-y-3 landscape:pointer-events-auto ${!isPlaying ? 'landscape:fixed landscape:bottom-4 landscape:left-28 landscape:right-64 landscape:w-auto landscape:space-y-1' : ''}`}>
           {/* Chapter Progress */}
           <div
             className={`w-full h-1 rounded-sm relative ${theme === 'bedtime' ? 'bg-zinc-900' : 'bg-zinc-200 dark:bg-zinc-800'}`}
@@ -317,7 +324,7 @@ export function ReaderView({
         </div>
 
         {!isPlaying && (
-          <div className="flex gap-4 items-center">
+          <div className="flex gap-4 items-center landscape:flex-col landscape:gap-4 landscape:pointer-events-auto">
             {/* Navigation Menu */}
             <div className="relative">
               <button
@@ -327,7 +334,7 @@ export function ReaderView({
                 <SkipBack size={20} />
               </button>
               {isNavOpen && (
-                <div className={`absolute bottom-full mb-2 left-0 w-64 border rounded-lg shadow-xl z-50 flex flex-col p-1 overflow-y-auto max-h-[70vh] ${theme === 'bedtime' ? 'bg-black border-zinc-800' : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700'}`}>
+                <div className={`absolute bottom-full mb-2 left-0 w-64 border rounded-lg shadow-xl z-50 flex flex-col p-1 overflow-y-auto max-h-[70vh] landscape:bottom-auto landscape:left-full landscape:ml-2 landscape:top-0 ${theme === 'bedtime' ? 'bg-black border-zinc-800' : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700'}`}>
                   <div className={`px-3 py-2 text-xs font-semibold uppercase tracking-wider border-b mb-1 ${theme === 'bedtime' ? 'text-stone-600 border-zinc-900' : 'text-zinc-500 dark:text-zinc-400 border-zinc-100 dark:border-zinc-800'}`}>
                     Navigate
                   </div>
@@ -392,7 +399,7 @@ export function ReaderView({
               </button>
 
               {isTocOpen && (
-                <div className={`absolute bottom-full mb-2 right-0 w-80 max-h-[70vh] overflow-y-auto border rounded-lg shadow-xl z-50 flex flex-col p-2 gap-1 ${theme === 'bedtime' ? 'bg-black border-zinc-800' : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700'}`}>
+                <div className={`absolute bottom-full mb-2 right-0 w-80 max-h-[70vh] overflow-y-auto border rounded-lg shadow-xl z-50 flex flex-col p-2 gap-1 landscape:bottom-auto landscape:left-full landscape:ml-2 landscape:top-0 ${theme === 'bedtime' ? 'bg-black border-zinc-800' : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700'}`}>
                   <div className={`px-3 py-2 text-xs font-semibold uppercase tracking-wider border-b mb-1 sticky top-0 z-10 ${theme === 'bedtime' ? 'text-stone-600 border-zinc-900 bg-black' : 'text-zinc-500 dark:text-zinc-400 border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900'}`}>
                     Table of Contents
                   </div>
@@ -426,9 +433,9 @@ export function ReaderView({
         )}
 
         {!isPlaying && (
-          <div className={`flex items-center justify-between w-full ${theme === 'bedtime' ? 'text-stone-500' : 'text-zinc-900 dark:text-zinc-100'}`}>
-            <span className="text-sm font-medium opacity-70 uppercase tracking-wider">Speed</span>
-            <div className="flex items-center gap-3">
+          <div className={`flex items-center justify-between w-full landscape:flex-col landscape:gap-4 landscape:pointer-events-auto ${theme === 'bedtime' ? 'text-stone-500' : 'text-zinc-900 dark:text-zinc-100'}`}>
+            <span className="text-sm font-medium opacity-70 uppercase tracking-wider landscape:hidden">Speed</span>
+            <div className="flex items-center gap-3 landscape:flex-col-reverse landscape:gap-2">
               <button
                 onClick={() => onWpmChange(Math.max(100, wpm - 25))}
                 className={`p-2 rounded-lg border transition-colors ${theme === 'bedtime' ? 'border-zinc-800 hover:bg-zinc-900' : 'border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}
@@ -436,8 +443,8 @@ export function ReaderView({
               >
                 <Minus size={20} />
               </button>
-              <div className="flex flex-col items-center min-w-[4rem]">
-                <span className="text-xl font-bold">{wpm}</span>
+              <div className="flex flex-col items-center min-w-[3rem]">
+                <span className="text-xl font-bold landscape:text-lg">{wpm}</span>
                 <span className="text-[10px] opacity-40 font-semibold uppercase">WPM</span>
               </div>
               <button
@@ -453,8 +460,17 @@ export function ReaderView({
       </div>
 
       {!isPlaying && (
+        <div className="hidden landscape:flex fixed bottom-6 right-6 z-50 flex-col items-end pointer-events-none" onClick={(e) => e.stopPropagation()}>
+          <div className={`px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm shadow-sm max-w-[200px] ${theme === 'bedtime' ? 'border-zinc-900 bg-black/80' : ''}`}>
+            <p className="text-[10px] uppercase tracking-widest opacity-40 font-bold mb-0.5">Chapter</p>
+            <p className="text-xs font-medium truncate">{sections[activeChapterIdx]?.label || 'No Chapter'}</p>
+          </div>
+        </div>
+      )}
+
+      {!isPlaying && (
         <button
-          className="absolute bottom-8 opacity-30 hover:opacity-60 transition-opacity background-none border-none cursor-pointer text-inherit"
+          className="absolute bottom-8 landscape:bottom-auto landscape:top-4 landscape:right-48 opacity-30 hover:opacity-60 transition-opacity background-none border-none cursor-pointer text-inherit text-sm"
           onClick={(e) => { e.stopPropagation(); onCloseBook(); }}
         >
           Close Book
