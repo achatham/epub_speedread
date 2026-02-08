@@ -36,6 +36,7 @@ const MOCK_STORAGE = {
   logReadingSession: async () => {},
   updateBookRealEndIndex: async () => {},
   updateBookRealEndQuote: async () => {},
+  updateBookTotalWords: async () => {},
   aggregateSessions: async () => {},
   getChapterAudio: async () => null,
   saveChapterAudio: async () => {},
@@ -451,6 +452,11 @@ function App() {
       setWords(allWords); setSections(loadedSections);
       setCurrentIndex(bookRecord.progress.wordIndex || 0);
       setWpm(bookRecord.settings.wpm || 300);
+
+      if (bookRecord.meta.totalWords === undefined) {
+        storageProvider.updateBookTotalWords(bookRecord.id, allWords.length);
+        setLibrary(prev => prev.map(b => b.id === bookRecord.id ? { ...b, meta: { ...b.meta, totalWords: allWords.length } } : b));
+      }
 
       if (bookRecord.analysis.realEndIndex !== undefined) {
         setRealEndIndex(bookRecord.analysis.realEndIndex);

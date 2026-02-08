@@ -105,7 +105,29 @@ export function LibraryView({
                                 </button>
                             </div>
                             <h3 className="font-semibold text-lg line-clamp-2 h-14">{book.meta.title}</h3>
-                            <div className="flex justify-between items-center mt-2">
+
+                            {/* Progress Bar */}
+                            <div className="mt-4 mb-1">
+                                <div className="flex justify-between items-end mb-1">
+                                    <p className="text-[10px] font-bold opacity-40 uppercase tracking-wider">
+                                        Progress
+                                    </p>
+                                    <p className="text-[10px] font-mono opacity-60">
+                                        {Math.min(100, Math.round((book.progress.wordIndex / (book.analysis.realEndIndex || book.meta.totalWords || 1)) * 100))}%
+                                    </p>
+                                </div>
+                                <div className={`w-full h-1.5 rounded-full overflow-hidden ${theme === 'bedtime' ? 'bg-zinc-800' : 'bg-zinc-200 dark:bg-zinc-700'}`}>
+                                    <div
+                                        className={`h-full transition-all duration-500 ${theme === 'bedtime' ? 'bg-amber-700' : 'bg-blue-500'}`}
+                                        style={{ width: `${Math.min(100, (book.progress.wordIndex / (book.analysis.realEndIndex || book.meta.totalWords || 1)) * 100)}%` }}
+                                    />
+                                </div>
+                                <p className="text-[10px] opacity-40 mt-1 font-mono">
+                                    {book.progress.wordIndex.toLocaleString()} / {(book.analysis.realEndIndex || book.meta.totalWords || '?').toLocaleString()} words
+                                </p>
+                            </div>
+
+                            <div className="flex justify-between items-center mt-4">
                                 <p className="text-xs opacity-60">
                                     Last read: {new Date(book.progress.lastReadAt).toLocaleDateString()}
                                 </p>

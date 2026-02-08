@@ -19,6 +19,7 @@ export interface BookRecord {
   meta: {
     title: string;
     addedAt: number;
+    totalWords?: number;
   };
   progress: {
     wordIndex: number;
@@ -190,6 +191,7 @@ export class FirestoreStorage {
               book.storage.localFile = cached;
           }
       }
+      // Order books by most recent activity (reading or upload)
       return books.sort((a, b) => b.progress.lastReadAt - a.progress.lastReadAt);
     } catch (e) {
       console.error("Firestore getAllBooks failed", e);
@@ -272,6 +274,10 @@ export class FirestoreStorage {
 
   async updateBookRealEndIndex(id: string, index: number): Promise<void> {
     await updateDoc(doc(this.booksCollection, id), { 'analysis.realEndIndex': index });
+  }
+
+  async updateBookTotalWords(id: string, totalWords: number): Promise<void> {
+    await updateDoc(doc(this.booksCollection, id), { 'meta.totalWords': totalWords });
   }
 
   async logReadingSession(sessionData: Omit<ReadingSession, 'id'>): Promise<void> {
