@@ -4,6 +4,16 @@ import { collection, doc, setDoc, getDocs, deleteDoc, getDoc, updateDoc, runTran
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { getAggregationPlan } from './stats';
 
+export interface RsvpSettings {
+  periodMultiplier: number;
+  commaMultiplier: number;
+  longWordMultiplier: number;
+  tooWideMultiplier: number;
+  chapterBreakDelay: number;
+  orientationDelay: number;
+  vanityWpmRatio: number;
+}
+
 export interface UserSettings {
   geminiApiKey?: string;
   syncApiKey?: boolean;
@@ -11,6 +21,7 @@ export interface UserSettings {
   fontFamily?: string;
   ttsSpeed?: number;
   autoLandscape?: boolean;
+  rsvp?: RsvpSettings;
   lastUpdated: number;
 }
 

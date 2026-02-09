@@ -1,5 +1,7 @@
-import { X, Minus, Plus, Type, LogIn, LogOut, Cloud } from 'lucide-react';
+import { useState } from 'react';
+import { X, Minus, Plus, Type, LogIn, LogOut, Cloud, Settings2 } from 'lucide-react';
 import type { User } from 'firebase/auth';
+import type { RsvpSettings } from '../utils/storage';
 
 export type FontFamily = 'system' | 'inter' | 'roboto' | 'merriweather' | 'mono';
 
@@ -16,6 +18,8 @@ interface SettingsModalProps {
   setAutoLandscape: (auto: boolean) => void;
   fontFamily: FontFamily;
   setFontFamily: (font: FontFamily) => void;
+  rsvpSettings: RsvpSettings;
+  setRsvpSettings: (settings: RsvpSettings) => void;
   onSave: () => void;
   user?: User | null;
   onSignIn?: () => void;
@@ -35,12 +39,20 @@ export function SettingsModal({
   setAutoLandscape,
   fontFamily,
   setFontFamily,
+  rsvpSettings,
+  setRsvpSettings,
   onSave,
   user,
   onSignIn,
   onSignOut
 }: SettingsModalProps) {
+  const [activeTab, setActiveTab] = useState<'general' | 'rsvp'>('general');
+
   if (!isOpen) return null;
+
+  const updateRsvp = (key: keyof RsvpSettings, value: number) => {
+    setRsvpSettings({ ...rsvpSettings, [key]: value });
+  };
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4 text-zinc-900 dark:text-zinc-100">
@@ -51,9 +63,33 @@ export function SettingsModal({
             <X size={24} />
           </button>
         </div>
-        <div className="space-y-6">
 
-          {/* Account Section */}
+        {/* Tabs */}
+        <div className="flex border-b border-zinc-200 dark:border-zinc-800 mb-6">
+          <button
+            onClick={() => setActiveTab('general')}
+            className={`flex-1 py-2 text-sm font-medium transition-colors border-b-2 ${activeTab === 'general'
+              ? 'border-zinc-900 dark:border-zinc-100 text-zinc-900 dark:text-zinc-100'
+              : 'border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+              }`}
+          >
+            General
+          </button>
+          <button
+            onClick={() => setActiveTab('rsvp')}
+            className={`flex-1 py-2 text-sm font-medium transition-colors border-b-2 ${activeTab === 'rsvp'
+              ? 'border-zinc-900 dark:border-zinc-100 text-zinc-900 dark:text-zinc-100'
+              : 'border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+              }`}
+          >
+            RSVP Delays
+          </button>
+        </div>
+
+        <div className="space-y-6">
+          {activeTab === 'general' ? (
+            <>
+              {/* Account Section */}
           <div>
             <label className="block text-sm font-medium mb-3 opacity-70 flex items-center gap-2">
               <Cloud size={16} />
@@ -177,14 +213,125 @@ export function SettingsModal({
             </div>
           </div>
 
+            </>
+          ) : (
+            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-200">
+              <div>
+                <label className="block text-sm font-medium mb-4 opacity-70 flex items-center gap-2">
+                  <Settings2 size={16} />
+                  RSVP Timing
+                </label>
+                <div className="space-y-5">
+                  <RsvpControl
+                    label="Period Multiplier"
+                    description="Delay after . ! ?"
+                    value={rsvpSettings.periodMultiplier}
+                    min={1} max={5} step={0.1}
+                    unit="x"
+                    onChange={(v) => updateRsvp('periodMultiplier', v)}
+                  />
+                  <RsvpControl
+                    label="Comma Multiplier"
+                    description="Delay after , ; :"
+                    value={rsvpSettings.commaMultiplier}
+                    min={1} max={5} step={0.1}
+                    unit="x"
+                    onChange={(v) => updateRsvp('commaMultiplier', v)}
+                  />
+                  <RsvpControl
+                    label="Long Word Multiplier"
+                    description="Delay for words > 8 chars"
+                    value={rsvpSettings.longWordMultiplier}
+                    min={1} max={5} step={0.1}
+                    unit="x"
+                    onChange={(v) => updateRsvp('longWordMultiplier', v)}
+                  />
+                  <RsvpControl
+                    label="Too-Wide Multiplier"
+                    description="Delay when word scales down"
+                    value={rsvpSettings.tooWideMultiplier}
+                    min={1} max={5} step={0.1}
+                    unit="x"
+                    onChange={(v) => updateRsvp('tooWideMultiplier', v)}
+                  />
+                  <RsvpControl
+                    label="Chapter Break Delay"
+                    description="Pause between chapters"
+                    value={rsvpSettings.chapterBreakDelay}
+                    min={0} max={10000} step={500}
+                    unit="ms"
+                    onChange={(v) => updateRsvp('chapterBreakDelay', v)}
+                  />
+                  <RsvpControl
+                    label="Orientation Delay"
+                    description="Pause after rotating screen"
+                    value={rsvpSettings.orientationDelay}
+                    min={0} max={2000} step={100}
+                    unit="ms"
+                    onChange={(v) => updateRsvp('orientationDelay', v)}
+                  />
+                  <RsvpControl
+                    label="Vanity WPM Ratio"
+                    description="Padding to match target WPM"
+                    value={rsvpSettings.vanityWpmRatio}
+                    min={1} max={2} step={0.05}
+                    unit="x"
+                    onChange={(v) => updateRsvp('vanityWpmRatio', v)}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
           <button
             onClick={onSave}
-            className="w-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 py-2.5 rounded-lg font-medium hover:opacity-90 transition-opacity"
+            className="w-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 py-2.5 rounded-lg font-medium hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
           >
-            Save Settings
+            Close Settings
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function RsvpControl({
+  label,
+  description,
+  value,
+  min,
+  max,
+  step,
+  onChange,
+  unit
+}: {
+  label: string;
+  description: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (v: number) => void;
+  unit: string;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex justify-between items-end">
+        <div>
+          <div className="text-sm font-medium">{label}</div>
+          <div className="text-[10px] opacity-50">{description}</div>
+        </div>
+        <div className="text-sm font-mono font-bold">{value.toFixed(unit === 'ms' ? 0 : 2)}{unit}</div>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+        className="w-full h-1.5 bg-zinc-200 dark:bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-zinc-900 dark:accent-zinc-100"
+      />
     </div>
   );
 }
