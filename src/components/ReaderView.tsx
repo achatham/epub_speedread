@@ -289,9 +289,6 @@ export function ReaderView({
               className={`h-full rounded-sm transition-all duration-300 ${theme === 'bedtime' ? 'bg-amber-700' : 'bg-zinc-400 dark:bg-zinc-600'}`}
               style={{ width: `${Math.min(100, chapterPercentage)}%` }}
             />
-            {isPlaying && (
-              <div className="absolute -bottom-5 left-0 text-[10px] uppercase tracking-tighter opacity-30 font-bold whitespace-nowrap">Chapter Progress</div>
-            )}
           </div>
 
           {/* Book Progress */}
@@ -317,10 +314,14 @@ export function ReaderView({
               />
             )}
             <div className="absolute inset-y-0 -left-2 -right-2 bg-transparent opacity-0 group-hover:opacity-100 cursor-pointer" />
-            {isPlaying && (
-              <div className="absolute -bottom-5 right-0 text-[10px] uppercase tracking-tighter opacity-30 font-bold whitespace-nowrap text-right">Book Progress</div>
-            )}
           </div>
+
+          {isPlaying && (
+            <div className="flex justify-between w-full px-0.5">
+              <div className="text-[10px] uppercase tracking-tighter opacity-30 font-bold whitespace-nowrap">Chapter Progress</div>
+              <div className="text-[10px] uppercase tracking-tighter opacity-30 font-bold whitespace-nowrap text-right">Book Progress</div>
+            </div>
+          )}
         </div>
 
         {!isPlaying && (
