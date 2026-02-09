@@ -578,16 +578,22 @@ function App() {
           multiplier = rsvpSettings.commaMultiplier;
         }
         const { prefix, suffix } = splitWord(currentWord);
-        const maxSideChars = Math.max(prefix.length + 0.5, suffix.length + 0.5);
-        if (((window.innerWidth * 0.9) / (1.2 * maxSideChars)) < (window.innerHeight * 0.25)) {
+        const currentLeftDensity = (prefix.length + 0.5) / 0.4;
+        const currentRightDensity = (suffix.length + 0.5) / 0.6;
+        const currentMaxDensity = Math.max(currentLeftDensity, currentRightDensity);
+
+        // Benchmark "transportation" for stable sizing (matches ReaderView)
+        const benchMaxDensity = 15.83; 
+
+        if (currentMaxDensity > benchMaxDensity * 1.15) {
           multiplier *= rsvpSettings.tooWideMultiplier;
         } else if (currentWord.length > 8) {
           multiplier *= rsvpSettings.longWordMultiplier;
         }
 
-        // Shave the WPM: The displayed WPM is padded by vanityWpmRatio.
-        const baseWpm = wpm / rsvpSettings.vanityWpmRatio;
-        interval = (60000 / baseWpm) * multiplier;
+        // The 'wpm' state is already padded by vanityWpmRatio. 
+        // We use it directly to offset the average impact of multipliers.
+        interval = (60000 / wpm) * multiplier;
 
         if (sections.some(s => s.startIndex === currentIndex + 1)) callback = () => { setCurrentIndex(prev => prev + 1); setIsChapterBreak(true); };
         else callback = nextWord;
