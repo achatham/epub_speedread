@@ -2,7 +2,10 @@
   {
     "origin": [
       "http://localhost:5173",
-      "https://epub-speedread.com"
+      "https://localhost:5173",
+      "https://epub-speed-reader-82342.web.app",
+      "https://epub-speed-reader-82342.firebaseapp.com",
+      "*"
     ],
     "method": ["GET", "PUT", "POST", "DELETE", "HEAD"],
     "responseHeader": ["Content-Type", "x-goog-resumable"],

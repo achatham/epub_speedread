@@ -79,7 +79,7 @@ export function ReaderView({
 
   if (words.length === 0) {
     return (
-      <div className={`flex flex-col items-center justify-center h-screen ${theme === 'bedtime' ? 'bg-black text-stone-400' : 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100'}`}>
+      <div className={`flex flex-col items-center justify-center h-dvh ${theme === 'bedtime' ? 'bg-black text-stone-400' : 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100'}`}>
         <div className="animate-pulse flex flex-col items-center">
           <div className={`h-4 w-48 rounded mb-4 ${theme === 'bedtime' ? 'bg-zinc-800' : 'bg-zinc-200 dark:bg-zinc-800'}`}></div>
           <div className={`h-4 w-32 rounded ${theme === 'bedtime' ? 'bg-zinc-800' : 'bg-zinc-200 dark:bg-zinc-800'}`}></div>
@@ -185,7 +185,7 @@ export function ReaderView({
   
   return (
     <div 
-      className={`flex flex-col items-center justify-center h-screen transition-colors duration-300 relative ${mainBg} ${mainText} ${!isPlaying ? 'cursor-pointer landscape:flex-row landscape:items-stretch landscape:justify-start' : ''}`}
+      className={`flex flex-col items-center justify-center h-dvh transition-colors duration-300 relative ${mainBg} ${mainText} ${!isPlaying ? 'cursor-pointer landscape:flex-row landscape:items-stretch landscape:justify-start' : ''}`}
       style={{ fontFamily: fontStyles[fontFamily] }}
       onClick={() => { if (!isPlaying) setIsPlaying(true); }}
     >
