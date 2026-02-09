@@ -38,7 +38,7 @@ export function LibraryView({
      const cardBgClass = theme === 'bedtime' ? 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-600' : 'bg-zinc-50 dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-800 hover:border-zinc-400 dark:hover:border-zinc-600';
 
      return (
-        <div className={`flex flex-col items-center min-h-screen font-sans transition-colors duration-300 p-8 ${bgClass} ${textClass}`}>
+        <div className={`flex flex-col items-center min-h-dvh font-sans transition-colors duration-300 p-8 ${bgClass} ${textClass}`}>
             <div className="absolute top-4 right-4 flex gap-2">
                 <button
                     onClick={onStatsClick}

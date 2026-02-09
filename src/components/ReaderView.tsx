@@ -81,7 +81,7 @@ export function ReaderView({
 
   if (words.length === 0) {
     return (
-      <div className={`flex flex-col items-center justify-center h-screen ${theme === 'bedtime' ? 'bg-black text-stone-400' : 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100'}`}>
+      <div className={`flex flex-col items-center justify-center h-dvh ${theme === 'bedtime' ? 'bg-black text-stone-400' : 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100'}`}>
         <div className="animate-pulse flex flex-col items-center">
           <div className={`h-4 w-48 rounded mb-4 ${theme === 'bedtime' ? 'bg-zinc-800' : 'bg-zinc-200 dark:bg-zinc-800'}`}></div>
           <div className={`h-4 w-32 rounded ${theme === 'bedtime' ? 'bg-zinc-800' : 'bg-zinc-200 dark:bg-zinc-800'}`}></div>
@@ -187,7 +187,7 @@ export function ReaderView({
   
   return (
     <div 
-      className={`flex flex-col items-center justify-center h-screen transition-colors duration-300 relative ${mainBg} ${mainText} ${!isPlaying ? 'cursor-pointer landscape:flex-row landscape:items-stretch landscape:justify-start' : ''}`}
+      className={`flex flex-col items-center justify-center h-dvh transition-colors duration-300 relative ${mainBg} ${mainText} ${!isPlaying ? 'cursor-pointer landscape:flex-row landscape:items-stretch landscape:justify-start' : ''}`}
       style={{ fontFamily: fontStyles[fontFamily] }}
       onClick={() => { if (!isPlaying) setIsPlaying(true); }}
     >
@@ -282,45 +282,49 @@ export function ReaderView({
           ${!isPlaying && theme === 'bedtime' ? 'landscape:bg-black landscape:border-zinc-900' : ''}`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className={`w-full space-y-3 landscape:pointer-events-auto ${!isPlaying ? 'landscape:fixed landscape:bottom-4 landscape:left-28 landscape:right-64 landscape:w-auto landscape:space-y-1' : ''}`}>
+        <div className={`w-full space-y-4 landscape:pointer-events-auto ${!isPlaying ? 'landscape:fixed landscape:bottom-4 landscape:left-28 landscape:right-64 landscape:w-auto landscape:space-y-4' : ''}`}>
           {/* Chapter Progress */}
-          <div
-            className={`w-full h-1 rounded-sm relative ${theme === 'bedtime' ? 'bg-zinc-900' : 'bg-zinc-200 dark:bg-zinc-800'}`}
-          >
-            <div
-              className={`h-full rounded-sm transition-all duration-300 ${theme === 'bedtime' ? 'bg-amber-700' : 'bg-zinc-400 dark:bg-zinc-600'}`}
-              style={{ width: `${Math.min(100, chapterPercentage)}%` }}
-            />
+          <div className="space-y-1">
             {isPlaying && (
-              <div className="absolute -top-5 left-0 text-[10px] uppercase tracking-tighter opacity-30 font-bold">Chapter Progress</div>
+              <div className="text-[10px] uppercase tracking-tighter opacity-30 font-bold">Chapter Progress</div>
             )}
+            <div
+              className={`w-full h-1 rounded-sm relative ${theme === 'bedtime' ? 'bg-zinc-900' : 'bg-zinc-200 dark:bg-zinc-800'}`}
+            >
+              <div
+                className={`h-full rounded-sm transition-all duration-300 ${theme === 'bedtime' ? 'bg-amber-700' : 'bg-zinc-400 dark:bg-zinc-600'}`}
+                style={{ width: `${Math.min(100, chapterPercentage)}%` }}
+              />
+            </div>
           </div>
 
           {/* Book Progress */}
-          <div
-            className={`w-full h-1 rounded-sm cursor-pointer relative group ${theme === 'bedtime' ? 'bg-zinc-900' : 'bg-zinc-200 dark:bg-zinc-800'}`}
-            onClick={(e) => {
-              if (isPlaying) return;
-              const rect = e.currentTarget.getBoundingClientRect();
-              const x = e.clientX - rect.left;
-              const percentage = x / rect.width;
-              setCurrentIndex(Math.floor(percentage * words.length));
-            }}
-          >
+          <div className="space-y-1">
             <div
-              className={`h-full rounded-sm ${theme === 'bedtime' ? 'bg-stone-500' : 'bg-zinc-900 dark:bg-zinc-100'}`}
-              style={{ width: `${Math.min(100, (currentIndex / effectiveTotalWords) * 100)}%` }}
-            />
-            {realEndIndex && (
+              className={`w-full h-1 rounded-sm cursor-pointer relative group ${theme === 'bedtime' ? 'bg-zinc-900' : 'bg-zinc-200 dark:bg-zinc-800'}`}
+              onClick={(e) => {
+                if (isPlaying) return;
+                const rect = e.currentTarget.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const percentage = x / rect.width;
+                setCurrentIndex(Math.floor(percentage * words.length));
+              }}
+            >
               <div
-                className="absolute top-0 bottom-0 w-0.5 bg-red-500/30"
-                style={{ left: `${(realEndIndex / words.length) * 100}%` }}
-                title="Real End of Book"
+                className={`h-full rounded-sm ${theme === 'bedtime' ? 'bg-stone-500' : 'bg-zinc-900 dark:bg-zinc-100'}`}
+                style={{ width: `${Math.min(100, (currentIndex / effectiveTotalWords) * 100)}%` }}
               />
-            )}
-            <div className="absolute inset-y-0 -left-2 -right-2 bg-transparent opacity-0 group-hover:opacity-100 cursor-pointer" />
+              {realEndIndex && (
+                <div
+                  className="absolute top-0 bottom-0 w-0.5 bg-red-500/30"
+                  style={{ left: `${(realEndIndex / words.length) * 100}%` }}
+                  title="Real End of Book"
+                />
+              )}
+              <div className="absolute inset-y-0 -left-2 -right-2 bg-transparent opacity-0 group-hover:opacity-100 cursor-pointer" />
+            </div>
             {isPlaying && (
-              <div className="absolute -top-5 right-0 text-[10px] uppercase tracking-tighter opacity-30 font-bold">Book Progress</div>
+              <div className="text-[10px] uppercase tracking-tighter opacity-30 font-bold text-right">Book Progress</div>
             )}
           </div>
         </div>

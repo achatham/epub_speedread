@@ -6,7 +6,14 @@ import {
   type RsvpSettings
 } from './utils/storage';
 import { auth, storage } from './utils/firebase';
-import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, type User } from 'firebase/auth';
+import { 
+  onAuthStateChanged, 
+  GoogleAuthProvider, 
+  signInWithPopup, 
+  getRedirectResult,
+  signOut, 
+  type User 
+} from 'firebase/auth';
 import { ref, getBytes } from 'firebase/storage';
 import { type WordData } from './utils/text-processing';
 import { calculateNavigationTarget, findSentenceStart, type NavigationType } from './utils/navigation';
@@ -20,6 +27,7 @@ import { SettingsModal, type FontFamily } from './components/SettingsModal';
 import { AiModal } from './components/AiModal';
 import { StatsView } from './components/StatsView';
 import { AboutView } from './components/AboutView';
+import { ConsoleLogger } from './components/ConsoleLogger';
 import { AI_QUESTIONS, WPM_VANITY_RATIO, DEFAULT_RSVP_SETTINGS } from './constants';
 import { LogIn, Info, BookOpen } from 'lucide-react';
 import { useDeviceLogic } from './hooks/useDeviceLogic';
@@ -209,6 +217,20 @@ function App() {
       setIsLoading(false);
       return;
     }
+
+    // Handle redirect result
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result) {
+          console.log("Redirect sign-in successful for:", result.user.email);
+        } else {
+          console.log("Redirect sign-in result: null (No redirect detected or state lost)");
+        }
+      })
+      .catch((error) => {
+        console.error("Redirect sign-in error:", error);
+      });
+
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
       if (u) {
@@ -286,8 +308,27 @@ function App() {
   };
 
   const handleSignIn = async () => {
-    if (!auth) return alert("Firebase not configured");
-    try { await signInWithPopup(auth, new GoogleAuthProvider()); } catch (e) { console.error(e); }
+    if (!auth) {
+      console.error("Firebase Auth not initialized");
+      return alert("Firebase not configured");
+    }
+    console.log("Attempting popup sign-in from origin:", window.location.origin);
+    try { 
+      // specific error handling for popup blocking
+      await signInWithPopup(auth, new GoogleAuthProvider()); 
+      console.log("Popup sign-in completed. Waiting for auth state change...");
+    } catch (e: any) { 
+      console.error("Popup sign-in failed:", e);
+      if (e.code === 'auth/popup-blocked') {
+        alert("Popup was blocked. Please allow popups for this site.");
+      } else if (e.code === 'auth/popup-closed-by-user') {
+        console.log("User closed the popup");
+      } else if (e.code === 'auth/unauthorized-domain') {
+        alert(`Domain Unauthorized: ${window.location.hostname} is not in Firebase Console > Auth > Settings > Authorized Domains.`);
+      } else {
+        alert(`Sign in error: ${e.code} - ${e.message}`);
+      }
+    }
   };
 
   const handleSignOut = async () => {
@@ -553,7 +594,7 @@ function App() {
 
   if (isLoading && !user) {
     return (
-      <div className={`flex flex-col items-center justify-center min-h-screen ${theme === 'bedtime' ? 'bg-black text-stone-400' : 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100'}`}>
+      <div className={`flex flex-col items-center justify-center min-h-dvh ${theme === 'bedtime' ? 'bg-black text-stone-400' : 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100'}`}>
         <div className="animate-pulse flex flex-col items-center">
           <BookOpen size={48} className="mb-4 opacity-20" />
           <p className="text-sm font-light opacity-50 tracking-widest uppercase">Loading</p>
@@ -568,7 +609,7 @@ function App() {
     }
 
     return (
-      <div className={`flex flex-col items-center justify-center min-h-screen ${theme === 'bedtime' ? 'bg-black text-stone-400' : 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100'}`}>
+      <div className={`flex flex-col items-center justify-center min-h-dvh ${theme === 'bedtime' ? 'bg-black text-stone-400' : 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100'}`}>
         <h1 className="text-4xl font-light mb-8">Speed Reader</h1>
         <p className="mb-8 opacity-70">Please sign in to access your library.</p>
         <div className="flex flex-col gap-4 w-64">
@@ -745,6 +786,7 @@ function App() {
           onStatsClick={handleOpenStats}
         />
       )}
+      <ConsoleLogger />
     </>
   );
 }
