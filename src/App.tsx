@@ -13,7 +13,6 @@ import { calculateNavigationTarget, findSentenceStart, type NavigationType } fro
 import { getGeminiApiKey, setGeminiApiKey as saveGeminiApiKey, askAboutBook, summarizeRecent, summarizeWhatJustHappened } from './utils/gemini';
 
 import { processEbook } from './utils/ebook';
-import { splitWord } from './utils/orp';
 import { AudioBookPlayer } from './utils/AudioBookPlayer';
 import { LibraryView } from './components/LibraryView';
 import { ReaderView } from './components/ReaderView';

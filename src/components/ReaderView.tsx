@@ -173,13 +173,13 @@ export function ReaderView({
     };
 
     return (
-        <div className={`mt-4 text-xs space-y-1 ${theme === 'bedtime' ? 'text-stone-500' : 'text-zinc-500 dark:text-zinc-400'}`}>
-            <div className="flex gap-4 justify-center">
+        <div className={`mt-4 text-xs space-y-1 landscape:mt-2 ${theme === 'bedtime' ? 'text-stone-500' : 'text-zinc-500 dark:text-zinc-400'}`}>
+            <div className="flex gap-4 justify-center landscape:justify-start">
                 <span>{percentage}% Complete</span>
                 <span>•</span>
                 <span>Page {Math.floor(currentIndex / 300) + 1} of {Math.ceil(effectiveTotalWords / 300)}</span>
             </div>
-            <div className="flex gap-4 justify-center font-mono opacity-80">
+            <div className="flex gap-4 justify-center landscape:justify-start font-mono opacity-80">
                 <span>Chapter: {formatDuration(wordsLeftInChapter)} left</span>
                 <span>Book: {formatDuration(wordsLeftInBook)} left</span>
             </div>
@@ -208,9 +208,7 @@ export function ReaderView({
             {currentIndex + 1} / {effectiveTotalWords} words
             {realEndIndex && currentIndex >= realEndIndex && " (Back Matter)"}
           </p>
-          <div className="landscape:hidden">
-            {getProgressStats()}
-          </div>
+          {getProgressStats()}
         </div>
       )}
 
