@@ -11,6 +11,7 @@ interface ReaderViewProps {
   currentIndex: number;
   effectiveTotalWords: number;
   realEndIndex: number | null;
+  furthestIndex: number | null;
   isPlaying: boolean;
   setIsPlaying: (playing: boolean) => void;
   wpm: number;
@@ -44,6 +45,7 @@ export function ReaderView({
   currentIndex,
   effectiveTotalWords,
   realEndIndex,
+  furthestIndex,
   isPlaying,
   setIsPlaying,
   wpm,
@@ -314,6 +316,13 @@ export function ReaderView({
                 className={`h-full rounded-sm ${theme === 'bedtime' ? 'bg-stone-500' : 'bg-zinc-900 dark:bg-zinc-100'}`}
                 style={{ width: `${Math.min(100, (currentIndex / effectiveTotalWords) * 100)}%` }}
               />
+              {furthestIndex !== null && furthestIndex > currentIndex && (
+                <div
+                  className={`absolute top-0 bottom-0 w-0.5 z-10 opacity-50 ${theme === 'bedtime' ? 'bg-stone-400' : 'bg-zinc-400 dark:bg-zinc-600'}`}
+                  style={{ left: `${Math.min(100, (furthestIndex / effectiveTotalWords) * 100)}%` }}
+                  title="Furthest Read"
+                />
+              )}
               {realEndIndex && (
                 <div
                   className="absolute top-0 bottom-0 w-0.5 bg-red-500/30"
@@ -360,6 +369,18 @@ export function ReaderView({
                     <span>Next Paragraph</span>
                   </button>
                   <div className={`border-t my-1 ${theme === 'bedtime' ? 'border-zinc-900' : 'border-zinc-100 dark:border-zinc-800'}`}></div>
+                  {furthestIndex !== null && furthestIndex > currentIndex + 10 && (
+                    <button 
+                      onClick={() => {
+                        setCurrentIndex(furthestIndex);
+                        toggleNav();
+                      }} 
+                      className={`text-left px-3 py-2 text-sm rounded flex justify-between items-center group ${theme === 'bedtime' ? 'text-stone-400 hover:bg-zinc-900' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300'}`}
+                    >
+                      <span>Jump to Furthest</span>
+                      <span className="opacity-50 text-xs">{(furthestIndex / effectiveTotalWords * 100).toFixed(0)}%</span>
+                    </button>
+                  )}
                   <button onClick={() => navigate('chapter')} className={`text-left px-3 py-2 text-sm rounded ${theme === 'bedtime' ? 'text-stone-400 hover:bg-zinc-900' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300'}`}>
                     Restart Chapter
                   </button>

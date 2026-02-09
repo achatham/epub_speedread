@@ -35,6 +35,7 @@ export interface BookRecord {
   progress: {
     wordIndex: number;
     lastReadAt: number;
+    furthestWordIndex?: number;
   };
   settings: {
     wpm: number;
@@ -269,10 +270,26 @@ export class FirestoreStorage {
   }
 
   async updateBookProgress(id: string, index: number): Promise<void> {
-    await updateDoc(doc(this.booksCollection, id), {
-      'progress.wordIndex': index,
-      'progress.lastReadAt': Date.now()
-    });
+    try {
+      // Fetch current book to check existing furthest progress
+      const currentBookRef = doc(this.booksCollection, id);
+      const snap = await getDoc(currentBookRef);
+      
+      let furthest = index;
+      if (snap.exists()) {
+        const data = snap.data() as BookRecord;
+        const previousFurthest = data.progress.furthestWordIndex || data.progress.wordIndex;
+        furthest = Math.max(index, previousFurthest);
+      }
+
+      await updateDoc(currentBookRef, {
+        'progress.wordIndex': index,
+        'progress.lastReadAt': Date.now(),
+        'progress.furthestWordIndex': furthest
+      });
+    } catch (e) {
+      console.error("Failed to update progress", e);
+    }
   }
 
   async updateBookWpm(id: string, wpm: number): Promise<void> {

@@ -29,8 +29,8 @@ export function getAggregationPlan(sessions: ReadingSession[]): { deleteIds: str
         bookTitle: first.bookTitle,
         startTime: first.startTime,
         endTime: Math.max(...group.map(s => s.endTime)),
-        startWordIndex: first.startWordIndex,
-        endWordIndex: last.endWordIndex,
+        startWordIndex: Math.min(...group.map(s => s.startWordIndex)),
+        endWordIndex: sorted[sorted.length - 1].endWordIndex, // Keep the actual end position of the last session
         wordsRead: group.reduce((acc, s) => acc + (s.wordsRead || Math.max(0, s.endWordIndex - s.startWordIndex)), 0),
         durationSeconds: group.reduce((acc, s) => acc + s.durationSeconds, 0),
         type: first.type || 'reading'

@@ -94,6 +94,7 @@ function App() {
   });
 
   const [realEndIndex, setRealEndIndex] = useState<number | null>(null);
+  const [furthestIndex, setFurthestIndex] = useState<number | null>(null);
   const [aiQuestion, setAiQuestion] = useState('');
   const [aiResponse, setAiResponse] = useState('');
   const [isAiLoading, setIsAiLoading] = useState(false);
@@ -401,7 +402,7 @@ function App() {
       setLibrary(await storageProvider.getAllBooks());
     }
     setWords([]); setSections([]); setCurrentIndex(0); setBookTitle('');
-    setCurrentBookId(null); setRealEndIndex(null);
+    setCurrentBookId(null); setRealEndIndex(null); setFurthestIndex(null);
 
     if (document.fullscreenElement) {
       document.exitFullscreen().catch(() => { });
@@ -422,6 +423,7 @@ function App() {
       setCurrentIndex(result.wordIndex);
       setWpm(result.wpm);
       setRealEndIndex(result.realEndIndex);
+      setFurthestIndex(bookRecord.progress.furthestWordIndex ?? bookRecord.progress.wordIndex);
 
       if (result.realEndQuote) {
         // Just to update the local library state if needed
@@ -447,6 +449,9 @@ function App() {
 
   useEffect(() => {
     if (!isPlaying && currentBookId && storageProvider) storageProvider.updateBookProgress(currentBookId, currentIndex);
+    if (furthestIndex !== null && currentIndex > furthestIndex) {
+      setFurthestIndex(currentIndex);
+    }
   }, [isPlaying, currentIndex, currentBookId, storageProvider]);
 
   const handleSetIsPlaying = useCallback((playing: boolean) => {
@@ -711,7 +716,9 @@ function App() {
       ) : (
         <ReaderView
           words={words} currentIndex={currentIndex} effectiveTotalWords={realEndIndex || words.length}
-          realEndIndex={realEndIndex} isPlaying={isPlaying}
+          realEndIndex={realEndIndex} 
+          furthestIndex={furthestIndex}
+          isPlaying={isPlaying}
           setIsPlaying={handleSetIsPlaying}
           wpm={Math.round(wpm / rsvpSettings.vanityWpmRatio)}
           onWpmChange={(targetWpm) => { 
