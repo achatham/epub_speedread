@@ -6,18 +6,12 @@ import {
   type RsvpSettings
 } from './utils/storage';
 import { auth, storage } from './utils/firebase';
-import { 
-  onAuthStateChanged, 
-  GoogleAuthProvider, 
-  signInWithPopup, 
-  getRedirectResult,
-  signOut, 
-  type User 
-} from 'firebase/auth';
+import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, getRedirectResult, signOut, type User } from 'firebase/auth';
 import { ref, getBytes } from 'firebase/storage';
-import { type WordData } from './utils/text-processing';
+import { type WordData, calculateRsvpInterval } from './utils/text-processing';
 import { calculateNavigationTarget, findSentenceStart, type NavigationType } from './utils/navigation';
 import { getGeminiApiKey, setGeminiApiKey as saveGeminiApiKey, askAboutBook, summarizeRecent, summarizeWhatJustHappened } from './utils/gemini';
+
 import { processEbook } from './utils/ebook';
 import { splitWord } from './utils/orp';
 import { AudioBookPlayer } from './utils/AudioBookPlayer';
@@ -571,29 +565,7 @@ function App() {
         interval = rsvpSettings.chapterBreakDelay; callback = () => setIsChapterBreak(false);
       } else {
         const currentWord = words[currentIndex].text || '';
-        let multiplier = 1;
-        if (currentWord.endsWith('.') || currentWord.endsWith('!') || currentWord.endsWith('?')) {
-          multiplier = rsvpSettings.periodMultiplier;
-        } else if (currentWord.endsWith(',') || currentWord.endsWith(';') || currentWord.endsWith(':')) {
-          multiplier = rsvpSettings.commaMultiplier;
-        }
-        const { prefix, suffix } = splitWord(currentWord);
-        const currentLeftDensity = (prefix.length + 0.5) / 0.4;
-        const currentRightDensity = (suffix.length + 0.5) / 0.6;
-        const currentMaxDensity = Math.max(currentLeftDensity, currentRightDensity);
-
-        // Benchmark "transportation" for stable sizing (matches ReaderView)
-        const benchMaxDensity = 15.83; 
-
-        if (currentMaxDensity > benchMaxDensity * 1.15) {
-          multiplier *= rsvpSettings.tooWideMultiplier;
-        } else if (currentWord.length > 8) {
-          multiplier *= rsvpSettings.longWordMultiplier;
-        }
-
-        // The 'wpm' state is already padded by vanityWpmRatio. 
-        // We use it directly to offset the average impact of multipliers.
-        interval = (60000 / wpm) * multiplier;
+        interval = calculateRsvpInterval(currentWord, wpm, rsvpSettings);
 
         if (sections.some(s => s.startIndex === currentIndex + 1)) callback = () => { setCurrentIndex(prev => prev + 1); setIsChapterBreak(true); };
         else callback = nextWord;

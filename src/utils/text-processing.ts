@@ -1,3 +1,6 @@
+import { splitWord } from './orp';
+import { type RsvpSettings } from './storage';
+
 export interface WordData {
   text: string;
   isParagraphStart: boolean;
@@ -9,6 +12,36 @@ const BLOCK_TAGS = new Set([
   'BLOCKQUOTE', 'LI', 'SECTION', 'ARTICLE', 'HEADER', 'FOOTER',
   'TR', 'TD', 'TH' // Tables also break text
 ]);
+
+export function calculateRsvpInterval(
+  word: string, 
+  wpm: number, 
+  settings: RsvpSettings
+): number {
+  let multiplier = 1;
+  
+  if (word.endsWith('.') || word.endsWith('!') || word.endsWith('?')) {
+    multiplier = settings.periodMultiplier;
+  } else if (word.endsWith(',') || word.endsWith(';') || word.endsWith(':')) {
+    multiplier = settings.commaMultiplier;
+  }
+
+  const { prefix, suffix } = splitWord(word);
+  const currentLeftDensity = (prefix.length + 0.5) / 0.4;
+  const currentRightDensity = (suffix.length + 0.5) / 0.6;
+  const currentMaxDensity = Math.max(currentLeftDensity, currentRightDensity);
+
+  // Benchmark "transportation" for stable sizing (matches ReaderView)
+  const benchMaxDensity = 15.83; 
+
+  if (currentMaxDensity > benchMaxDensity * 1.15) {
+    multiplier *= settings.tooWideMultiplier;
+  } else if (word.length > 8) {
+    multiplier *= settings.longWordMultiplier;
+  }
+
+  return (60000 / wpm) * multiplier;
+}
 
 export function extractWordsFromDoc(doc: Document): WordData[] {
   const words: WordData[] = [];
