@@ -14,7 +14,7 @@ export interface ProcessedBook {
 }
 
 export const findQuoteIndex = (quote: string, currentWords: WordData[]): number | null => {
-  const quoteWords = quote.split(/\s+/).filter(w => w.length > 0);
+  const quoteWords = quote.split(/\s+/).filter(w => w.length > 0).map(w => w.toLowerCase().replace(/[^\w]/g, ''));
   if (quoteWords.length > 0) {
     for (let i = currentWords.length - quoteWords.length; i >= 0; i--) {
       let match = true;
