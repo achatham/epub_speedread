@@ -369,18 +369,25 @@ export function ReaderView({
                     <span>Next Paragraph</span>
                   </button>
                   <div className={`border-t my-1 ${theme === 'bedtime' ? 'border-zinc-900' : 'border-zinc-100 dark:border-zinc-800'}`}></div>
-                  {furthestIndex !== null && furthestIndex > currentIndex + 10 && (
-                    <button 
-                      onClick={() => {
+                  <button 
+                    onClick={() => {
+                      if (furthestIndex !== null && furthestIndex > currentIndex + 10) {
                         setCurrentIndex(furthestIndex);
                         toggleNav();
-                      }} 
-                      className={`text-left px-3 py-2 text-sm rounded flex justify-between items-center group ${theme === 'bedtime' ? 'text-stone-400 hover:bg-zinc-900' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300'}`}
-                    >
-                      <span>Jump to Furthest</span>
-                      <span className="opacity-50 text-xs">{(furthestIndex / effectiveTotalWords * 100).toFixed(0)}%</span>
-                    </button>
-                  )}
+                      }
+                    }} 
+                    disabled={!(furthestIndex !== null && furthestIndex > currentIndex + 10)}
+                    className={`text-left px-3 py-2 text-sm rounded flex justify-between items-center group transition-opacity ${
+                      theme === 'bedtime' 
+                        ? 'text-stone-400 hover:enabled:bg-zinc-900 disabled:opacity-20' 
+                        : 'hover:enabled:bg-zinc-100 dark:hover:enabled:bg-zinc-800 text-zinc-700 dark:text-zinc-300 disabled:opacity-30'
+                    }`}
+                  >
+                    <span>Jump to Furthest</span>
+                    <span className="opacity-50 text-xs">
+                      {furthestIndex !== null ? `${(furthestIndex / effectiveTotalWords * 100).toFixed(0)}%` : '0%'}
+                    </span>
+                  </button>
                   <button onClick={() => navigate('chapter')} className={`text-left px-3 py-2 text-sm rounded ${theme === 'bedtime' ? 'text-stone-400 hover:bg-zinc-900' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300'}`}>
                     Restart Chapter
                   </button>

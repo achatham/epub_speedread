@@ -21,7 +21,6 @@ export function getAggregationPlan(sessions: ReadingSession[]): { deleteIds: str
     if (group.length > 1) {
       const sorted = [...group].sort((a, b) => a.startTime - b.startTime);
       const first = sorted[0];
-      const last = sorted[sorted.length - 1];
 
       const aggregated: ReadingSession = {
         id: crypto.randomUUID(),
