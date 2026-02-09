@@ -36,6 +36,7 @@ interface ReaderViewProps {
   isChapterBreak: boolean;
   upcomingChapterTitle: string;
   onStatsClick?: () => void;
+  vanityWpmRatio: number;
 }
 
 export function ReaderView({
@@ -67,7 +68,8 @@ export function ReaderView({
   isSynthesizing,
   isChapterBreak,
   upcomingChapterTitle,
-  onStatsClick
+  onStatsClick,
+  vanityWpmRatio
 }: ReaderViewProps) {
   const activeChapterRef = useRef<HTMLButtonElement>(null);
 
@@ -156,7 +158,7 @@ export function ReaderView({
     const nextChapterStartIndex = sections[activeChapterIdx + 1]?.startIndex || words.length;
     const wordsLeftInChapter = Math.max(0, nextChapterStartIndex - currentIndex);
     const wordsLeftInBook = Math.max(0, effectiveTotalWords - currentIndex);
-    const effectiveWpm = wpm / 1.2; 
+    const effectiveWpm = wpm / (vanityWpmRatio / 1.04);
     
     const formatDuration = (wordCount: number) => {
         const minutes = wordCount / effectiveWpm;

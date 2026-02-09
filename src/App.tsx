@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   FirestoreStorage,
   type BookRecord,
-  type ReadingSession
+  type ReadingSession,
+  type RsvpSettings
 } from './utils/storage';
 import { auth, storage } from './utils/firebase';
 import { 
@@ -27,7 +28,7 @@ import { AiModal } from './components/AiModal';
 import { StatsView } from './components/StatsView';
 import { AboutView } from './components/AboutView';
 import { ConsoleLogger } from './components/ConsoleLogger';
-import { AI_QUESTIONS, WPM_VANITY_RATIO } from './constants';
+import { AI_QUESTIONS, WPM_VANITY_RATIO, DEFAULT_RSVP_SETTINGS } from './constants';
 import { LogIn, Info, BookOpen } from 'lucide-react';
 import { useDeviceLogic } from './hooks/useDeviceLogic';
 
@@ -125,6 +126,47 @@ function App() {
   });
 
   const [fontFamily, setFontFamily] = useState<FontFamily>('system');
+
+  const [rsvpSettings, setRsvpSettings] = useState<RsvpSettings>(() => {
+    try {
+      const saved = localStorage.getItem('user_settings');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.rsvp) return { ...DEFAULT_RSVP_SETTINGS, ...parsed.rsvp };
+      }
+    } catch { }
+    return { ...DEFAULT_RSVP_SETTINGS };
+  });
+
+  // --- Auto-save Settings ---
+  useEffect(() => {
+    const settings = {
+      ttsSpeed,
+      autoLandscape,
+      theme,
+      fontFamily,
+      syncApiKey,
+      geminiApiKey: syncApiKey ? geminiApiKey : undefined,
+      rsvp: rsvpSettings
+    };
+    localStorage.setItem('user_settings', JSON.stringify(settings));
+  }, [ttsSpeed, autoLandscape, theme, fontFamily, syncApiKey, geminiApiKey, rsvpSettings]);
+
+  useEffect(() => {
+    if (!storageProvider) return;
+    const timer = setTimeout(() => {
+      storageProvider.updateSettings({
+        ttsSpeed,
+        autoLandscape,
+        theme,
+        fontFamily,
+        syncApiKey,
+        geminiApiKey: syncApiKey ? geminiApiKey : undefined,
+        rsvp: rsvpSettings
+      });
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [ttsSpeed, autoLandscape, theme, fontFamily, syncApiKey, geminiApiKey, rsvpSettings, storageProvider]);
 
   // Test Hook for Playwright
   useEffect(() => {
@@ -224,6 +266,7 @@ function App() {
           if (settings.fontFamily) setFontFamily(settings.fontFamily as FontFamily);
           if (settings.ttsSpeed) setTtsSpeed(settings.ttsSpeed);
           if (settings.autoLandscape !== undefined) setAutoLandscape(settings.autoLandscape);
+          if (settings.rsvp) setRsvpSettings(prev => ({ ...prev, ...settings.rsvp }));
         }
 
         const [books, history] = await Promise.all([
@@ -513,26 +556,32 @@ function App() {
   useEffect(() => {
     if (isPlaying && words.length > 0) {
       const timeSinceRotation = Date.now() - lastRotationTime;
-      if (timeSinceRotation < 500) {
+      if (timeSinceRotation < rsvpSettings.orientationDelay) {
         // Just let the effect re-run naturally since it depends on rotationTrigger
         return;
       }
 
       let interval: number; let callback: () => void;
       if (isChapterBreak) {
-        interval = 3000; callback = () => setIsChapterBreak(false);
+        interval = rsvpSettings.chapterBreakDelay; callback = () => setIsChapterBreak(false);
       } else {
         const currentWord = words[currentIndex].text || '';
         let multiplier = 1;
-        if (currentWord.endsWith('.') || currentWord.endsWith('!') || currentWord.endsWith('?')) multiplier = 2;
-        else if (currentWord.endsWith(',') || currentWord.endsWith(';') || currentWord.endsWith(':')) multiplier = 1.5;
+        if (currentWord.endsWith('.') || currentWord.endsWith('!') || currentWord.endsWith('?')) {
+          multiplier = rsvpSettings.periodMultiplier;
+        } else if (currentWord.endsWith(',') || currentWord.endsWith(';') || currentWord.endsWith(':')) {
+          multiplier = rsvpSettings.commaMultiplier;
+        }
         const { prefix, suffix } = splitWord(currentWord);
         const maxSideChars = Math.max(prefix.length + 0.5, suffix.length + 0.5);
-        if (((window.innerWidth * 0.9) / (1.2 * maxSideChars)) < (window.innerHeight * 0.25)) multiplier *= 1.5;
-        else if (currentWord.length > 8) multiplier *= 1.2;
+        if (((window.innerWidth * 0.9) / (1.2 * maxSideChars)) < (window.innerHeight * 0.25)) {
+          multiplier *= rsvpSettings.tooWideMultiplier;
+        } else if (currentWord.length > 8) {
+          multiplier *= rsvpSettings.longWordMultiplier;
+        }
 
-        // Shave the WPM: The displayed WPM is 15% higher than the actual base WPM used here.
-        const baseWpm = wpm / WPM_VANITY_RATIO;
+        // Shave the WPM: The displayed WPM is padded by vanityWpmRatio.
+        const baseWpm = wpm / rsvpSettings.vanityWpmRatio;
         interval = (60000 / baseWpm) * multiplier;
 
         if (sections.some(s => s.startIndex === currentIndex + 1)) callback = () => { setCurrentIndex(prev => prev + 1); setIsChapterBreak(true); };
@@ -541,7 +590,7 @@ function App() {
       timerRef.current = window.setTimeout(callback, interval);
     }
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [isPlaying, wpm, words, currentIndex, nextWord, sections, isChapterBreak, rotationTrigger]);
+  }, [isPlaying, wpm, words, currentIndex, nextWord, sections, isChapterBreak, rotationTrigger, lastRotationTime, rsvpSettings]);
 
   if (isLoading && !user) {
     return (
@@ -592,22 +641,17 @@ function App() {
         setApiKey={(k) => { 
           setGeminiApiKey(k); 
           saveGeminiApiKey(k); 
-          storageProvider.updateSettings({ geminiApiKey: syncApiKey ? k : "" }); 
         }}
         syncApiKey={syncApiKey}
-        setSyncApiKey={(sync) => {
-          setSyncApiKey(sync);
-          storageProvider.updateSettings({ 
-            syncApiKey: sync,
-            geminiApiKey: sync ? geminiApiKey : "" 
-          });
-        }}
+        setSyncApiKey={setSyncApiKey}
         ttsSpeed={ttsSpeed}
-        setTtsSpeed={(s) => { setTtsSpeed(s); storageProvider.updateSettings({ ttsSpeed: s }); }}
+        setTtsSpeed={setTtsSpeed}
         autoLandscape={autoLandscape}
-        setAutoLandscape={(a) => { setAutoLandscape(a); storageProvider.updateSettings({ autoLandscape: a }); }}
+        setAutoLandscape={setAutoLandscape}
         fontFamily={fontFamily}
-        setFontFamily={(f) => { setFontFamily(f); storageProvider.updateSettings({ fontFamily: f }); }}
+        setFontFamily={setFontFamily}
+        rsvpSettings={rsvpSettings}
+        setRsvpSettings={setRsvpSettings}
         user={user}
         onSignIn={handleSignIn}
         onSignOut={handleSignOut}
@@ -669,12 +713,13 @@ function App() {
           words={words} currentIndex={currentIndex} effectiveTotalWords={realEndIndex || words.length}
           realEndIndex={realEndIndex} isPlaying={isPlaying}
           setIsPlaying={handleSetIsPlaying}
-          wpm={Math.round(wpm / WPM_VANITY_RATIO)} 
+          wpm={Math.round(wpm / rsvpSettings.vanityWpmRatio)}
           onWpmChange={(targetWpm) => { 
-              const boosted = targetWpm * WPM_VANITY_RATIO;
+              const boosted = targetWpm * rsvpSettings.vanityWpmRatio;
               setWpm(boosted); 
               storageProvider.updateBookWpm(currentBookId!, boosted); 
           }}
+          vanityWpmRatio={rsvpSettings.vanityWpmRatio}
           theme={theme} fontFamily={fontFamily} bookTitle={bookTitle}
           onCloseBook={handleCloseBook} onSettingsClick={() => setIsSettingsOpen(true)}
           onToggleTheme={toggleTheme} onAskAiClick={() => { setAiResponse(''); setIsAskAiOpen(true); }}
