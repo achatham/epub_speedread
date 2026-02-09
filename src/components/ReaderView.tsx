@@ -290,7 +290,7 @@ export function ReaderView({
               style={{ width: `${Math.min(100, chapterPercentage)}%` }}
             />
             {isPlaying && (
-              <div className="absolute -top-5 left-0 text-[10px] uppercase tracking-tighter opacity-30 font-bold">Chapter Progress</div>
+              <div className="absolute -bottom-5 left-0 text-[10px] uppercase tracking-tighter opacity-30 font-bold whitespace-nowrap">Chapter Progress</div>
             )}
           </div>
 
@@ -318,7 +318,7 @@ export function ReaderView({
             )}
             <div className="absolute inset-y-0 -left-2 -right-2 bg-transparent opacity-0 group-hover:opacity-100 cursor-pointer" />
             {isPlaying && (
-              <div className="absolute -top-5 right-0 text-[10px] uppercase tracking-tighter opacity-30 font-bold">Book Progress</div>
+              <div className="absolute -bottom-5 right-0 text-[10px] uppercase tracking-tighter opacity-30 font-bold whitespace-nowrap text-right">Book Progress</div>
             )}
           </div>
         </div>
