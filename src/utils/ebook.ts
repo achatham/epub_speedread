@@ -33,6 +33,27 @@ export const findQuoteIndex = (quote: string, currentWords: WordData[]): number 
   return null;
 };
 
+export async function analyzeRealEndOfBook(
+  bookId: string,
+  chapters: string[],
+  allWords: WordData[],
+  storageProvider: FirestoreStorage
+): Promise<number | null> {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey || chapters.length === 0) return null;
+
+  const quote = await findRealEndOfBook(chapters, allWords.map(w => w.text).join(' '));
+  if (quote) {
+    await storageProvider.updateBookRealEndQuote(bookId, quote);
+    const idx = findQuoteIndex(quote, allWords);
+    if (idx !== null) {
+      await storageProvider.updateBookRealEndIndex(bookId, idx);
+      return idx;
+    }
+  }
+  return null;
+}
+
 export async function processEbook(
   bookRecord: BookRecord,
   storageProvider: FirestoreStorage
@@ -141,20 +162,6 @@ export async function processEbook(
     if (idx !== null) {
       result.realEndIndex = idx;
       await storageProvider.updateBookRealEndIndex(bookRecord.id, idx);
-    }
-  } else {
-    const apiKey = getGeminiApiKey();
-    if (apiKey && loadedSections.length > 0) {
-      const quote = await findRealEndOfBook(loadedSections.map(s => s.label), allWords.map(w => w.text).join(' '));
-      if (quote) {
-        result.realEndQuote = quote;
-        await storageProvider.updateBookRealEndQuote(bookRecord.id, quote);
-        const idx = findQuoteIndex(quote, allWords);
-        if (idx !== null) {
-          result.realEndIndex = idx;
-          await storageProvider.updateBookRealEndIndex(bookRecord.id, idx);
-        }
-      }
     }
   }
 
