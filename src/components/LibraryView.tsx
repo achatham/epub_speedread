@@ -1,5 +1,5 @@
 import type { RefObject } from 'react';
-import { BookOpen, Moon, Settings, Sun, Sunset, Trash2, Upload, DownloadCloud, BarChart2 } from 'lucide-react';
+import { BookOpen, Moon, Settings, Sun, Sunset, Trash2, Upload, DownloadCloud, BarChart2, Info } from 'lucide-react';
 import type { BookRecord } from '../utils/storage';
 
 type Theme = 'light' | 'dark' | 'bedtime';
@@ -17,6 +17,7 @@ interface LibraryViewProps {
   onFileInputClick: (e: React.MouseEvent<HTMLInputElement, MouseEvent>) => void;
   onStatsClick?: () => void;
   onLoadDemoBook?: () => void;
+  onAboutClick?: () => void;
 }
 
 export function LibraryView({
@@ -31,7 +32,8 @@ export function LibraryView({
   fileInputRef,
   onFileInputClick,
   onStatsClick,
-  onLoadDemoBook
+  onLoadDemoBook,
+  onAboutClick
 }: LibraryViewProps) {
      const bgClass = theme === 'bedtime' ? 'bg-black' : 'bg-white dark:bg-zinc-900';
      const textClass = theme === 'bedtime' ? 'text-stone-400' : 'text-zinc-900 dark:text-zinc-100';
@@ -40,6 +42,13 @@ export function LibraryView({
      return (
         <div className={`flex flex-col items-center min-h-dvh font-sans transition-colors duration-300 p-8 ${bgClass} ${textClass}`}>
             <div className="absolute top-4 right-4 flex gap-2">
+                <button
+                    onClick={onAboutClick}
+                    className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                    title="About Speed Reader"
+                >
+                    <Info size={24} />
+                </button>
                 <button
                     onClick={onStatsClick}
                     className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"

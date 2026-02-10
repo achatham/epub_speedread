@@ -19,7 +19,7 @@ import { ReaderView } from './components/ReaderView';
 import { SettingsModal, type FontFamily } from './components/SettingsModal';
 import { AiModal } from './components/AiModal';
 import { StatsView } from './components/StatsView';
-import { AboutView } from './components/AboutView';
+import { AboutView, AboutContent } from './components/AboutView';
 import { ConsoleLogger } from './components/ConsoleLogger';
 import { AI_QUESTIONS, WPM_VANITY_RATIO, DEFAULT_RSVP_SETTINGS } from './constants';
 import { LogIn, Info, BookOpen } from 'lucide-react';
@@ -600,32 +600,31 @@ function App() {
   }
 
   if (!user || !storageProvider) {
-    if (showAbout) {
-      return <AboutView onBack={() => setShowAbout(false)} theme={theme} />;
-    }
-
     return (
-      <div className={`flex flex-col items-center justify-center min-h-dvh ${theme === 'bedtime' ? 'bg-black text-stone-400' : 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100'}`}>
-        <h1 className="text-4xl font-light mb-8">Speed Reader</h1>
-        <p className="mb-8 opacity-70">Please sign in to access your library.</p>
-        <div className="flex flex-col gap-4 w-64">
-          <button 
-            onClick={handleSignIn}
-            className="flex items-center justify-center gap-2 px-6 py-3 text-sm font-medium bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg hover:opacity-90 transition-opacity shadow-sm"
-          >
-            <LogIn size={20} />
-            Sign In with Google
-          </button>
-          <button 
-            onClick={() => setShowAbout(true)}
-            className="flex items-center justify-center gap-2 px-6 py-3 text-sm font-medium border border-zinc-200 dark:border-zinc-800 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors"
-          >
-            <Info size={20} />
-            Learn more...
-          </button>
+      <div className={`min-h-dvh flex flex-col ${theme === 'bedtime' ? 'bg-black text-stone-400' : 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100'}`}>
+        <div className="flex flex-col items-center justify-center pt-24 pb-12 px-6">
+          <h1 className="text-5xl font-light mb-8">Speed Reader</h1>
+          <p className="mb-12 opacity-70 text-lg">Please sign in to access your library.</p>
+          <div className="flex flex-col gap-4 w-full max-w-sm">
+            <button 
+              onClick={handleSignIn}
+              className="flex items-center justify-center gap-3 px-8 py-4 text-base font-medium bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-xl hover:opacity-90 transition-opacity shadow-lg"
+            >
+              <LogIn size={24} />
+              Sign In with Google
+            </button>
+          </div>
+        </div>
+        
+        <div className="border-t border-zinc-100 dark:border-zinc-800 pt-24">
+          <AboutContent theme={theme} onSignIn={handleSignIn} />
         </div>
       </div>
     );
+  }
+
+  if (showAbout) {
+    return <AboutView onBack={() => setShowAbout(false)} theme={theme} />;
   }
 
   return (
@@ -703,6 +702,7 @@ function App() {
           onFileInputClick={onFileInputClick}
           onStatsClick={handleOpenStats}
           onLoadDemoBook={handleLoadDemoBook}
+          onAboutClick={() => setShowAbout(true)}
         />
       ) : (
         <ReaderView
