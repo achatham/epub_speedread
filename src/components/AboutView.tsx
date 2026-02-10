@@ -2,10 +2,9 @@ import { ArrowLeft, BookOpen, Brain, Mic, Type, Library } from 'lucide-react';
 
 interface AboutContentProps {
   onSignIn?: () => void;
-  theme: 'light' | 'dark' | 'bedtime';
 }
 
-export function AboutContent({ onSignIn, theme }: AboutContentProps) {
+export function AboutContent({ onSignIn }: AboutContentProps) {
   return (
     <div className="max-w-2xl mx-auto px-6">
       <header className="mb-16">
@@ -150,7 +149,8 @@ export function AboutView({ onBack, theme }: AboutViewProps) {
           Back
         </button>
       </div>
-      <AboutContent theme={theme} />
-    </div>
-  );
-}
+            <AboutContent />
+          </div>
+        );
+      }
+      

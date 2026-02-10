@@ -22,7 +22,7 @@ import { StatsView } from './components/StatsView';
 import { AboutView, AboutContent } from './components/AboutView';
 import { ConsoleLogger } from './components/ConsoleLogger';
 import { AI_QUESTIONS, WPM_VANITY_RATIO, DEFAULT_RSVP_SETTINGS } from './constants';
-import { LogIn, Info, BookOpen } from 'lucide-react';
+import { LogIn, BookOpen } from 'lucide-react';
 import { useDeviceLogic } from './hooks/useDeviceLogic';
 
 type Theme = 'light' | 'dark' | 'bedtime';
@@ -617,7 +617,7 @@ function App() {
         </div>
         
         <div className="border-t border-zinc-100 dark:border-zinc-800 pt-24">
-          <AboutContent theme={theme} onSignIn={handleSignIn} />
+          <AboutContent onSignIn={handleSignIn} />
         </div>
       </div>
     );
