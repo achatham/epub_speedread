@@ -12,7 +12,7 @@ import { type WordData, calculateRsvpInterval } from './utils/text-processing';
 import { calculateNavigationTarget, findSentenceStart, type NavigationType } from './utils/navigation';
 import { getGeminiApiKey, setGeminiApiKey as saveGeminiApiKey, askAboutBook, summarizeRecent, summarizeWhatJustHappened } from './utils/gemini';
 
-import { processEbook } from './utils/ebook';
+import { processEbook, analyzeRealEndOfBook } from './utils/ebook';
 import { AudioBookPlayer } from './utils/AudioBookPlayer';
 import { LibraryView } from './components/LibraryView';
 import { ReaderView } from './components/ReaderView';
@@ -50,6 +50,11 @@ const MOCK_STORAGE = {
 function App() {
   const [library, setLibrary] = useState<BookRecord[]>([]);
   const [currentBookId, setCurrentBookId] = useState<string | null>(null);
+  const currentBookIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    currentBookIdRef.current = currentBookId;
+  }, [currentBookId]);
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
   const [storageProvider, setStorageProvider] = useState<FirestoreStorage | null>(null);
@@ -439,6 +444,26 @@ function App() {
       if (result.realEndQuote) {
         // Just to update the local library state if needed
         setLibrary(prev => prev.map(b => b.id === bookRecord.id ? { ...b, analysis: { ...b.analysis, realEndQuote: result.realEndQuote } } : b));
+      }
+
+      // Background AI analysis if real end is unknown
+      if (result.realEndIndex === null && geminiApiKey) {
+        analyzeRealEndOfBook(
+          bookRecord.id,
+          result.sections.map(s => s.label),
+          result.words,
+          storageProvider
+        ).then(newIndex => {
+          if (newIndex !== null && currentBookIdRef.current === bookRecord.id) {
+            setRealEndIndex(newIndex);
+            setLibrary(prev => prev.map(b => b.id === bookRecord.id ? {
+              ...b,
+              analysis: { ...b.analysis, realEndIndex: newIndex }
+            } : b));
+          }
+        }).catch(err => {
+          console.error("[App] Background real end detection failed:", err);
+        });
       }
     } catch (e) {
       console.error("Book processing failed", e);
