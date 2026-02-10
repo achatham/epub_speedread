@@ -69,12 +69,25 @@ export function StatsView({
     // Sort sessions chronologically for the chart
     const chrono = [...chartSessions].sort((a, b) => a.startTime - b.startTime);
     
-    // If only one session, use its start and end points
-    let pointsData = chrono.map(s => ({ index: s.endWordIndex, time: s.endTime }));
-    if (pointsData.length === 1) {
+    // Group by day to find max position per day (regardless of modality)
+    const dailyMax = new Map<string, ReadingSession>();
+    for (const s of chrono) {
+        const date = new Date(s.startTime).toLocaleDateString();
+        const existing = dailyMax.get(date);
+        // If multiple sessions on the same day, take the one that reached the furthest index
+        if (!existing || s.endWordIndex >= existing.endWordIndex) {
+            dailyMax.set(date, s);
+        }
+    }
+
+    const pointsDataSessions = Array.from(dailyMax.values()).sort((a, b) => a.startTime - b.startTime);
+
+    // If only one day of activity, show start and end of that day's max session
+    let pointsData = pointsDataSessions.map(s => ({ index: s.endWordIndex, time: s.endTime }));
+    if (pointsDataSessions.length === 1) {
         pointsData = [
-            { index: chrono[0].startWordIndex, time: chrono[0].startTime },
-            { index: chrono[0].endWordIndex, time: chrono[0].endTime }
+            { index: pointsDataSessions[0].startWordIndex, time: pointsDataSessions[0].startTime },
+            { index: pointsDataSessions[0].endWordIndex, time: pointsDataSessions[0].endTime }
         ];
     }
     

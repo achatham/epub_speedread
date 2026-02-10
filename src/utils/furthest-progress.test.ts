@@ -149,7 +149,7 @@ describe('Sync to Furthest Progress', () => {
     expect(agg.wordsRead).toBe(300);
     // startWordIndex should be the minimum encountered
     expect(agg.startWordIndex).toBe(0);
-    // endWordIndex should be the position of the LAST session in time
-    expect(agg.endWordIndex).toBe(150);
+    // endWordIndex should be the MAXIMUM position reached in the group
+    expect(agg.endWordIndex).toBe(200);
   });
 });

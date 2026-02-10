@@ -129,4 +129,36 @@ describe('incremental stats aggregation', () => {
         expect(aggB2.bookId).toBe(book2);
         expect(aggB2.wordsRead).toBe(100);
     });
+
+    it('should use maximum endWordIndex even if later session has lower index', () => {
+        const existing: ReadingSession = {
+            id: 'agg-1',
+            bookId: book1,
+            bookTitle: 'Book 1',
+            startTime: today,
+            endTime: today + 1000,
+            startWordIndex: 0,
+            endWordIndex: 2000,
+            wordsRead: 2000,
+            durationSeconds: 600,
+            type: 'reading'
+        };
+
+        const newSessions: ReadingSession[] = [{
+            id: 's-later-but-behind',
+            bookId: book1,
+            bookTitle: 'Book 1',
+            startTime: todayLater,
+            endTime: todayLater + 1000,
+            startWordIndex: 1000,
+            endWordIndex: 1500,
+            wordsRead: 500,
+            durationSeconds: 300,
+            type: 'reading'
+        }];
+
+        const plan = getIncrementalAggregationPlan([existing], newSessions);
+        expect(plan.createSessions[0].endWordIndex).toBe(2000);
+        expect(plan.createSessions[0].wordsRead).toBe(2500);
+    });
 });
