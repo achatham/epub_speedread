@@ -20,9 +20,9 @@ export const ConsoleLogger: React.FC = () => {
     try {
       const saved = localStorage.getItem('debug_logs');
       if (saved) {
-        setLogs(JSON.parse(saved));
+        setLogs(JSON.parse(saved) as LogEntry[]);
       }
-    } catch (e) {}
+    } catch { }
 
     const addLog = (type: LogEntry['type'], ...args: any[]) => {
       const message = args.map(arg => 
@@ -40,7 +40,7 @@ export const ConsoleLogger: React.FC = () => {
         const updated = [newEntry, ...prev].slice(0, 50);
         try {
           localStorage.setItem('debug_logs', JSON.stringify(updated));
-        } catch (e) {}
+        } catch { }
         return updated;
       });
     };

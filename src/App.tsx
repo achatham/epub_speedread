@@ -177,7 +177,7 @@ function App() {
         return;
       }
 
-      const processedWords = mockWords.map(w => ({
+      const processedWords = mockWords.map((w: any) => ({
         text: w.text,
         isParagraphStart: typeof w.isParagraphStart === 'boolean' ? w.isParagraphStart : (w.paragraphIndex === 0 && w.sentenceIndex === 0),
         isSentenceStart: typeof w.isSentenceStart === 'boolean' ? w.isSentenceStart : w.sentenceIndex === 0
@@ -192,6 +192,10 @@ function App() {
       setUser(u => u || (MOCK_USER as any));
       setStorageProvider(p => p || (MOCK_STORAGE as any));
       setIsLoading(false);
+    };
+
+    (window as any).__setWpm = (newWpm: number) => {
+      setWpm(newWpm * WPM_VANITY_RATIO);
     };
   }, []);
 
@@ -209,14 +213,14 @@ function App() {
     if (storageProvider) {
       audioPlayerRef.current = new AudioBookPlayer(storageProvider, geminiApiKey);
     }
-  }, [storageProvider]);
+  }, [storageProvider, geminiApiKey]);
 
   // Update API Key
   useEffect(() => {
     if (audioPlayerRef.current) {
       audioPlayerRef.current.updateApiKey(geminiApiKey);
     }
-  }, [geminiApiKey]);
+  }, [geminiApiKey, audioPlayerRef]);
 
   // --- Auth & Storage Init ---
   useEffect(() => {
@@ -459,7 +463,7 @@ function App() {
     if (furthestIndex !== null && currentIndex > furthestIndex) {
       setFurthestIndex(currentIndex);
     }
-  }, [isPlaying, currentIndex, currentBookId, storageProvider]);
+  }, [isPlaying, currentIndex, currentBookId, storageProvider, furthestIndex]);
 
   const handleSetIsPlaying = useCallback((playing: boolean) => {
     if (playing && !isPlaying) {

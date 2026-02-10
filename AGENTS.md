@@ -53,4 +53,5 @@ The project uses **Playwright** for End-to-End (E2E) testing.
 
 ## Development Mandates
 
+- **Pre-Submit Verification:** Before submitting any changes or finishing a task, you **MUST** run `./verify.sh`. This ensures the project lints cleanly, builds without errors, and passes all unit and E2E tests. Failure to do so is a violation of project safety standards.
 - **Gemini Versioning:** *NEVER* change a Gemini version number in code. `gemini-3-flash-preview` is the latest model and must be preserved.

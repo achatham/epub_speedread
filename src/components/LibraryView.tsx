@@ -1,5 +1,5 @@
 import type { RefObject } from 'react';
-import { BookOpen, Moon, Settings, Sun, Sunset, Trash2, Upload, DownloadCloud, BarChart2, Info } from 'lucide-react';
+import { BookOpen, Moon, Settings, Sun, Sunset, Trash2, Upload, DownloadCloud, BarChart2, Info, Github } from 'lucide-react';
 import type { BookRecord } from '../utils/storage';
 
 type Theme = 'light' | 'dark' | 'bedtime';
@@ -165,8 +165,21 @@ export function LibraryView({
                         style={{ display: 'none' }} 
                         onClick={onFileInputClick}
                     />
-                </div>
-            </div>
-        </div>
-     );
-}
+                                </div>
+                            </div>
+                
+                            <footer className="mt-auto py-12 text-center border-t border-zinc-100 dark:border-zinc-800 w-full">
+                                <a 
+                                    href="https://github.com/achatham/epub_speedread" 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-2 opacity-40 hover:opacity-100 transition-opacity text-sm font-medium"
+                                >
+                                    <Github size={18} />
+                                    View on GitHub
+                                </a>
+                            </footer>
+                        </div>
+                     );
+                }
+                

@@ -26,7 +26,7 @@ try {
     if (getApps().length > 0) {
       try {
         db = getFirestore(app);
-      } catch (e) {
+      } catch {
         // If getFirestore fails, it means it wasn't initialized yet
         db = initializeFirestore(app, {
           localCache: persistentLocalCache({

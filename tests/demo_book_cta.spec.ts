@@ -35,18 +35,54 @@ test('verify demo book cta styling', async ({ page }) => {
 
     
 
-    // Go back
+      // Go back
 
-    await page.getByRole('button', { name: 'Back' }).click();
+    
 
-    await expect(ctaButton).toBeVisible();
+      await page.getByRole('button', { name: 'Back' }).click();
 
-  
+    
 
-    // Verify styling (rough check of class application indirectly via screenshot)
+      await expect(ctaButton).toBeVisible();
 
-    await page.screenshot({ path: 'tests/screenshots/demo-book-cta.png' });
+    
 
-  });
+    
+
+    
+
+      // Verify GitHub link
+
+    
+
+      const githubLink = page.getByRole('link', { name: 'View on GitHub' });
+
+    
+
+      await expect(githubLink).toBeVisible();
+
+    
+
+      await expect(githubLink).toHaveAttribute('href', 'https://github.com/achatham/epub_speedread');
+
+    
+
+    
+
+    
+
+      // Verify styling (rough check of class application indirectly via screenshot)
+
+    
+
+      await page.screenshot({ path: 'tests/screenshots/demo-book-cta.png' });
+
+    
+
+    });
+
+    
+
+    
 
   

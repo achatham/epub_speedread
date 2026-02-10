@@ -1,4 +1,4 @@
-import { ArrowLeft, BookOpen, Brain, Mic, Type, Library } from 'lucide-react';
+import { ArrowLeft, BookOpen, Brain, Mic, Type, Library, Github } from 'lucide-react';
 
 interface AboutContentProps {
   onSignIn?: () => void;
@@ -116,7 +116,7 @@ export function AboutContent({ onSignIn }: AboutContentProps) {
       </section>
 
       {onSignIn && (
-        <div className="mt-32 text-center pb-20">
+        <div className="mt-32 text-center">
           <button
             onClick={onSignIn}
             className="px-8 py-4 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-xl font-medium hover:opacity-90 transition-opacity shadow-lg"
@@ -125,6 +125,18 @@ export function AboutContent({ onSignIn }: AboutContentProps) {
           </button>
         </div>
       )}
+
+      <footer className="mt-32 pb-20 text-center border-t border-zinc-100 dark:border-zinc-800 pt-12">
+        <a 
+          href="https://github.com/achatham/epub_speedread" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 opacity-40 hover:opacity-100 transition-opacity text-sm font-medium"
+        >
+          <Github size={18} />
+          View on GitHub
+        </a>
+      </footer>
     </div>
   );
 }

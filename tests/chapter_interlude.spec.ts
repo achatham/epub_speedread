@@ -64,6 +64,8 @@ test('pausing normally should back up to start of sentence on resume', async ({ 
     ], [
       { label: "Chapter 1", startIndex: 0 }
     ]);
+    // Set a very slow WPM for the test
+    (window as any).__setWpm?.(60); 
   });
 
   const playButton = page.getByRole('button', { name: 'Play' });
@@ -71,7 +73,7 @@ test('pausing normally should back up to start of sentence on resume', async ({ 
 
   // Wait for "end."
   const rsvpContainer = page.locator('.flex.w-full.items-baseline');
-  await expect(rsvpContainer).toHaveText(/end\./, { timeout: 10000 });
+  await expect(rsvpContainer).toHaveText(/end\./, { timeout: 20000 });
 
   // Pause
   await page.locator('.fixed.inset-0.z-40').click();

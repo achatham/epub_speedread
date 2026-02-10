@@ -15,6 +15,11 @@ test('verify landing page shows about content below login', async ({ page }) => 
   // 4. Verify AI section
   await expect(page.locator('text=AI Assistant, No Spoilers')).toBeVisible();
 
-  // 5. Take screenshot
+  // 5. Verify GitHub link
+  const githubLink = page.getByRole('link', { name: 'View on GitHub' });
+  await expect(githubLink).toBeVisible();
+  await expect(githubLink).toHaveAttribute('href', 'https://github.com/achatham/epub_speedread');
+
+  // 6. Take screenshot
   await page.screenshot({ path: 'tests/screenshots/landing-page.png', fullPage: true });
 });
