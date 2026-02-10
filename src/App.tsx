@@ -32,6 +32,7 @@ const MOCK_STORAGE = {
   getSettings: async () => ({}),
   getAllBooks: async () => [],
   getSessions: async () => [],
+  getAggregatedSessions: async () => [],
   updateBookProgress: async () => {},
   updateBookWpm: async () => {},
   updateSettings: async () => {},
@@ -265,7 +266,7 @@ function App() {
 
         const [books, history] = await Promise.all([
             storageProvider.getAllBooks(),
-            storageProvider.getSessions()
+            storageProvider.getAggregatedSessions()
         ]);
         
         setLibrary(books);
@@ -296,7 +297,7 @@ function App() {
   const handleOpenStats = async () => {
     if (storageProvider) {
       await storageProvider.aggregateSessions();
-      setSessions(await storageProvider.getSessions());
+      setSessions(await storageProvider.getAggregatedSessions());
     }
     setIsStatsOpen(true);
   };
@@ -519,7 +520,7 @@ function App() {
           type: 'reading'
         }).then(() => {
             // Refresh sessions list
-            storageProvider.getSessions().then(setSessions);
+            storageProvider.getAggregatedSessions().then(setSessions);
         }).catch(e => console.error("Failed to log session", e));
       } else {
         console.log("Session too short to log (< 10s)");
@@ -756,7 +757,7 @@ function App() {
                       wordsRead: Math.max(0, stats.endWordIndex - stats.startWordIndex),
                       durationSeconds: stats.durationSeconds,
                       type: 'listening'
-                    }).then(() => storageProvider.getSessions().then(setSessions));
+                    }).then(() => storageProvider.getAggregatedSessions().then(setSessions));
                   }
                 },
                 onError: (msg) => alert(msg)

@@ -1,8 +1,8 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { db as firestore, storage as firebaseStorage } from './firebase';
-import { collection, doc, setDoc, getDocs, deleteDoc, getDoc, updateDoc, runTransaction } from 'firebase/firestore';
+import { collection, doc, setDoc, getDocs, deleteDoc, getDoc, updateDoc, runTransaction, query, where, orderBy } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { getAggregationPlan } from './stats';
+import { getIncrementalAggregationPlan } from './stats';
 
 export interface RsvpSettings {
   periodMultiplier: number;
@@ -23,6 +23,7 @@ export interface UserSettings {
   autoLandscape?: boolean;
   rsvp?: RsvpSettings;
   lastUpdated: number;
+  lastAggregationTime?: number;
 }
 
 export interface BookRecord {
@@ -142,6 +143,10 @@ export class FirestoreStorage {
     return collection(this.userDocRef, 'sessions');
   }
 
+  private get aggregatedSessionsCollection() {
+    return collection(this.userDocRef, 'aggregatedSessions');
+  }
+
   async getSettings(): Promise<UserSettings | null> {
     try {
       const snap = await getDoc(this.userDocRef);
@@ -214,20 +219,27 @@ export class FirestoreStorage {
   async aggregateSessions(): Promise<void> {
     if (!firestore) return;
     try {
-      const sessions = await this.getSessions();
-      const { deleteIds, createSessions } = getAggregationPlan(sessions);
+      const settings = await this.getSettings();
+      const lastAgg = settings?.lastAggregationTime || 0;
 
-      if (deleteIds.length === 0) return;
+      const newRawSessions = await this.getRawSessions(lastAgg);
+      if (newRawSessions.length === 0) return;
+
+      const existingAggregated = await this.getAggregatedSessions();
+      const { deleteIds, createSessions } = getIncrementalAggregationPlan(existingAggregated, newRawSessions);
+
+      const maxEndTime = Math.max(...newRawSessions.map(s => s.endTime));
 
       await runTransaction(firestore, async (transaction) => {
         for (const id of deleteIds) {
-          transaction.delete(doc(this.sessionsCollection, id));
+          transaction.delete(doc(this.aggregatedSessionsCollection, id));
         }
         for (const s of createSessions) {
-          transaction.set(doc(this.sessionsCollection, s.id), s);
+          transaction.set(doc(this.aggregatedSessionsCollection, s.id), s);
         }
+        transaction.update(this.userDocRef, { lastAggregationTime: maxEndTime });
       });
-      console.log(`[Storage] Aggregated ${deleteIds.length} sessions into ${createSessions.length} entries.`);
+      console.log(`[Storage] Incremental aggregation: ${newRawSessions.length} new raw sessions processed.`);
     } catch (e) {
       console.error("Aggregation transaction failed", e);
     }
@@ -313,18 +325,37 @@ export class FirestoreStorage {
     await setDoc(sessionRef, { ...sessionData, id: sessionRef.id });
   }
 
-  async getSessions(bookId?: string): Promise<ReadingSession[]> {
+  async getRawSessions(since: number = 0): Promise<ReadingSession[]> {
     try {
-      const snapshot = await getDocs(this.sessionsCollection);
+      const q = query(
+        this.sessionsCollection,
+        where('startTime', '>', since),
+        orderBy('startTime', 'desc')
+      );
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(d => d.data() as ReadingSession);
+    } catch (e) {
+      console.error("Firestore getRawSessions failed", e);
+      return [];
+    }
+  }
+
+  async getAggregatedSessions(bookId?: string): Promise<ReadingSession[]> {
+    try {
+      const snapshot = await getDocs(this.aggregatedSessionsCollection);
       let sessions = snapshot.docs.map(d => d.data() as ReadingSession);
       if (bookId) {
         sessions = sessions.filter(s => s.bookId === bookId);
       }
       return sessions.sort((a, b) => b.startTime - a.startTime);
     } catch (e) {
-      console.error("Firestore getSessions failed", e);
+      console.error("Firestore getAggregatedSessions failed", e);
       return [];
     }
+  }
+
+  async getSessions(bookId?: string): Promise<ReadingSession[]> {
+    return this.getAggregatedSessions(bookId);
   }
 
   async saveChapterAudio(bookId: string, chapterIndex: number, speed: number, chunks: AudioChunk[]): Promise<void> {
