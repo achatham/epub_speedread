@@ -166,6 +166,17 @@ function App() {
   // Test Hook for Playwright
   useEffect(() => {
     (window as any).__loadMockWords = (mockWords: any[], mockSections?: any[], mockSessions?: any[]) => {
+      isMockModeRef.current = true;
+      if (mockWords === null) {
+        // Special case: Simulate logged-in Library View with empty library
+        setUser(u => u || (MOCK_USER as any));
+        setStorageProvider(p => p || (MOCK_STORAGE as any));
+        setLibrary([]);
+        setCurrentBookId(null);
+        setIsLoading(false);
+        return;
+      }
+
       const processedWords = mockWords.map(w => ({
         text: w.text,
         isParagraphStart: typeof w.isParagraphStart === 'boolean' ? w.isParagraphStart : (w.paragraphIndex === 0 && w.sentenceIndex === 0),
@@ -191,6 +202,7 @@ function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
   const audioPlayerRef = useRef<AudioBookPlayer | null>(null);
+  const isMockModeRef = useRef(false);
 
   // Initialize Player
   useEffect(() => {
@@ -227,6 +239,7 @@ function App() {
       });
 
     const unsubscribe = onAuthStateChanged(auth, (u) => {
+      if (isMockModeRef.current) return;
       setUser(u);
       if (u) {
         const provider = new FirestoreStorage(u.uid);

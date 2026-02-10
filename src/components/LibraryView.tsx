@@ -66,15 +66,15 @@ export function LibraryView({
             <h1 className="text-3xl font-light mb-8 mt-12">Your Library</h1>
 
             {library.length === 0 && !isLoading && (
-                <div className="text-center opacity-50 mb-12 flex flex-col items-center gap-4">
-                    <p>No books yet. Upload one to get started.</p>
+                <div className="text-center opacity-70 mb-12 flex flex-col items-center gap-6">
+                    <p className="text-lg">No books yet. Upload one to get started.</p>
                     {onLoadDemoBook && (
                         <button
                             onClick={onLoadDemoBook}
-                            className="text-sm px-4 py-2 rounded-lg bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors flex items-center gap-2"
+                            className="text-base font-medium px-6 py-3 rounded-xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:opacity-90 transition-opacity flex items-center gap-3 shadow-md"
                         >
-                            <DownloadCloud size={16} />
-                            Try "Frankenstein"
+                            <DownloadCloud size={20} />
+                            Try "Frankenstein" Demo
                         </button>
                     )}
                 </div>
