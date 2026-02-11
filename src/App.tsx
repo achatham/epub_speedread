@@ -469,7 +469,7 @@ function App() {
       console.error("Book processing failed", e);
       setCurrentBookId(null);
     }
-  }, [storageProvider]);
+  }, [storageProvider, geminiApiKey]);
 
   useEffect(() => {
     if (currentBookId && currentBookId !== 'mock' && storageProvider) {
