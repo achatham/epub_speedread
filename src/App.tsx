@@ -20,6 +20,7 @@ import { SettingsModal, type FontFamily } from './components/SettingsModal';
 import { AiModal } from './components/AiModal';
 import { StatsView } from './components/StatsView';
 import { AboutView, AboutContent } from './components/AboutView';
+import { OnboardingModal } from './components/OnboardingModal';
 import { ConsoleLogger } from './components/ConsoleLogger';
 import { AI_QUESTIONS, WPM_VANITY_RATIO, DEFAULT_RSVP_SETTINGS } from './constants';
 import { LogIn, BookOpen } from 'lucide-react';
@@ -28,14 +29,15 @@ import { useDeviceLogic } from './hooks/useDeviceLogic';
 type Theme = 'light' | 'dark' | 'bedtime';
 
 const MOCK_USER = { uid: 'mock-user' };
+let mockSettings: any = { onboardingCompleted: true }; // Default to completed for tests
 const MOCK_STORAGE = {
-  getSettings: async () => ({}),
+  getSettings: async () => mockSettings,
   getAllBooks: async () => [],
   getSessions: async () => [],
   getAggregatedSessions: async () => [],
   updateBookProgress: async () => {},
   updateBookWpm: async () => {},
-  updateSettings: async () => {},
+  updateSettings: async (s: any) => { mockSettings = { ...mockSettings, ...s }; },
   logReadingSession: async () => {},
   updateBookRealEndIndex: async () => {},
   updateBookRealEndQuote: async () => {},
@@ -104,6 +106,7 @@ function App() {
   const [isTocOpen, setIsTocOpen] = useState(false);
   const [isNavOpen, setIsNavOpen] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
 
   const { rotationTrigger, lastRotationTime } = useDeviceLogic({ 
     isPlaying, 
@@ -202,6 +205,10 @@ function App() {
     (window as any).__setWpm = (newWpm: number) => {
       setWpm(newWpm * WPM_VANITY_RATIO);
     };
+
+    (window as any).__setMockSettings = (settings: any) => {
+      mockSettings = { ...mockSettings, ...settings };
+    };
   }, []);
 
   const timerRef = useRef<number | null>(null);
@@ -284,6 +291,14 @@ function App() {
           if (settings.ttsSpeed) setTtsSpeed(settings.ttsSpeed);
           if (settings.autoLandscape !== undefined) setAutoLandscape(settings.autoLandscape);
           if (settings.rsvp) setRsvpSettings(prev => ({ ...prev, ...settings.rsvp }));
+          
+          // Show onboarding if not completed and no API key set
+          if (!settings.onboardingCompleted && !settings.geminiApiKey) {
+            setIsOnboardingOpen(true);
+          }
+        } else {
+          // New user (no settings doc yet)
+          setIsOnboardingOpen(true);
         }
 
         const [books, history] = await Promise.all([
@@ -680,6 +695,29 @@ function App() {
         onSignIn={handleSignIn}
         onSignOut={handleSignOut}
         onSave={() => setIsSettingsOpen(false)}
+      />
+
+      <OnboardingModal
+        isOpen={isOnboardingOpen}
+        onClose={() => {
+          setIsOnboardingOpen(false);
+          storageProvider.updateSettings({ onboardingCompleted: true });
+        }}
+        apiKey={geminiApiKey}
+        setApiKey={(k) => { 
+          setGeminiApiKey(k); 
+          saveGeminiApiKey(k);
+        }}
+        syncApiKey={syncApiKey}
+        setSyncApiKey={setSyncApiKey}
+        onComplete={() => {
+          setIsOnboardingOpen(false);
+          storageProvider.updateSettings({ 
+            onboardingCompleted: true,
+            syncApiKey: syncApiKey,
+            geminiApiKey: syncApiKey ? geminiApiKey : "" 
+          });
+        }}
       />
 
       <AiModal
