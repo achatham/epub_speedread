@@ -22,6 +22,7 @@ export interface UserSettings {
   ttsSpeed?: number;
   autoLandscape?: boolean;
   rsvp?: RsvpSettings;
+  onboardingCompleted?: boolean;
   lastUpdated: number;
   lastAggregationTime?: number;
 }
