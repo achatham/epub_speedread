@@ -1,26 +1,36 @@
 import type { ReadingSession } from './storage';
 
+export function getDayKey(startTime: number): string {
+  const d = new Date(startTime);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+export function getSessionKey(s: ReadingSession): string {
+  const date = getDayKey(s.startTime);
+  const type = s.type || 'reading';
+  return `${s.bookId}-${date}-${type}`;
+}
+
 export function getIncrementalAggregationPlan(
   existingAggregated: ReadingSession[],
   newRawSessions: ReadingSession[]
 ): { deleteIds: string[], createSessions: ReadingSession[] } {
   const groups = new Map<string, ReadingSession[]>();
 
-  const getKey = (s: ReadingSession) => {
-    const date = new Date(s.startTime).toLocaleDateString();
-    const type = s.type || 'reading';
-    return `${s.bookId}-${date}-${type}`;
-  };
-
   // 1. Group existing aggregated sessions
+  // We use a list in case multiple existing records have the same key (bug recovery)
   for (const s of existingAggregated) {
-    groups.set(getKey(s), [s]);
+    const key = getSessionKey(s);
+    if (!groups.has(key)) {
+      groups.set(key, []);
+    }
+    groups.get(key)!.push(s);
   }
 
   // 2. Track which groups are modified and add new raw sessions
   const modifiedKeys = new Set<string>();
   for (const s of newRawSessions) {
-    const key = getKey(s);
+    const key = getSessionKey(s);
     if (!groups.has(key)) {
       groups.set(key, []);
     }
@@ -35,17 +45,19 @@ export function getIncrementalAggregationPlan(
   for (const key of modifiedKeys) {
     const group = groups.get(key)!;
 
-    // Find the original aggregated session from the existing set if it exists
-    const existing = existingAggregated.find(ea => getKey(ea) === key);
-    if (existing) {
-      deleteIds.push(existing.id);
+    // Find all existing records for this key to ensure they are all replaced/deleted
+    const existing = existingAggregated.filter(ea => getSessionKey(ea) === key);
+    const idToUse = existing.length > 0 ? existing[0].id : crypto.randomUUID();
+
+    if (existing.length > 0) {
+      deleteIds.push(...existing.map(e => e.id));
     }
 
     const sorted = [...group].sort((a, b) => a.startTime - b.startTime);
     const first = sorted[0];
 
     const aggregated: ReadingSession = {
-      id: existing?.id || crypto.randomUUID(),
+      id: idToUse,
       bookId: first.bookId,
       bookTitle: first.bookTitle,
       startTime: first.startTime,
@@ -60,7 +72,7 @@ export function getIncrementalAggregationPlan(
     createSessions.push(aggregated);
   }
 
-  // Filter out deleteIds that are being overwritten with the same ID
+  // Filter out the ID we are currently updating from deleteIds
   const actualDeleteIds = deleteIds.filter(id => !createSessions.some(cs => cs.id === id));
 
   return { deleteIds: actualDeleteIds, createSessions };

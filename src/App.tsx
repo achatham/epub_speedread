@@ -575,9 +575,10 @@ function App() {
           wordsRead: wordsRead,
           durationSeconds: Math.round(durationMs / 1000),
           type: 'reading'
-        }).then(() => {
-            // Refresh sessions list
-            storageProvider.getAggregatedSessions().then(setSessions);
+        }).then(async () => {
+            // Trigger aggregation to ensure stats are up to date
+            await storageProvider.aggregateSessions();
+            setSessions(await storageProvider.getAggregatedSessions());
         }).catch(e => console.error("Failed to log session", e));
       } else {
         console.log("Session too short to log (< 10s)");
@@ -837,7 +838,10 @@ function App() {
                       wordsRead: Math.max(0, stats.endWordIndex - stats.startWordIndex),
                       durationSeconds: stats.durationSeconds,
                       type: 'listening'
-                    }).then(() => storageProvider.getAggregatedSessions().then(setSessions));
+                    }).then(async () => {
+                        await storageProvider.aggregateSessions();
+                        setSessions(await storageProvider.getAggregatedSessions());
+                    });
                   }
                 },
                 onError: (msg) => alert(msg)

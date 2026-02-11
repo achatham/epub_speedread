@@ -1,5 +1,6 @@
 import { X, Clock, BookOpen, BarChart2, TrendingUp, Volume2 } from 'lucide-react';
 import type { ReadingSession, BookRecord } from '../utils/storage';
+import { getSessionKey, getDayKey } from '../utils/stats';
 
 interface StatsViewProps {
   isOpen: boolean;
@@ -13,12 +14,29 @@ interface StatsViewProps {
 export function StatsView({
   isOpen,
   onClose,
-  sessions,
+  sessions: rawSessions,
   books,
   activeBookId,
   theme
 }: StatsViewProps) {
   if (!isOpen) return null;
+
+  // Perform a final in-memory aggregation to ensure UI never shows individual/duplicate records
+  const aggregatedMap = new Map<string, ReadingSession>();
+  for (const s of rawSessions) {
+    const key = getSessionKey(s);
+    const existing = aggregatedMap.get(key);
+    if (!existing) {
+      aggregatedMap.set(key, { ...s });
+    } else {
+      existing.endTime = Math.max(existing.endTime, s.endTime);
+      existing.startWordIndex = Math.min(existing.startWordIndex, s.startWordIndex);
+      existing.endWordIndex = Math.max(existing.endWordIndex, s.endWordIndex);
+      existing.wordsRead = (existing.wordsRead || 0) + (s.wordsRead || Math.max(0, s.endWordIndex - s.startWordIndex));
+      existing.durationSeconds += s.durationSeconds;
+    }
+  }
+  const sessions = Array.from(aggregatedMap.values()).sort((a, b) => b.startTime - a.startTime);
 
   const bgClass = theme === 'bedtime' ? 'bg-black' : 'bg-white dark:bg-zinc-900';
   const textClass = theme === 'bedtime' ? 'text-stone-400' : 'text-zinc-900 dark:text-zinc-100';
@@ -72,7 +90,7 @@ export function StatsView({
     // Group by day to find max position per day (regardless of modality)
     const dailyMax = new Map<string, ReadingSession>();
     for (const s of chrono) {
-        const date = new Date(s.startTime).toLocaleDateString();
+        const date = getDayKey(s.startTime);
         const existing = dailyMax.get(date);
         // If multiple sessions on the same day, take the one that reached the furthest index
         if (!existing || s.endWordIndex >= existing.endWordIndex) {
