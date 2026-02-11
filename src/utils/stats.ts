@@ -51,7 +51,7 @@ export function getIncrementalAggregationPlan(
       startTime: first.startTime,
       endTime: Math.max(...group.map(s => s.endTime)),
       startWordIndex: Math.min(...group.map(s => s.startWordIndex)),
-      endWordIndex: sorted[sorted.length - 1].endWordIndex,
+      endWordIndex: Math.max(...group.map(s => s.endWordIndex)),
       wordsRead: group.reduce((acc, s) => acc + (s.wordsRead || Math.max(0, s.endWordIndex - s.startWordIndex)), 0),
       durationSeconds: group.reduce((acc, s) => acc + s.durationSeconds, 0),
       type: (first.type || 'reading') as 'reading' | 'listening'
