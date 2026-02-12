@@ -1,4 +1,5 @@
-import { X, Clock, BookOpen, BarChart2, TrendingUp, Volume2 } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { X, Clock, BookOpen, BarChart2, TrendingUp, Volume2, Library } from 'lucide-react';
 import type { ReadingSession, BookRecord } from '../utils/storage';
 import { getSessionKey, getDayKey } from '../utils/stats';
 
@@ -19,42 +20,57 @@ export function StatsView({
   activeBookId,
   theme
 }: StatsViewProps) {
-  if (!isOpen) return null;
+  const [activeTab, setActiveTab] = useState<'book' | 'history'>('book');
+  const [timeRange, setTimeRange] = useState<'week' | 'month' | 'year'>('week');
 
   // Perform a final in-memory aggregation to ensure UI never shows individual/duplicate records
-  const aggregatedMap = new Map<string, ReadingSession>();
-  for (const s of rawSessions) {
-    const key = getSessionKey(s);
-    const existing = aggregatedMap.get(key);
-    if (!existing) {
-      aggregatedMap.set(key, { ...s });
-    } else {
-      existing.endTime = Math.max(existing.endTime, s.endTime);
-      existing.startWordIndex = Math.min(existing.startWordIndex, s.startWordIndex);
-      existing.endWordIndex = Math.max(existing.endWordIndex, s.endWordIndex);
-      existing.wordsRead = (existing.wordsRead || 0) + (s.wordsRead || Math.max(0, s.endWordIndex - s.startWordIndex));
-      existing.durationSeconds += s.durationSeconds;
+  const sessions = useMemo(() => {
+    const aggregatedMap = new Map<string, ReadingSession>();
+    for (const s of rawSessions) {
+      const key = getSessionKey(s);
+      const existing = aggregatedMap.get(key);
+      if (!existing) {
+        aggregatedMap.set(key, { ...s });
+      } else {
+        existing.endTime = Math.max(existing.endTime, s.endTime);
+        existing.startWordIndex = Math.min(existing.startWordIndex, s.startWordIndex);
+        existing.endWordIndex = Math.max(existing.endWordIndex, s.endWordIndex);
+        existing.wordsRead = (existing.wordsRead || 0) + (s.wordsRead || Math.max(0, s.endWordIndex - s.startWordIndex));
+        existing.durationSeconds += s.durationSeconds;
+      }
     }
-  }
-  const sessions = Array.from(aggregatedMap.values()).sort((a, b) => b.startTime - a.startTime);
+    return Array.from(aggregatedMap.values()).sort((a, b) => b.startTime - a.startTime);
+  }, [rawSessions]);
 
   const bgClass = theme === 'bedtime' ? 'bg-black' : 'bg-white dark:bg-zinc-900';
   const textClass = theme === 'bedtime' ? 'text-stone-400' : 'text-zinc-900 dark:text-zinc-100';
   const cardBgClass = theme === 'bedtime' ? 'bg-zinc-900/50' : 'bg-zinc-50 dark:bg-zinc-800/50';
 
-  // 1. Determine which book to show the trend for
-  const chartBookId = activeBookId || (sessions.length > 0 ? sessions[0].bookId : null);
-  const chartBook = chartBookId ? books.find(b => b.id === chartBookId) : null;
-  const chartSessions = chartBookId ? sessions.filter(s => s.bookId === chartBookId) : [];
+  const WORDS_PER_PAGE = 300;
 
-  // Filter sessions for the active book if provided, otherwise show all
-  const filteredSessions = activeBookId 
-    ? sessions.filter(s => s.bookId === activeBookId)
-    : sessions;
+  // 1. Determine which book to show for "Current Book" tab
+  const bookToViewId = activeBookId || (sessions.length > 0 ? sessions[0].bookId : null);
+  const bookToView = bookToViewId ? books.find(b => b.id === bookToViewId) : null;
+  const bookSessions = bookToViewId ? sessions.filter(s => s.bookId === bookToViewId) : [];
+
+  // 2. Filter sessions for "Overall History" tab
+  const historySessions = useMemo(() => {
+    const now = Date.now();
+    let threshold = 0;
+    if (timeRange === 'week') threshold = now - 7 * 24 * 60 * 60 * 1000;
+    else if (timeRange === 'month') threshold = now - 30 * 24 * 60 * 60 * 1000;
+    else if (timeRange === 'year') threshold = now - 365 * 24 * 60 * 60 * 1000;
+    return sessions.filter(s => s.startTime >= threshold);
+  }, [sessions, timeRange]);
+
+  if (!isOpen) return null;
+
+  // Use either book sessions or history sessions based on tab
+  const displaySessions = activeTab === 'book' ? bookSessions : historySessions;
 
   // Split totals by type
-  const readSessions = filteredSessions.filter(s => (s.type || 'reading') === 'reading');
-  const listenSessions = filteredSessions.filter(s => s.type === 'listening');
+  const readSessions = displaySessions.filter(s => (s.type || 'reading') === 'reading');
+  const listenSessions = displaySessions.filter(s => s.type === 'listening');
 
   const totalReadSeconds = readSessions.reduce((acc, s) => acc + s.durationSeconds, 0);
   const totalListenSeconds = listenSessions.reduce((acc, s) => acc + s.durationSeconds, 0);
@@ -62,8 +78,6 @@ export function StatsView({
   const totalReadMinutes = Math.round(totalReadSeconds / 60);
   const totalListenMinutes = Math.round(totalListenSeconds / 60);
   
-  // Progress Calculation (Simplified: 300 words = 1 page)
-  const WORDS_PER_PAGE = 300;
   const totalWordsRead = readSessions.reduce((acc, s) => acc + (s.wordsRead || Math.max(0, s.endWordIndex - s.startWordIndex)), 0);
   const totalWordsHeard = listenSessions.reduce((acc, s) => acc + (s.wordsRead || Math.max(0, s.endWordIndex - s.startWordIndex)), 0);
   
@@ -73,19 +87,19 @@ export function StatsView({
   // Chart Logic (Simple SVG Sparkline)
   // X = Time, Y = Completion %
   const renderProgressChart = () => {
-    if (!chartBook || chartSessions.length === 0) return (
+    if (!bookToView || bookSessions.length === 0) return (
         <div className="h-32 flex items-center justify-center opacity-40 italic text-sm">
-            No progress data available.
+            No progress data available for this book.
         </div>
     );
 
     // Use the actual/estimated end index for the 100% baseline
     // If we have a realEndIndex from AI, use that. Otherwise use current wordIndex or max seen.
-    const bookTotalWords = chartBook.analysis.realEndIndex || chartBook.progress.wordIndex || 1;
-    const maxIndex = Math.max(bookTotalWords, ...chartSessions.map(s => s.endWordIndex));
+    const bookTotalWords = bookToView.analysis.realEndIndex || bookToView.progress.wordIndex || 1;
+    const maxIndex = Math.max(bookTotalWords, ...bookSessions.map(s => s.endWordIndex));
     
     // Sort sessions chronologically for the chart
-    const chrono = [...chartSessions].sort((a, b) => a.startTime - b.startTime);
+    const chrono = [...bookSessions].sort((a, b) => a.startTime - b.startTime);
     
     // Group by day to find max position per day (regardless of modality)
     const dailyMax = new Map<string, ReadingSession>();
@@ -163,7 +177,7 @@ export function StatsView({
              const dateStr = new Date(p.time).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
              
              // Find original session for type
-             const session = chartSessions.find(s => s.endTime === p.time);
+             const session = bookSessions.find(s => s.endTime === p.time);
              const isListen = session?.type === 'listening';
              
              return (
@@ -188,8 +202,106 @@ export function StatsView({
         </svg>
         <div className="flex justify-between text-[10px] opacity-50 mt-2" style={{ paddingLeft: `${paddingLeft}px`, paddingRight: `${paddingRight}px` }}>
             <span>{startDateStr}</span>
-            <span className="hidden sm:inline">Progress: {chartBook.meta.title}</span>
+            <span className="hidden sm:inline">Progress: {bookToView.meta.title}</span>
             <span>{endDateStr}</span>
+        </div>
+      </div>
+    );
+  };
+
+  const renderHistoryChart = () => {
+    if (historySessions.length === 0) return (
+        <div className="h-32 flex items-center justify-center opacity-40 italic text-sm">
+            No activity data for this period.
+        </div>
+    );
+
+    const isYear = timeRange === 'year';
+    const dailyData = new Map<string, { read: number, listen: number, timestamp: number }>();
+
+    for (const s of historySessions) {
+        const d = new Date(s.startTime);
+        const key = isYear
+            ? d.toLocaleDateString(undefined, { month: 'short', year: '2-digit' })
+            : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        const existing = dailyData.get(key) || { read: 0, listen: 0, timestamp: s.startTime };
+        if (s.type === 'listening') existing.listen += s.durationSeconds / 60;
+        else existing.read += s.durationSeconds / 60;
+        dailyData.set(key, existing);
+    }
+
+    const sortedData = Array.from(dailyData.entries())
+        .sort((a, b) => a[1].timestamp - b[1].timestamp)
+        .map(([key, val]) => ({ key, ...val }));
+
+    const width = 400;
+    const height = 180;
+    const paddingLeft = 40;
+    const paddingRight = 20;
+    const paddingTop = 20;
+    const paddingBottom = 30;
+
+    const maxMins = Math.max(15, ...sortedData.map(d => d.read + d.listen));
+    const totalBars = sortedData.length;
+    const chartWidth = width - paddingLeft - paddingRight;
+    const barWidth = (chartWidth / totalBars) * 0.7;
+    const gap = (chartWidth / totalBars) * 0.3;
+
+    return (
+      <div className="relative w-full group/chart">
+        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto overflow-visible">
+          {/* Axis */}
+          <line x1={paddingLeft} y1={height - paddingBottom} x2={width - paddingRight} y2={height - paddingBottom} stroke="currentColor" strokeWidth="1" opacity="0.2" />
+
+          {/* Y-Axis Labels */}
+          {[0, 0.5, 1].map(tick => {
+              const y = height - paddingBottom - tick * (height - paddingTop - paddingBottom);
+              return (
+                  <g key={tick}>
+                    <line x1={paddingLeft - 5} y1={y} x2={paddingLeft} y2={y} stroke="currentColor" strokeWidth="1" opacity="0.1" />
+                    <text x={paddingLeft - 10} y={y} textAnchor="end" alignmentBaseline="middle" className="text-[10px] fill-current opacity-40 font-mono">
+                        {Math.round(tick * maxMins)}m
+                    </text>
+                  </g>
+              );
+          })}
+
+          {/* Bars */}
+          {sortedData.map((d, i) => {
+              const x = paddingLeft + i * (barWidth + gap) + gap/2;
+              const readH = (d.read / maxMins) * (height - paddingTop - paddingBottom);
+              const listenH = (d.listen / maxMins) * (height - paddingTop - paddingBottom);
+
+              return (
+                  <g key={d.key} className="group/bar">
+                      <rect
+                        x={x} y={height - paddingBottom - readH - listenH}
+                        width={barWidth} height={listenH}
+                        fill="#a855f7" rx="1"
+                        className="opacity-80 group-hover/bar:opacity-100 transition-opacity"
+                      />
+                      <rect
+                        x={x} y={height - paddingBottom - readH}
+                        width={barWidth} height={readH}
+                        fill={theme === 'bedtime' ? '#d97706' : '#ef4444'} rx="1"
+                        className="opacity-80 group-hover/bar:opacity-100 transition-opacity"
+                      />
+
+                      {/* Tooltip */}
+                      <g className="opacity-0 group-hover/bar:opacity-100 pointer-events-none transition-opacity">
+                        <rect x={x + barWidth/2 - 35} y={height - paddingBottom - readH - listenH - 30} width="70" height="22" rx="4" className="fill-zinc-800 dark:fill-zinc-100" />
+                        <text x={x + barWidth/2} y={height - paddingBottom - readH - listenH - 16} textAnchor="middle" className="text-[9px] font-bold fill-white dark:fill-zinc-900">
+                            {d.key}: {Math.round(d.read + d.listen)}m
+                        </text>
+                      </g>
+                  </g>
+              );
+          })}
+        </svg>
+        <div className="flex justify-between text-[10px] opacity-50 mt-2" style={{ paddingLeft: `${paddingLeft}px`, paddingRight: `${paddingRight}px` }}>
+            <span>{sortedData[0]?.key}</span>
+            <span>Total Time: {totalReadMinutes + totalListenMinutes} mins</span>
+            <span>{sortedData[sortedData.length - 1]?.key}</span>
         </div>
       </div>
     );
@@ -210,8 +322,43 @@ export function StatsView({
           </button>
         </div>
 
+        {/* Tabs */}
+        <div className="px-6 border-b border-zinc-200 dark:border-zinc-800 flex gap-6 shrink-0">
+          <button
+            onClick={() => setActiveTab('book')}
+            className={`py-3 text-sm font-medium border-b-2 transition-all flex items-center gap-2 ${activeTab === 'book' ? 'border-red-500 text-red-500' : 'border-transparent opacity-50 hover:opacity-100'}`}
+          >
+            <BookOpen size={18} />
+            Current Book
+          </button>
+          <button
+            onClick={() => setActiveTab('history')}
+            className={`py-3 text-sm font-medium border-b-2 transition-all flex items-center gap-2 ${activeTab === 'history' ? 'border-red-500 text-red-500' : 'border-transparent opacity-50 hover:opacity-100'}`}
+          >
+            <Library size={18} />
+            Overall History
+          </button>
+        </div>
+
         <div className="flex-1 overflow-y-auto p-6 space-y-8">
           
+          {/* History Time Range Selector */}
+          {activeTab === 'history' && (
+            <div className="flex justify-center -mb-2">
+                <div className="bg-zinc-100 dark:bg-zinc-800 p-1 rounded-xl flex gap-1">
+                    {(['week', 'month', 'year'] as const).map(range => (
+                        <button
+                            key={range}
+                            onClick={() => setTimeRange(range)}
+                            className={`px-6 py-2 text-xs font-semibold rounded-lg transition-all ${timeRange === range ? 'bg-white dark:bg-zinc-700 shadow-sm text-red-500' : 'opacity-50 hover:opacity-100'}`}
+                        >
+                            {range.charAt(0).toUpperCase() + range.slice(1)}
+                        </button>
+                    ))}
+                </div>
+            </div>
+          )}
+
           {/* Summary Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className={`p-4 rounded-xl ${cardBgClass} flex flex-col items-center justify-center text-center`}>
@@ -236,22 +383,25 @@ export function StatsView({
             </div>
           </div>
 
-          {/* Progress Chart */}
-          {chartBook && (
-            <div className="space-y-4">
-                <h3 className="text-sm font-medium opacity-70 flex items-center gap-2">
-                    <TrendingUp size={16} />
-                    {activeBookId ? 'Book Progress Trend' : `Recent Progress: ${chartBook.meta.title}`}
-                </h3>
-                <div className={`p-6 rounded-xl ${cardBgClass}`}>
-                    {renderProgressChart()}
-                </div>
-            </div>
-          )}
+          {/* Progress Chart / History Chart */}
+          <div className="space-y-4">
+              <h3 className="text-sm font-medium opacity-70 flex items-center gap-2">
+                  <TrendingUp size={16} />
+                  {activeTab === 'book'
+                    ? (activeBookId ? 'Book Progress Trend' : (bookToView ? `Recent Progress: ${bookToView.meta.title}` : 'No Book Data'))
+                    : `Reading Activity: Past ${timeRange.charAt(0).toUpperCase() + timeRange.slice(1)}`
+                  }
+              </h3>
+              <div className={`p-6 rounded-xl ${cardBgClass}`}>
+                  {activeTab === 'book' ? renderProgressChart() : renderHistoryChart()}
+              </div>
+          </div>
 
           {/* Recent Sessions Table */}
           <div className="space-y-4">
-            <h3 className="text-sm font-medium opacity-70">Recent Activity</h3>
+            <h3 className="text-sm font-medium opacity-70">
+                {activeTab === 'book' ? 'Recent Book Activity' : 'History Activity'}
+            </h3>
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left">
                 <thead>
@@ -263,7 +413,7 @@ export function StatsView({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                  {filteredSessions.slice(0, 10).map((session) => (
+                  {displaySessions.slice(0, 10).map((session) => (
                     <tr key={session.id} className="group hover:bg-zinc-100/50 dark:hover:bg-zinc-800/50 transition-colors">
                       <td className="py-3 pr-4 font-medium truncate max-w-[150px]">
                         <div className="flex items-center gap-2">
@@ -282,9 +432,9 @@ export function StatsView({
                       </td>
                     </tr>
                   ))}
-                  {filteredSessions.length === 0 && (
+                  {displaySessions.length === 0 && (
                     <tr>
-                      <td colSpan={4} className="py-8 text-center opacity-40 italic">No reading sessions recorded yet.</td>
+                      <td colSpan={4} className="py-8 text-center opacity-40 italic">No activity recorded for this {activeTab === 'book' ? 'book' : 'period'}.</td>
                     </tr>
                   )}
                 </tbody>
