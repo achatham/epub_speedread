@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { X, Clock, BookOpen, BarChart2, TrendingUp, Volume2, Library } from 'lucide-react';
 import type { ReadingSession, BookRecord } from '../utils/storage';
 import { getSessionKey, getDayKey } from '../utils/stats';
