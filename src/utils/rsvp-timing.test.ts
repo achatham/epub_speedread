@@ -21,6 +21,24 @@ describe('calculateRsvpInterval', () => {
     expect(interval).toBe(baseInterval * DEFAULT_RSVP_SETTINGS.commaMultiplier);
   });
 
+  it('should handle punctuation inside quotes', () => {
+    // Period inside quotes
+    const periodWord = 'are!"';
+    expect(calculateRsvpInterval(periodWord, wpm, DEFAULT_RSVP_SETTINGS))
+      .toBe(baseInterval * DEFAULT_RSVP_SETTINGS.periodMultiplier);
+
+    // Comma inside quotes
+    const commaWord = 'are,"';
+    expect(calculateRsvpInterval(commaWord, wpm, DEFAULT_RSVP_SETTINGS))
+      .toBe(baseInterval * DEFAULT_RSVP_SETTINGS.commaMultiplier);
+
+    // Other closing characters
+    expect(calculateRsvpInterval('end!)', wpm, DEFAULT_RSVP_SETTINGS))
+      .toBe(baseInterval * DEFAULT_RSVP_SETTINGS.periodMultiplier);
+    expect(calculateRsvpInterval('wait:]', wpm, DEFAULT_RSVP_SETTINGS))
+      .toBe(baseInterval * DEFAULT_RSVP_SETTINGS.commaMultiplier);
+  });
+
   it('should apply long word multiplier', () => {
     // "unconventional" is > 8 characters
     const interval = calculateRsvpInterval('unconventional', wpm, DEFAULT_RSVP_SETTINGS);
