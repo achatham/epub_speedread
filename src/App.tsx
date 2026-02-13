@@ -12,7 +12,7 @@ import { type WordData, calculateRsvpInterval } from './utils/text-processing';
 import { calculateNavigationTarget, findSentenceStart, type NavigationType } from './utils/navigation';
 import { getGeminiApiKey, setGeminiApiKey as saveGeminiApiKey, askAboutBook, summarizeRecent, summarizeWhatJustHappened } from './utils/gemini';
 
-import { processEbook, analyzeRealEndOfBook } from './utils/ebook';
+import { processBook, analyzeRealEndOfBook } from './utils/ebook';
 import { AudioBookPlayer } from './utils/AudioBookPlayer';
 import { LibraryView } from './components/LibraryView';
 import { ReaderView } from './components/ReaderView';
@@ -375,7 +375,8 @@ function App() {
     if (!file) return;
     setIsLoading(true);
     try {
-      const id = await storageProvider.addBook(file, file.name.replace(/\.epub$/i, ''));
+      const title = file.name.replace(/\.(epub|pdf)$/i, '');
+      const id = await storageProvider.addBook(file, title);
       setLibrary(await storageProvider.getAllBooks());
       handleSelectBook(id);
     } catch (e) { console.error(e); } finally { setIsLoading(false); }
@@ -443,10 +444,10 @@ function App() {
     }
   };
 
-  const processBook = useCallback(async (bookRecord: BookRecord) => {
+  const handleProcessBook = useCallback(async (bookRecord: BookRecord) => {
     if (!storageProvider) return;
     try {
-      const result = await processEbook(bookRecord, storageProvider);
+      const result = await processBook(bookRecord, storageProvider);
       
       setBookTitle(result.title);
       setWords(result.words);
@@ -490,13 +491,13 @@ function App() {
     if (currentBookId && currentBookId !== 'mock' && storageProvider) {
       setIsLoading(true);
       const record = library.find(b => b.id === currentBookId);
-      if (record) processBook(record).then(() => setIsLoading(false));
+      if (record) handleProcessBook(record).then(() => setIsLoading(false));
       else storageProvider.getBook(currentBookId).then(f => {
-        if (f) processBook(f).then(() => setIsLoading(false));
+        if (f) handleProcessBook(f).then(() => setIsLoading(false));
         else { setCurrentBookId(null); setIsLoading(false); }
       });
     }
-  }, [currentBookId, processBook, library, storageProvider]);
+  }, [currentBookId, handleProcessBook, library, storageProvider]);
 
   useEffect(() => {
     if (!isPlaying && currentBookId && storageProvider) storageProvider.updateBookProgress(currentBookId, currentIndex);

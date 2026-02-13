@@ -33,6 +33,7 @@ export interface BookRecord {
     title: string;
     addedAt: number;
     totalWords?: number;
+    extension?: string;
   };
   progress: {
     wordIndex: number;
@@ -171,17 +172,18 @@ export class FirestoreStorage {
   async addBook(file: File, title: string): Promise<string> {
     const id = crypto.randomUUID();
     const now = Date.now();
+    const extension = file.name.split('.').pop()?.toLowerCase() || 'epub';
 
     // 1. Upload to Firebase Storage
     if (firebaseStorage) {
-        const storageRef = ref(firebaseStorage, `users/${this.userId}/books/${id}.epub`);
+        const storageRef = ref(firebaseStorage, `users/${this.userId}/books/${id}.${extension}`);
         await uploadBytes(storageRef, file);
         const cloudUrl = await getDownloadURL(storageRef);
 
         // 2. Create Firestore Metadata
         const bookMeta: BookRecord = {
             id,
-            meta: { title, addedAt: now },
+            meta: { title, addedAt: now, extension },
             progress: { wordIndex: 0, lastReadAt: now },
             settings: { wpm: 300 },
             analysis: {},
@@ -259,7 +261,9 @@ export class FirestoreStorage {
           console.log(`[Storage] Downloading ${book.meta.title} from cloud...`);
           const response = await fetch(book.storage.cloudUrl);
           const blob = await response.blob();
-          file = new File([blob], `${book.meta.title}.epub`, { type: 'application/epub+zip' });
+          const extension = book.meta.extension || 'epub';
+          const mimeType = extension === 'pdf' ? 'application/pdf' : 'application/epub+zip';
+          file = new File([blob], `${book.meta.title}.${extension}`, { type: mimeType });
           await this.fileCache.saveFile(id, file);
       }
       book.storage.localFile = file;
@@ -272,10 +276,13 @@ export class FirestoreStorage {
 
   async deleteBook(id: string): Promise<void> {
     try {
+      const snap = await getDoc(doc(this.booksCollection, id));
+      const extension = snap.exists() ? (snap.data() as BookRecord).meta.extension || 'epub' : 'epub';
+
       await deleteDoc(doc(this.booksCollection, id));
       await this.fileCache.deleteFile(id);
       if (firebaseStorage) {
-          await deleteObject(ref(firebaseStorage, `users/${this.userId}/books/${id}.epub`));
+          await deleteObject(ref(firebaseStorage, `users/${this.userId}/books/${id}.${extension}`));
       }
     } catch (e) {
       console.error("Delete failed", e);

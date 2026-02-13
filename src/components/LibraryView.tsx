@@ -161,7 +161,7 @@ export function LibraryView({
                         type="file" 
                         ref={fileInputRef} 
                         onChange={onFileUpload} 
-                        accept=".epub" 
+                        accept=".epub,.pdf"
                         style={{ display: 'none' }} 
                         onClick={onFileInputClick}
                     />
