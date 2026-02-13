@@ -20,9 +20,9 @@ export function calculateRsvpInterval(
 ): number {
   let multiplier = 1;
   
-  if (word.endsWith('.') || word.endsWith('!') || word.endsWith('?')) {
+  if (/[.!?]['")\]]*$/.test(word)) {
     multiplier = settings.periodMultiplier;
-  } else if (word.endsWith(',') || word.endsWith(';') || word.endsWith(':')) {
+  } else if (/[,;:]['")\]]*$/.test(word)) {
     multiplier = settings.commaMultiplier;
   }
 
