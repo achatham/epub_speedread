@@ -1,5 +1,6 @@
+import { useState, useMemo } from 'react';
 import type { RefObject } from 'react';
-import { BookOpen, Moon, Settings, Sun, Sunset, Trash2, Upload, DownloadCloud, BarChart2, Info, Github } from 'lucide-react';
+import { BookOpen, Moon, Settings, Sun, Sunset, Trash2, Upload, DownloadCloud, BarChart2, Info, Github, Search, Archive, Inbox, X, Clock } from 'lucide-react';
 import type { BookRecord } from '../utils/storage';
 
 type Theme = 'light' | 'dark' | 'bedtime';
@@ -12,6 +13,7 @@ interface LibraryViewProps {
   onToggleTheme: () => void;
   onSelectBook: (id: string) => void;
   onDeleteBook: (e: React.MouseEvent, id: string) => void;
+  onToggleArchive: (id: string, archived: boolean) => void;
   onFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   fileInputRef: RefObject<HTMLInputElement | null>;
   onFileInputClick: (e: React.MouseEvent<HTMLInputElement, MouseEvent>) => void;
@@ -28,6 +30,7 @@ export function LibraryView({
   onToggleTheme,
   onSelectBook,
   onDeleteBook,
+  onToggleArchive,
   onFileUpload,
   fileInputRef,
   onFileInputClick,
@@ -35,151 +38,199 @@ export function LibraryView({
   onLoadDemoBook,
   onAboutClick
 }: LibraryViewProps) {
-     const bgClass = theme === 'bedtime' ? 'bg-black' : 'bg-white dark:bg-zinc-900';
-     const textClass = theme === 'bedtime' ? 'text-stone-400' : 'text-zinc-900 dark:text-zinc-100';
-     const cardBgClass = theme === 'bedtime' ? 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-600' : 'bg-zinc-50 dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-800 hover:border-zinc-400 dark:hover:border-zinc-600';
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState<'active' | 'archived'>('active');
 
-     return (
-        <div className={`flex flex-col items-center min-h-dvh font-sans transition-colors duration-300 p-8 ${bgClass} ${textClass}`}>
-            <div className="absolute top-4 right-4 flex gap-2">
-                <button
-                    onClick={onAboutClick}
-                    className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-                    title="About Speed Reader"
-                >
-                    <Info size={24} />
-                </button>
-                <button
-                    onClick={onStatsClick}
-                    className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-                    title="Reading Stats"
-                >
-                    <BarChart2 size={24} />
-                </button>
-                <button
-                    onClick={onSettingsClick}
-                    className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-                    title="Settings"
-                >
-                    <Settings size={24} />
-                </button>
-                <button 
-                    onClick={onToggleTheme}
-                    className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-                    title={`Theme: ${theme}`}
-                >
-                    {theme === 'light' ? <Sun size={24} /> : theme === 'dark' ? <Moon size={24} /> : <Sunset size={24} className="text-amber-600" />}
-                </button>
-            </div>
-            
-            <h1 className="text-3xl font-light mb-8 mt-12">Your Library</h1>
+  const filteredBooks = useMemo(() => {
+    return library.filter(book => {
+      const matchesSearch = book.meta.title.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesTab = activeTab === 'archived' ? book.archived === true : !book.archived;
+      return matchesSearch && matchesTab;
+    });
+  }, [library, searchQuery, activeTab]);
 
-            {library.length === 0 && !isLoading && (
-                <div className="text-center opacity-70 mb-12 flex flex-col items-center gap-6">
-                    <p className="text-lg">No books yet. Upload one to get started.</p>
-                    {onLoadDemoBook && (
-                        <button
-                            onClick={onLoadDemoBook}
-                            className="text-base font-medium px-6 py-3 rounded-xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:opacity-90 transition-opacity flex items-center gap-3 shadow-md"
-                        >
-                            <DownloadCloud size={20} />
-                            Try "Frankenstein" Demo
-                        </button>
-                    )}
-                </div>
+  const bgClass = theme === 'bedtime' ? 'bg-black' : 'bg-white dark:bg-zinc-900';
+  const textClass = theme === 'bedtime' ? 'text-stone-400' : 'text-zinc-900 dark:text-zinc-100';
+  const cardBgClass = theme === 'bedtime' ? 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-600' : 'bg-zinc-50 dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-800 hover:border-zinc-400 dark:hover:border-zinc-600';
+
+  return (
+    <div className={`flex flex-col items-center min-h-dvh font-sans transition-colors duration-300 p-4 md:p-8 ${bgClass} ${textClass}`}>
+      <div className="w-full max-w-5xl">
+        <header className="flex justify-between items-center mb-8">
+          <h1 className="text-2xl font-light">Library</h1>
+          <div className="flex gap-1 sm:gap-2">
+            <button
+              onClick={onAboutClick}
+              className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              title="About Speed Reader"
+            >
+              <Info size={22} />
+            </button>
+            <button
+              onClick={onStatsClick}
+              className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              title="Reading Stats"
+            >
+              <BarChart2 size={22} />
+            </button>
+            <button
+              onClick={onSettingsClick}
+              className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              title="Settings"
+            >
+              <Settings size={22} />
+            </button>
+            <button
+              onClick={onToggleTheme}
+              className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              title={`Theme: ${theme}`}
+            >
+              {theme === 'light' ? <Sun size={22} /> : theme === 'dark' ? <Moon size={22} /> : <Sunset size={22} className="text-amber-600" />}
+            </button>
+          </div>
+        </header>
+
+        <div className="flex flex-col sm:flex-row gap-4 mb-8">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 opacity-40" size={18} />
+            <input
+              type="text"
+              placeholder="Search your library..."
+              className={`w-full pl-10 pr-10 py-2.5 rounded-xl border transition-all focus:ring-2 focus:ring-blue-500/20 outline-none ${theme === 'bedtime' ? 'bg-zinc-900/50 border-zinc-800' : 'bg-zinc-50 dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-800'}`}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 opacity-40 hover:opacity-100">
+                <X size={18} />
+              </button>
             )}
+          </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 w-full max-w-5xl mb-12">
-                {library.map(book => {
-                    const isGhost = !book.storage.localFile;
-                    return (
-                        <div 
-                            key={book.id} 
-                            onClick={() => onSelectBook(book.id)}
-                            className={`group border rounded-lg p-6 hover:shadow-lg transition-all cursor-pointer relative ${cardBgClass}`}
-                        >
-                            <div className="flex items-start justify-between mb-4">
-                                <div className="relative">
-                                    <BookOpen size={32} className={`transition-opacity ${isGhost ? 'opacity-20' : 'opacity-50 group-hover:opacity-100'}`} />
-                                    {isGhost && (
-                                        <DownloadCloud size={16} className="absolute -bottom-1 -right-1 text-blue-500" />
-                                    )}
-                                </div>
-                                <button 
-                                    onClick={(e) => onDeleteBook(e, book.id)}
-                                    className="p-2 -mr-2 -mt-2 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 rounded-full transition-all"
-                                    title="Delete book"
-                                >
-                                    <Trash2 size={18} />
-                                </button>
-                            </div>
-                            <h3 className="font-semibold text-lg line-clamp-2 h-14">{book.meta.title}</h3>
+          <div className="flex bg-zinc-100 dark:bg-zinc-800 p-1 rounded-xl self-start sm:self-auto gap-1">
+            <button
+              onClick={() => setActiveTab('active')}
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${activeTab === 'active' ? 'bg-white dark:bg-zinc-700 shadow-sm' : 'opacity-50'}`}
+            >
+              <Inbox size={16} />
+              Active
+            </button>
+            <button
+              onClick={() => setActiveTab('archived')}
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${activeTab === 'archived' ? 'bg-white dark:bg-zinc-700 shadow-sm' : 'opacity-50'}`}
+            >
+              <Archive size={16} />
+              Archived
+            </button>
 
-                            {/* Progress Bar */}
-                            <div className="mt-4 mb-1">
-                                <div className="flex justify-between items-end mb-1">
-                                    <p className="text-[10px] font-bold opacity-40 uppercase tracking-wider">
-                                        Progress
-                                    </p>
-                                    <p className="text-[10px] font-mono opacity-60">
-                                        {Math.min(100, Math.round((book.progress.wordIndex / (book.analysis.realEndIndex || book.meta.totalWords || 1)) * 100))}%
-                                    </p>
-                                </div>
-                                <div className={`w-full h-1.5 rounded-full overflow-hidden ${theme === 'bedtime' ? 'bg-zinc-800' : 'bg-zinc-200 dark:bg-zinc-700'}`}>
-                                    <div
-                                        className={`h-full transition-all duration-500 ${theme === 'bedtime' ? 'bg-amber-700' : 'bg-blue-500'}`}
-                                        style={{ width: `${Math.min(100, (book.progress.wordIndex / (book.analysis.realEndIndex || book.meta.totalWords || 1)) * 100)}%` }}
-                                    />
-                                </div>
-                                <p className="text-[10px] opacity-40 mt-1 font-mono">
-                                    {book.progress.wordIndex.toLocaleString()} / {(book.analysis.realEndIndex || book.meta.totalWords || '?').toLocaleString()} words
-                                </p>
-                            </div>
+            <div className="w-px h-4 bg-zinc-300 dark:bg-zinc-600 self-center mx-1" />
 
-                            <div className="flex justify-between items-center mt-4">
-                                <p className="text-xs opacity-60">
-                                    Last read: {new Date(book.progress.lastReadAt).toLocaleDateString()}
-                                </p>
-                                {isGhost && (
-                                    <span className="text-[10px] font-bold uppercase tracking-wider text-blue-500/80 bg-blue-500/10 px-1.5 py-0.5 rounded">
-                                        Cloud
-                                    </span>
-                                )}
-                            </div>
-                        </div>
-                    );
-                })}
-                
-                {/* Upload Card */}
-                <div 
-                  className={`border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-colors min-h-[200px] ${theme === 'bedtime' ? 'border-zinc-800 hover:bg-zinc-900' : 'border-zinc-300 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800/30'}`}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                    <Upload size={32} className="opacity-50 mb-4" />
-                    <span className="font-medium">Add a new book</span>
-                    <input 
-                        type="file" 
-                        ref={fileInputRef} 
-                        onChange={onFileUpload} 
-                        accept=".epub,.pdf"
-                        style={{ display: 'none' }} 
-                        onClick={onFileInputClick}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="p-1.5 hover:bg-white dark:hover:bg-zinc-700 rounded-lg transition-all opacity-70 hover:opacity-100"
+              title="Add Book"
+            >
+              <Upload size={18} />
+            </button>
+          </div>
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={onFileUpload}
+            accept=".epub,.pdf"
+            className="hidden"
+            onClick={onFileInputClick}
+          />
+        </div>
+
+        {filteredBooks.length === 0 && !isLoading && (
+          <div className="text-center opacity-70 my-20 flex flex-col items-center gap-4">
+            <p className="text-lg">
+              {searchQuery ? 'No books match your search.' : activeTab === 'archived' ? 'No archived books.' : 'Your library is empty.'}
+            </p>
+            {library.length === 0 && onLoadDemoBook && activeTab === 'active' && (
+              <button
+                onClick={onLoadDemoBook}
+                className="text-base font-medium px-6 py-3 rounded-xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:opacity-90 transition-opacity flex items-center gap-3 shadow-md mt-4"
+              >
+                <DownloadCloud size={20} />
+                Try "Frankenstein" Demo
+              </button>
+            )}
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-12">
+          {filteredBooks.map(book => {
+            const isGhost = !book.storage.localFile;
+            const progress = Math.min(100, Math.round((book.progress.wordIndex / (book.analysis.realEndIndex || book.meta.totalWords || 1)) * 100));
+
+            return (
+              <div
+                key={book.id}
+                onClick={() => onSelectBook(book.id)}
+                className={`group border rounded-xl p-4 hover:shadow-md transition-all cursor-pointer relative ${cardBgClass} flex flex-col gap-3`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="relative flex-shrink-0">
+                    <BookOpen size={20} className={`transition-opacity ${isGhost ? 'opacity-20' : 'opacity-60 group-hover:opacity-100'}`} />
+                    {isGhost && (
+                      <DownloadCloud size={12} className="absolute -bottom-1 -right-1 text-blue-500" />
+                    )}
+                  </div>
+                  <h3 className="font-semibold text-sm line-clamp-1 flex-1">{book.meta.title}</h3>
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onToggleArchive(book.id, !book.archived); }}
+                      className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg transition-all"
+                      title={book.archived ? "Unarchive" : "Archive"}
+                    >
+                      {book.archived ? <Inbox size={16} /> : <Archive size={16} />}
+                    </button>
+                    <button
+                      onClick={(e) => onDeleteBook(e, book.id)}
+                      className="p-1.5 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 rounded-lg transition-all"
+                      title="Delete book"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex justify-between items-end mb-1.5">
+                    <p className="text-[10px] font-medium opacity-40 uppercase tracking-wider flex items-center gap-1">
+                      <Clock size={10} />
+                      {new Date(book.progress.lastReadAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                    </p>
+                    <p className="text-[10px] font-mono font-bold opacity-60">
+                      {progress}%
+                    </p>
+                  </div>
+                  <div className={`w-full h-1 rounded-full overflow-hidden ${theme === 'bedtime' ? 'bg-zinc-800' : 'bg-zinc-200 dark:bg-zinc-700'}`}>
+                    <div
+                      className={`h-full transition-all duration-500 ${theme === 'bedtime' ? 'bg-amber-700' : 'bg-blue-500'}`}
+                      style={{ width: `${progress}%` }}
                     />
-                                </div>
-                            </div>
-                
-                            <footer className="mt-auto py-12 text-center border-t border-zinc-100 dark:border-zinc-800 w-full">
-                                <a 
-                                    href="https://github.com/achatham/epub_speedread" 
-                                    target="_blank" 
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-2 opacity-40 hover:opacity-100 transition-opacity text-sm font-medium"
-                                >
-                                    <Github size={18} />
-                                    View on GitHub
-                                </a>
-                            </footer>
-                        </div>
-                     );
-                }
-                
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <footer className="mt-auto py-12 text-center border-t border-zinc-100 dark:border-zinc-800 w-full">
+          <a
+            href="https://github.com/achatham/epub_speedread"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 opacity-40 hover:opacity-100 transition-opacity text-sm font-medium"
+          >
+            <Github size={18} />
+            View on GitHub
+          </a>
+        </footer>
+      </div>
+    </div>
+  );
+}
