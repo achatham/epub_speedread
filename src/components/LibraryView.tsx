@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import type { RefObject } from 'react';
-import { BookOpen, Moon, Settings, Sun, Sunset, Trash2, Upload, DownloadCloud, BarChart2, Info, Github, Search, Archive, Plus, Inbox, X, ChevronRight, Clock } from 'lucide-react';
+import { BookOpen, Moon, Settings, Sun, Sunset, Trash2, Upload, DownloadCloud, BarChart2, Info, Github, Search, Archive, Inbox, X, Clock } from 'lucide-react';
 import type { BookRecord } from '../utils/storage';
 
 type Theme = 'light' | 'dark' | 'bedtime';
@@ -107,7 +107,7 @@ export function LibraryView({
             )}
           </div>
 
-          <div className="flex bg-zinc-100 dark:bg-zinc-800 p-1 rounded-xl self-start sm:self-auto">
+          <div className="flex bg-zinc-100 dark:bg-zinc-800 p-1 rounded-xl self-start sm:self-auto gap-1">
             <button
               onClick={() => setActiveTab('active')}
               className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${activeTab === 'active' ? 'bg-white dark:bg-zinc-700 shadow-sm' : 'opacity-50'}`}
@@ -122,15 +122,17 @@ export function LibraryView({
               <Archive size={16} />
               Archived
             </button>
-          </div>
 
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 px-5 py-2.5 rounded-xl flex items-center gap-2 hover:opacity-90 transition-opacity font-medium shadow-sm"
-          >
-            <Plus size={20} />
-            Add Book
-          </button>
+            <div className="w-px h-4 bg-zinc-300 dark:bg-zinc-600 self-center mx-1" />
+
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="p-1.5 hover:bg-white dark:hover:bg-zinc-700 rounded-lg transition-all opacity-70 hover:opacity-100"
+              title="Add Book"
+            >
+              <Upload size={18} />
+            </button>
+          </div>
           <input
             type="file"
             ref={fileInputRef}

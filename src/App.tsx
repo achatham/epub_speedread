@@ -211,6 +211,17 @@ function App() {
     (window as any).__setMockSettings = (settings: any) => {
       mockSettings = { ...mockSettings, ...settings };
     };
+
+    (window as any).__setLibrary = (mockBooks: BookRecord[]) => {
+      isMockModeRef.current = true;
+      const provider = { ...MOCK_STORAGE } as any;
+      provider.getAllBooks = async () => mockBooks;
+      setUser(MOCK_USER as any);
+      setStorageProvider(provider);
+      setLibrary(mockBooks);
+      setIsLoading(false);
+      setCurrentBookId(null);
+    };
   }, []);
 
   const timerRef = useRef<number | null>(null);
