@@ -42,6 +42,7 @@ const MOCK_STORAGE = {
   updateBookRealEndIndex: async () => {},
   updateBookRealEndQuote: async () => {},
   updateBookTotalWords: async () => {},
+  updateBookArchived: async () => {},
   aggregateSessions: async () => {},
   getChapterAudio: async () => null,
   saveChapterAudio: async () => {},
@@ -53,6 +54,7 @@ function App() {
   const [library, setLibrary] = useState<BookRecord[]>([]);
   const [currentBookId, setCurrentBookId] = useState<string | null>(null);
   const currentBookIdRef = useRef<string | null>(null);
+  const hasAutoOpenedRef = useRef(false);
 
   useEffect(() => {
     currentBookIdRef.current = currentBookId;
@@ -308,6 +310,14 @@ function App() {
         
         setLibrary(books);
         setSessions(history);
+
+        // Auto-open most recent book if any, but only once per app session
+        if (books.length > 0 && !currentBookId && !hasAutoOpenedRef.current) {
+          const mostRecent = books[0];
+          // Only auto-open if it wasn't finished (or just open it anyway as requested)
+          hasAutoOpenedRef.current = true;
+          handleSelectBook(mostRecent.id);
+        }
       } catch (err) {
         console.error('Failed to load storage data', err);
       } finally {
@@ -408,6 +418,12 @@ function App() {
       await storageProvider.deleteBook(id);
       setLibrary(await storageProvider.getAllBooks());
     }
+  };
+
+  const handleToggleArchive = async (id: string, archived: boolean) => {
+    if (!storageProvider) return;
+    await storageProvider.updateBookArchived(id, archived);
+    setLibrary(await storageProvider.getAllBooks());
   };
 
   const handleSelectBook = async (id: string) => {
@@ -766,6 +782,7 @@ function App() {
           onToggleTheme={toggleTheme}
           onSelectBook={handleSelectBook}
           onDeleteBook={handleDeleteBook}
+          onToggleArchive={handleToggleArchive}
           onFileUpload={handleFileUpload}
           fileInputRef={fileInputRef}
           onFileInputClick={onFileInputClick}

@@ -29,6 +29,7 @@ export interface UserSettings {
 
 export interface BookRecord {
   id: string;
+  archived?: boolean;
   meta: {
     title: string;
     addedAt: number;
@@ -326,6 +327,10 @@ export class FirestoreStorage {
 
   async updateBookTotalWords(id: string, totalWords: number): Promise<void> {
     await updateDoc(doc(this.booksCollection, id), { 'meta.totalWords': totalWords });
+  }
+
+  async updateBookArchived(id: string, archived: boolean): Promise<void> {
+    await updateDoc(doc(this.booksCollection, id), { archived });
   }
 
   async logReadingSession(sessionData: Omit<ReadingSession, 'id'>): Promise<void> {
