@@ -12,6 +12,7 @@ export interface RsvpSettings {
   chapterBreakDelay: number;
   orientationDelay: number;
   vanityWpmRatio: number;
+  wpmRampDuration: number;
 }
 
 export interface UserSettings {
@@ -29,18 +30,24 @@ export interface UserSettings {
 
 export interface BookRecord {
   id: string;
+  archived?: boolean;
   meta: {
     title: string;
     addedAt: number;
     totalWords?: number;
+    extension?: string;
   };
   progress: {
     wordIndex: number;
     lastReadAt: number;
     furthestWordIndex?: number;
+    cumulativeWordsRead?: number;
+    cumulativeExpectedWords?: number;
+    cumulativeDurationSeconds?: number;
   };
   settings: {
     wpm: number;
+    vanityWpmRatio?: number;
   };
   analysis: {
     realEndQuote?: string;
@@ -171,19 +178,23 @@ export class FirestoreStorage {
   async addBook(file: File, title: string): Promise<string> {
     const id = crypto.randomUUID();
     const now = Date.now();
+    const extension = file.name.split('.').pop()?.toLowerCase() || 'epub';
 
     // 1. Upload to Firebase Storage
     if (firebaseStorage) {
-        const storageRef = ref(firebaseStorage, `users/${this.userId}/books/${id}.epub`);
+        const storageRef = ref(firebaseStorage, `users/${this.userId}/books/${id}.${extension}`);
         await uploadBytes(storageRef, file);
         const cloudUrl = await getDownloadURL(storageRef);
 
         // 2. Create Firestore Metadata
         const bookMeta: BookRecord = {
             id,
-            meta: { title, addedAt: now },
+            meta: { title, addedAt: now, extension },
             progress: { wordIndex: 0, lastReadAt: now },
-            settings: { wpm: 300 },
+            settings: {
+              wpm: 300 * (typeof window !== 'undefined' ? (JSON.parse(localStorage.getItem('user_settings') || '{}').rsvp?.vanityWpmRatio || 1.25) : 1.25),
+              vanityWpmRatio: typeof window !== 'undefined' ? (JSON.parse(localStorage.getItem('user_settings') || '{}').rsvp?.vanityWpmRatio || 1.25) : 1.25
+            },
             analysis: {},
             storage: { cloudUrl }
         };
@@ -259,7 +270,9 @@ export class FirestoreStorage {
           console.log(`[Storage] Downloading ${book.meta.title} from cloud...`);
           const response = await fetch(book.storage.cloudUrl);
           const blob = await response.blob();
-          file = new File([blob], `${book.meta.title}.epub`, { type: 'application/epub+zip' });
+          const extension = book.meta.extension || 'epub';
+          const mimeType = extension === 'pdf' ? 'application/pdf' : 'application/epub+zip';
+          file = new File([blob], `${book.meta.title}.${extension}`, { type: mimeType });
           await this.fileCache.saveFile(id, file);
       }
       book.storage.localFile = file;
@@ -272,10 +285,13 @@ export class FirestoreStorage {
 
   async deleteBook(id: string): Promise<void> {
     try {
+      const snap = await getDoc(doc(this.booksCollection, id));
+      const extension = snap.exists() ? (snap.data() as BookRecord).meta.extension || 'epub' : 'epub';
+
       await deleteDoc(doc(this.booksCollection, id));
       await this.fileCache.deleteFile(id);
       if (firebaseStorage) {
-          await deleteObject(ref(firebaseStorage, `users/${this.userId}/books/${id}.epub`));
+          await deleteObject(ref(firebaseStorage, `users/${this.userId}/books/${id}.${extension}`));
       }
     } catch (e) {
       console.error("Delete failed", e);
@@ -309,6 +325,19 @@ export class FirestoreStorage {
     await updateDoc(doc(this.booksCollection, id), { 'settings.wpm': wpm });
   }
 
+  async updateBookStats(id: string, stats: Partial<BookRecord['progress'] & { vanityWpmRatio?: number; wpm?: number }>): Promise<void> {
+    const updates: any = {};
+    if (stats.cumulativeWordsRead !== undefined) updates['progress.cumulativeWordsRead'] = stats.cumulativeWordsRead;
+    if (stats.cumulativeExpectedWords !== undefined) updates['progress.cumulativeExpectedWords'] = stats.cumulativeExpectedWords;
+    if (stats.cumulativeDurationSeconds !== undefined) updates['progress.cumulativeDurationSeconds'] = stats.cumulativeDurationSeconds;
+    if (stats.vanityWpmRatio !== undefined) updates['settings.vanityWpmRatio'] = stats.vanityWpmRatio;
+    if (stats.wpm !== undefined) updates['settings.wpm'] = stats.wpm;
+
+    if (Object.keys(updates).length > 0) {
+      await updateDoc(doc(this.booksCollection, id), updates);
+    }
+  }
+
   async updateBookRealEndQuote(id: string, quote: string): Promise<void> {
     await updateDoc(doc(this.booksCollection, id), { 'analysis.realEndQuote': quote });
   }
@@ -319,6 +348,10 @@ export class FirestoreStorage {
 
   async updateBookTotalWords(id: string, totalWords: number): Promise<void> {
     await updateDoc(doc(this.booksCollection, id), { 'meta.totalWords': totalWords });
+  }
+
+  async updateBookArchived(id: string, archived: boolean): Promise<void> {
+    await updateDoc(doc(this.booksCollection, id), { archived });
   }
 
   async logReadingSession(sessionData: Omit<ReadingSession, 'id'>): Promise<void> {

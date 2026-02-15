@@ -9,10 +9,10 @@ import { auth, storage } from './utils/firebase';
 import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, getRedirectResult, signOut, type User } from 'firebase/auth';
 import { ref, getBytes } from 'firebase/storage';
 import { type WordData, calculateRsvpInterval } from './utils/text-processing';
-import { calculateNavigationTarget, findSentenceStart, type NavigationType } from './utils/navigation';
+import { calculateNavigationTarget, findRewindTarget, type NavigationType } from './utils/navigation';
 import { getGeminiApiKey, setGeminiApiKey as saveGeminiApiKey, askAboutBook, summarizeRecent, summarizeWhatJustHappened } from './utils/gemini';
 
-import { processEbook, analyzeRealEndOfBook } from './utils/ebook';
+import { processBook, analyzeRealEndOfBook } from './utils/ebook';
 import { AudioBookPlayer } from './utils/AudioBookPlayer';
 import { LibraryView } from './components/LibraryView';
 import { ReaderView } from './components/ReaderView';
@@ -42,6 +42,7 @@ const MOCK_STORAGE = {
   updateBookRealEndIndex: async () => {},
   updateBookRealEndQuote: async () => {},
   updateBookTotalWords: async () => {},
+  updateBookArchived: async () => {},
   aggregateSessions: async () => {},
   getChapterAudio: async () => null,
   saveChapterAudio: async () => {},
@@ -53,6 +54,7 @@ function App() {
   const [library, setLibrary] = useState<BookRecord[]>([]);
   const [currentBookId, setCurrentBookId] = useState<string | null>(null);
   const currentBookIdRef = useRef<string | null>(null);
+  const hasAutoOpenedRef = useRef(false);
 
   useEffect(() => {
     currentBookIdRef.current = currentBookId;
@@ -102,6 +104,7 @@ function App() {
   const [isReadingAloud, setIsReadingAloud] = useState(false);
   const [isSynthesizing, setIsSynthesizing] = useState(false);
   const [isChapterBreak, setIsChapterBreak] = useState(false);
+  const [playbackStartTime, setPlaybackStartTime] = useState<number | null>(null);
 
   const [isTocOpen, setIsTocOpen] = useState(false);
   const [isNavOpen, setIsNavOpen] = useState(false);
@@ -209,6 +212,17 @@ function App() {
     (window as any).__setMockSettings = (settings: any) => {
       mockSettings = { ...mockSettings, ...settings };
     };
+
+    (window as any).__setLibrary = (mockBooks: BookRecord[]) => {
+      isMockModeRef.current = true;
+      const provider = { ...MOCK_STORAGE } as any;
+      provider.getAllBooks = async () => mockBooks;
+      setUser(MOCK_USER as any);
+      setStorageProvider(provider);
+      setLibrary(mockBooks);
+      setIsLoading(false);
+      setCurrentBookId(null);
+    };
   }, []);
 
   const timerRef = useRef<number | null>(null);
@@ -308,6 +322,14 @@ function App() {
         
         setLibrary(books);
         setSessions(history);
+
+        // Auto-open most recent book if any, but only once per app session
+        if (books.length > 0 && !currentBookId && !hasAutoOpenedRef.current) {
+          const mostRecent = books[0];
+          // Only auto-open if it wasn't finished (or just open it anyway as requested)
+          hasAutoOpenedRef.current = true;
+          handleSelectBook(mostRecent.id);
+        }
       } catch (err) {
         console.error('Failed to load storage data', err);
       } finally {
@@ -375,7 +397,8 @@ function App() {
     if (!file) return;
     setIsLoading(true);
     try {
-      const id = await storageProvider.addBook(file, file.name.replace(/\.epub$/i, ''));
+      const title = file.name.replace(/\.(epub|pdf)$/i, '');
+      const id = await storageProvider.addBook(file, title);
       setLibrary(await storageProvider.getAllBooks());
       handleSelectBook(id);
     } catch (e) { console.error(e); } finally { setIsLoading(false); }
@@ -407,6 +430,12 @@ function App() {
       await storageProvider.deleteBook(id);
       setLibrary(await storageProvider.getAllBooks());
     }
+  };
+
+  const handleToggleArchive = async (id: string, archived: boolean) => {
+    if (!storageProvider) return;
+    await storageProvider.updateBookArchived(id, archived);
+    setLibrary(await storageProvider.getAllBooks());
   };
 
   const handleSelectBook = async (id: string) => {
@@ -443,10 +472,10 @@ function App() {
     }
   };
 
-  const processBook = useCallback(async (bookRecord: BookRecord) => {
+  const handleProcessBook = useCallback(async (bookRecord: BookRecord) => {
     if (!storageProvider) return;
     try {
-      const result = await processEbook(bookRecord, storageProvider);
+      const result = await processBook(bookRecord, storageProvider);
       
       setBookTitle(result.title);
       setWords(result.words);
@@ -490,13 +519,13 @@ function App() {
     if (currentBookId && currentBookId !== 'mock' && storageProvider) {
       setIsLoading(true);
       const record = library.find(b => b.id === currentBookId);
-      if (record) processBook(record).then(() => setIsLoading(false));
+      if (record) handleProcessBook(record).then(() => setIsLoading(false));
       else storageProvider.getBook(currentBookId).then(f => {
-        if (f) processBook(f).then(() => setIsLoading(false));
+        if (f) handleProcessBook(f).then(() => setIsLoading(false));
         else { setCurrentBookId(null); setIsLoading(false); }
       });
     }
-  }, [currentBookId, processBook, library, storageProvider]);
+  }, [currentBookId, handleProcessBook, library, storageProvider]);
 
   useEffect(() => {
     if (!isPlaying && currentBookId && storageProvider) storageProvider.updateBookProgress(currentBookId, currentIndex);
@@ -507,10 +536,11 @@ function App() {
 
   const handleSetIsPlaying = useCallback((playing: boolean) => {
     if (playing && !isPlaying) {
+      setPlaybackStartTime(Date.now());
       if (isChapterBreak) {
         setIsChapterBreak(false);
       } else {
-        setCurrentIndex(findSentenceStart(currentIndex, words));
+        setCurrentIndex(findRewindTarget(currentIndex, words, sections));
       }
       if (isReadingAloud) {
         audioPlayerRef.current?.stop();
@@ -536,13 +566,14 @@ function App() {
         }
       }
     } else if (!playing && isPlaying) {
+      setPlaybackStartTime(null);
       if (wakeLockRef.current) {
         wakeLockRef.current.release();
         wakeLockRef.current = null;
       }
     }
     setIsPlaying(playing);
-  }, [isPlaying, currentIndex, words, isReadingAloud, autoLandscape, isChapterBreak]);
+  }, [isPlaying, currentIndex, words, isReadingAloud, autoLandscape, isChapterBreak, sections]);
 
   useEffect(() => {
     if (isPlaying) {
@@ -579,6 +610,47 @@ function App() {
             // Trigger aggregation to ensure stats are up to date
             await storageProvider.aggregateSessions();
             setSessions(await storageProvider.getAggregatedSessions());
+
+            // Update book statistics and vanity ratio
+            const bookRecord = library.find(b => b.id === currentBookId);
+            if (bookRecord) {
+              const expectedWordsThisSession = wpm * (durationMs / 60000);
+              const cumulativeWords = (bookRecord.progress.cumulativeWordsRead || 0) + wordsRead;
+              const cumulativeExpected = (bookRecord.progress.cumulativeExpectedWords || 0) + expectedWordsThisSession;
+              const cumulativeDuration = (bookRecord.progress.cumulativeDurationSeconds || 0) + Math.round(durationMs / 1000);
+
+              const newVanityRatio = cumulativeWords > 0 ? cumulativeExpected / cumulativeWords : (bookRecord.settings.vanityWpmRatio || rsvpSettings.vanityWpmRatio);
+              const oldVanityRatio = bookRecord.settings.vanityWpmRatio || rsvpSettings.vanityWpmRatio;
+
+              // Maintain same targetWpm
+              const targetWpm = wpm / oldVanityRatio;
+              const newBoostedWpm = targetWpm * newVanityRatio;
+
+              await storageProvider.updateBookStats(currentBookId, {
+                cumulativeWordsRead: cumulativeWords,
+                cumulativeExpectedWords: cumulativeExpected,
+                cumulativeDurationSeconds: cumulativeDuration,
+                vanityWpmRatio: newVanityRatio,
+                wpm: newBoostedWpm
+              });
+
+              // Update local state
+              setLibrary(prev => prev.map(b => b.id === currentBookId ? {
+                ...b,
+                progress: {
+                  ...b.progress,
+                  cumulativeWordsRead: cumulativeWords,
+                  cumulativeExpectedWords: cumulativeExpected,
+                  cumulativeDurationSeconds: cumulativeDuration
+                },
+                settings: {
+                  ...b.settings,
+                  vanityWpmRatio: newVanityRatio,
+                  wpm: newBoostedWpm
+                }
+              } : b));
+              setWpm(newBoostedWpm);
+            }
         }).catch(e => console.error("Failed to log session", e));
       } else {
         console.log("Session too short to log (< 10s)");
@@ -623,7 +695,18 @@ function App() {
         interval = rsvpSettings.chapterBreakDelay; callback = () => setIsChapterBreak(false);
       } else {
         const currentWord = words[currentIndex].text || '';
-        interval = calculateRsvpInterval(currentWord, wpm, rsvpSettings);
+
+        let effectiveWpm = wpm;
+        if (playbackStartTime && rsvpSettings.wpmRampDuration > 0) {
+          const elapsed = Date.now() - playbackStartTime;
+          if (elapsed < rsvpSettings.wpmRampDuration) {
+            const progress = elapsed / rsvpSettings.wpmRampDuration;
+            // Ramp from 0.5 to 1.0
+            effectiveWpm = wpm * (0.5 + 0.5 * progress);
+          }
+        }
+
+        interval = calculateRsvpInterval(currentWord, effectiveWpm, rsvpSettings);
 
         if (sections.some(s => s.startIndex === currentIndex + 1)) callback = () => { setCurrentIndex(prev => prev + 1); setIsChapterBreak(true); };
         else callback = nextWord;
@@ -631,7 +714,7 @@ function App() {
       timerRef.current = window.setTimeout(callback, interval);
     }
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [isPlaying, wpm, words, currentIndex, nextWord, sections, isChapterBreak, rotationTrigger, lastRotationTime, rsvpSettings]);
+  }, [isPlaying, wpm, words, currentIndex, nextWord, sections, isChapterBreak, rotationTrigger, lastRotationTime, rsvpSettings, playbackStartTime]);
 
   if (isLoading && !user) {
     return (
@@ -765,6 +848,7 @@ function App() {
           onToggleTheme={toggleTheme}
           onSelectBook={handleSelectBook}
           onDeleteBook={handleDeleteBook}
+          onToggleArchive={handleToggleArchive}
           onFileUpload={handleFileUpload}
           fileInputRef={fileInputRef}
           onFileInputClick={onFileInputClick}
@@ -779,13 +863,14 @@ function App() {
           furthestIndex={furthestIndex}
           isPlaying={isPlaying}
           setIsPlaying={handleSetIsPlaying}
-          wpm={Math.round(wpm / rsvpSettings.vanityWpmRatio)}
+          wpm={Math.round(wpm / (library.find(b => b.id === currentBookId)?.settings.vanityWpmRatio || rsvpSettings.vanityWpmRatio))}
           onWpmChange={(targetWpm) => { 
-              const boosted = targetWpm * rsvpSettings.vanityWpmRatio;
+              const currentRatio = library.find(b => b.id === currentBookId)?.settings.vanityWpmRatio || rsvpSettings.vanityWpmRatio;
+              const boosted = targetWpm * currentRatio;
               setWpm(boosted); 
               storageProvider.updateBookWpm(currentBookId!, boosted); 
           }}
-          vanityWpmRatio={rsvpSettings.vanityWpmRatio}
+          vanityWpmRatio={library.find(b => b.id === currentBookId)?.settings.vanityWpmRatio || rsvpSettings.vanityWpmRatio}
           theme={theme} fontFamily={fontFamily} bookTitle={bookTitle}
           onCloseBook={handleCloseBook} onSettingsClick={() => setIsSettingsOpen(true)}
           onToggleTheme={toggleTheme} onAskAiClick={() => { setAiResponse(''); setIsAskAiOpen(true); }}

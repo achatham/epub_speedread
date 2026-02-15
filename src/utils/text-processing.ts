@@ -20,9 +20,9 @@ export function calculateRsvpInterval(
 ): number {
   let multiplier = 1;
   
-  if (word.endsWith('.') || word.endsWith('!') || word.endsWith('?')) {
+  if (/[.!?]['")\]]*$/.test(word)) {
     multiplier = settings.periodMultiplier;
-  } else if (word.endsWith(',') || word.endsWith(';') || word.endsWith(':')) {
+  } else if (/[,;:]['")\]]*$/.test(word)) {
     multiplier = settings.commaMultiplier;
   }
 
@@ -138,6 +138,46 @@ export function extractWordsFromDoc(doc: Document): WordData[] {
   }
 
   return words;
+}
+
+export function extractWordsFromText(text: string): WordData[] {
+  const paragraphs = text.split(/\n\s*\n/);
+  const allWords: WordData[] = [];
+
+  paragraphs.forEach((para) => {
+    const processedPara = para
+      .replace(/—/g, ' — ')
+      .replace(/–/g, ' – ')
+      .replace(/(\w)-(\w)/g, '$1- $2');
+
+    const rawWords = processedPara
+      .replace(/\s+/g, ' ')
+      .split(' ')
+      .filter(w => w.length > 0);
+
+    rawWords.forEach((w, wordIndex) => {
+      allWords.push({
+        text: w,
+        isParagraphStart: wordIndex === 0,
+        isSentenceStart: false // Post-process
+      });
+    });
+  });
+
+  // Post-process for Sentence Starts
+  for (let i = 0; i < allWords.length; i++) {
+    if (i === 0 || allWords[i].isParagraphStart) {
+      allWords[i].isSentenceStart = true;
+      continue;
+    }
+
+    const prevWord = allWords[i - 1].text;
+    if (/[.!?]['")\]]*$/.test(prevWord)) {
+        allWords[i].isSentenceStart = true;
+    }
+  }
+
+  return allWords;
 }
 
 export interface TextChunk {

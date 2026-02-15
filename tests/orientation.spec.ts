@@ -29,7 +29,7 @@ test.describe('Mobile Orientation Layout', () => {
     await page.getByText('Close Book').click();
 
     // Verify we are in Library View
-    await expect(page.getByText('Your Library')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Library' })).toBeVisible();
 
     await page.screenshot({ path: 'tests/screenshots/library-portrait.png' });
   });
@@ -48,7 +48,7 @@ test.describe('Mobile Orientation Layout', () => {
 
     await page.getByText('Close Book').click();
 
-    await expect(page.getByText('Your Library')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Library' })).toBeVisible();
 
     await page.screenshot({ path: 'tests/screenshots/library-landscape.png' });
   });

@@ -1,5 +1,5 @@
 import ePub from 'epubjs';
-import { extractWordsFromDoc, type WordData } from './text-processing';
+import { extractWordsFromDoc, extractWordsFromText, type WordData } from './text-processing';
 import { getGeminiApiKey, findRealEndOfBook } from './gemini';
 import { type BookRecord, type FirestoreStorage } from './storage';
 
@@ -54,7 +54,75 @@ export async function analyzeRealEndOfBook(
   return null;
 }
 
-export async function processEbook(
+export async function processBook(
+  bookRecord: BookRecord,
+  storageProvider: FirestoreStorage
+): Promise<ProcessedBook> {
+  const extension = bookRecord.meta.extension || 'epub';
+  if (extension === 'pdf') {
+    return processPdf(bookRecord, storageProvider);
+  }
+  return processEpub(bookRecord, storageProvider);
+}
+
+export async function processPdf(
+  bookRecord: BookRecord,
+  storageProvider: FirestoreStorage
+): Promise<ProcessedBook> {
+  const pdfjs = await import('pdfjs-dist');
+  // Setup PDF.js worker
+  pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+    'pdfjs-dist/build/pdf.worker.min.mjs',
+    import.meta.url
+  ).toString();
+
+  let file = bookRecord.storage.localFile;
+  if (!file) {
+    const fullBook = await storageProvider.getBook(bookRecord.id);
+    if (!fullBook?.storage.localFile) throw new Error("File missing");
+    file = fullBook.storage.localFile;
+  }
+
+  const arrayBuffer = await file.arrayBuffer();
+  const loadingTask = pdfjs.getDocument({ data: arrayBuffer });
+  const pdf = await loadingTask.promise;
+
+  const bookTitle = bookRecord.meta.title;
+  let allWords: WordData[] = [];
+  const loadedSections: { label: string; startIndex: number }[] = [];
+
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const textContent = await page.getTextContent();
+    const pageText = textContent.items
+      .map((item: any) => item.str)
+      .join(' ');
+
+    const pageWords = extractWordsFromText(pageText);
+    if (pageWords.length > 0) {
+      loadedSections.push({ label: `Page ${i}`, startIndex: allWords.length });
+      allWords = [...allWords, ...pageWords];
+    }
+  }
+
+  const result: ProcessedBook = {
+    title: bookTitle,
+    words: allWords,
+    sections: loadedSections,
+    wordIndex: bookRecord.progress.wordIndex || 0,
+    wpm: bookRecord.settings.wpm || 300,
+    realEndIndex: bookRecord.analysis.realEndIndex || null
+  };
+
+  // Handle Total Words
+  if (bookRecord.meta.totalWords === undefined) {
+    await storageProvider.updateBookTotalWords(bookRecord.id, allWords.length);
+  }
+
+  return result;
+}
+
+export async function processEpub(
   bookRecord: BookRecord,
   storageProvider: FirestoreStorage
 ): Promise<ProcessedBook> {
