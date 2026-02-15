@@ -9,7 +9,7 @@ import { auth, storage } from './utils/firebase';
 import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, getRedirectResult, signOut, type User } from 'firebase/auth';
 import { ref, getBytes } from 'firebase/storage';
 import { type WordData, calculateRsvpInterval } from './utils/text-processing';
-import { calculateNavigationTarget, findSentenceStart, findRewindTarget, type NavigationType } from './utils/navigation';
+import { calculateNavigationTarget, findRewindTarget, type NavigationType } from './utils/navigation';
 import { getGeminiApiKey, setGeminiApiKey as saveGeminiApiKey, askAboutBook, summarizeRecent, summarizeWhatJustHappened } from './utils/gemini';
 
 import { processBook, analyzeRealEndOfBook } from './utils/ebook';
