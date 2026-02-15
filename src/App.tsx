@@ -9,7 +9,8 @@ import { auth, storage } from './utils/firebase';
 import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, getRedirectResult, signOut, type User } from 'firebase/auth';
 import { ref, getBytes } from 'firebase/storage';
 import { type WordData, calculateRsvpInterval } from './utils/text-processing';
-import { calculateNavigationTarget, findRewindTarget, type NavigationType } from './utils/navigation';
+import { calculateNavigationTarget, type NavigationType } from './utils/navigation';
+import { getResumeIndex } from './utils/playback';
 import { getGeminiApiKey, setGeminiApiKey as saveGeminiApiKey, askAboutBook, summarizeRecent, summarizeWhatJustHappened } from './utils/gemini';
 
 import { processBook, analyzeRealEndOfBook } from './utils/ebook';
@@ -55,6 +56,7 @@ function App() {
   const [library, setLibrary] = useState<BookRecord[]>([]);
   const [currentBookId, setCurrentBookId] = useState<string | null>(null);
   const currentBookIdRef = useRef<string | null>(null);
+  const lastLoadedBookIdRef = useRef<string | null>(null);
   const hasAutoOpenedRef = useRef(false);
 
   useEffect(() => {
@@ -498,7 +500,8 @@ function App() {
       setLibrary(await storageProvider.getAllBooks());
     }
     setWords([]); setSections([]); setCurrentIndex(0); setBookTitle('');
-    setCurrentBookId(null); setRealEndIndex(null); setFurthestIndex(null);
+    setCurrentBookId(null); lastLoadedBookIdRef.current = null;
+    setRealEndIndex(null); setFurthestIndex(null);
 
     if (document.fullscreenElement) {
       document.exitFullscreen().catch(() => { });
@@ -513,6 +516,7 @@ function App() {
     try {
       const result = await processBook(bookRecord, storageProvider);
       
+      lastLoadedBookIdRef.current = bookRecord.id;
       setBookTitle(result.title);
       setWords(result.words);
       setSections(result.sections);
@@ -553,6 +557,10 @@ function App() {
 
   useEffect(() => {
     if (currentBookId && currentBookId !== 'mock' && storageProvider) {
+      if (currentBookId === lastLoadedBookIdRef.current) {
+        // Book already loaded, don't re-process to avoid resetting currentIndex
+        return;
+      }
       setIsLoading(true);
       const record = library.find(b => b.id === currentBookId);
       if (record) handleProcessBook(record).then(() => setIsLoading(false));
@@ -573,11 +581,13 @@ function App() {
   const handleSetIsPlaying = useCallback((playing: boolean) => {
     if (playing && !isPlaying) {
       setPlaybackStartTime(Date.now());
+
+      const nextIndex = getResumeIndex(currentIndex, words, sections, isChapterBreak);
       if (isChapterBreak) {
         setIsChapterBreak(false);
-      } else {
-        setCurrentIndex(findRewindTarget(currentIndex, words, sections));
       }
+      setCurrentIndex(nextIndex);
+
       if (isReadingAloud) {
         audioPlayerRef.current?.stop();
         setIsReadingAloud(false);
@@ -619,7 +629,14 @@ function App() {
         sessionStartIndexRef.current = currentIndex;
       }
     } else if (sessionStartTimeRef.current !== null && currentBookId && storageProvider) {
-      const durationMs = Date.now() - sessionStartTimeRef.current;
+      const savedBookId = currentBookId;
+      const savedIndex = currentIndex;
+      const savedWpm = wpm;
+      const savedStartTime = sessionStartTimeRef.current;
+      const savedStartIndex = sessionStartIndexRef.current || 0;
+      const savedBookTitle = bookTitle;
+
+      const durationMs = Date.now() - savedStartTime;
       const durationMins = durationMs / 60000;
       const wordsRead = wordsReadInSessionRef.current;
       const avgWpm = durationMins > 0 ? Math.round(wordsRead / durationMins) : 0;
@@ -627,18 +644,18 @@ function App() {
       console.log(`Session Summary:
 - Duration: ${(durationMs / 1000).toFixed(1)}s
 - Words Read: ${wordsRead}
-- Set WPM: ${wpm}
+- Set WPM: ${savedWpm}
 - Effective Avg WPM: ${avgWpm}`);
 
       // Log Session to Storage (only if longer than 10 seconds)
       if (durationMs >= 10000) {
         storageProvider.logReadingSession({
-          bookId: currentBookId,
-          bookTitle: bookTitle,
-          startTime: sessionStartTimeRef.current,
+          bookId: savedBookId,
+          bookTitle: savedBookTitle,
+          startTime: savedStartTime,
           endTime: Date.now(),
-          startWordIndex: sessionStartIndexRef.current || 0,
-          endWordIndex: currentIndex,
+          startWordIndex: savedStartIndex,
+          endWordIndex: savedIndex,
           wordsRead: wordsRead,
           durationSeconds: Math.round(durationMs / 1000),
           type: 'reading'
@@ -648,9 +665,9 @@ function App() {
             setSessions(await storageProvider.getAggregatedSessions());
 
             // Update book statistics and vanity ratio
-            const bookRecord = library.find(b => b.id === currentBookId);
+            const bookRecord = library.find(b => b.id === savedBookId);
             if (bookRecord) {
-              const expectedWordsThisSession = wpm * (durationMs / 60000);
+              const expectedWordsThisSession = savedWpm * (durationMs / 60000);
               const cumulativeWords = (bookRecord.progress.cumulativeWordsRead || 0) + wordsRead;
               const cumulativeExpected = (bookRecord.progress.cumulativeExpectedWords || 0) + expectedWordsThisSession;
               const cumulativeDuration = (bookRecord.progress.cumulativeDurationSeconds || 0) + Math.round(durationMs / 1000);
@@ -659,10 +676,10 @@ function App() {
               const oldVanityRatio = bookRecord.settings.vanityWpmRatio || rsvpSettings.vanityWpmRatio;
 
               // Maintain same targetWpm
-              const targetWpm = wpm / oldVanityRatio;
+              const targetWpm = savedWpm / oldVanityRatio;
               const newBoostedWpm = targetWpm * newVanityRatio;
 
-              await storageProvider.updateBookStats(currentBookId, {
+              await storageProvider.updateBookStats(savedBookId, {
                 cumulativeWordsRead: cumulativeWords,
                 cumulativeExpectedWords: cumulativeExpected,
                 cumulativeDurationSeconds: cumulativeDuration,
@@ -671,10 +688,11 @@ function App() {
               });
 
               // Update local state
-              setLibrary(prev => prev.map(b => b.id === currentBookId ? {
+              setLibrary(prev => prev.map(b => b.id === savedBookId ? {
                 ...b,
                 progress: {
                   ...b.progress,
+                  wordIndex: savedIndex,
                   cumulativeWordsRead: cumulativeWords,
                   cumulativeExpectedWords: cumulativeExpected,
                   cumulativeDurationSeconds: cumulativeDuration
@@ -685,7 +703,10 @@ function App() {
                   wpm: newBoostedWpm
                 }
               } : b));
-              setWpm(newBoostedWpm);
+
+              if (currentBookIdRef.current === savedBookId) {
+                setWpm(newBoostedWpm);
+              }
             }
         }).catch(e => console.error("Failed to log session", e));
       } else {

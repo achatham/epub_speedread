@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { calculateNavigationTarget, findSentenceStart, findRewindTarget } from './navigation';
+import { calculateNavigationTarget, findSentenceStart } from './navigation';
+import { findRewindTarget } from './playback';
 import type { WordData } from './text-processing';
 
 describe('navigation', () => {
