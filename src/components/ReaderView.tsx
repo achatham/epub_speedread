@@ -58,6 +58,7 @@ export function ReaderView({
   onSettingsClick,
   onToggleTheme,
   onAskAiClick,
+  onBookSettingsClick,
   sections,
   setCurrentIndex,
   navigate,
