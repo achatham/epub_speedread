@@ -23,29 +23,24 @@ try {
     app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
     auth = getAuth(app);
 
-    if (getApps().length > 0) {
-      try {
-        db = getFirestore(app);
-      } catch {
-        // If getFirestore fails, it means it wasn't initialized yet
-        db = initializeFirestore(app, {
-          localCache: persistentLocalCache({
-            tabManager: persistentMultipleTabManager()
-          })
-        });
-      }
-    } else {
+    // Try to initialize Firestore with persistence
+    try {
       db = initializeFirestore(app, {
         localCache: persistentLocalCache({
           tabManager: persistentMultipleTabManager()
         })
       });
+      console.log("Firestore initialized with persistent cache");
+    } catch (e: any) {
+      // If already initialized, just get the existing instance
+      console.warn("Firestore already initialized, getting existing instance. Persistence might not be configured if initialized elsewhere.");
+      db = getFirestore(app);
     }
 
     storage = getStorage(app);
   }
-} catch {
-  console.error("Firebase initialization failed");
+} catch (e) {
+  console.error("Firebase initialization failed", e);
 }
 
 export { auth, db, storage, app };

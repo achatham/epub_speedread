@@ -63,7 +63,7 @@ function App() {
     currentBookIdRef.current = currentBookId;
   }, [currentBookId]);
   const [isLoading, setIsLoading] = useState(true);
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null | undefined>(undefined);
   const [storageProvider, setStorageProvider] = useState<FirestoreStorage | null>(null);
 
   const [words, setWords] = useState<WordData[]>([]);
@@ -113,6 +113,14 @@ function App() {
   const [isNavOpen, setIsNavOpen] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
+  const [onboardingCompleted, setOnboardingCompleted] = useState(() => {
+    try {
+      const saved = localStorage.getItem('user_settings');
+      if (saved) return !!JSON.parse(saved).onboardingCompleted;
+    } catch { }
+    return false;
+  });
+
   const [isBookSettingsOpen, setIsBookSettingsOpen] = useState(false);
   const [isRecomputingEnd, setIsRecomputingEnd] = useState(false);
 
@@ -191,10 +199,11 @@ function App() {
       fontFamily,
       syncApiKey,
       geminiApiKey: syncApiKey ? geminiApiKey : undefined,
-      rsvp: rsvpSettings
+      rsvp: rsvpSettings,
+      onboardingCompleted
     };
     localStorage.setItem('user_settings', JSON.stringify(settings));
-  }, [ttsSpeed, autoLandscape, theme, fontFamily, syncApiKey, geminiApiKey, rsvpSettings]);
+  }, [ttsSpeed, autoLandscape, theme, fontFamily, syncApiKey, geminiApiKey, rsvpSettings, onboardingCompleted]);
 
   useEffect(() => {
     if (!storageProvider) return;
@@ -206,11 +215,12 @@ function App() {
         fontFamily,
         syncApiKey,
         geminiApiKey: syncApiKey ? geminiApiKey : undefined,
-        rsvp: rsvpSettings
+        rsvp: rsvpSettings,
+        onboardingCompleted
       });
     }, 1000);
     return () => clearTimeout(timer);
-  }, [ttsSpeed, autoLandscape, theme, fontFamily, syncApiKey, geminiApiKey, rsvpSettings, storageProvider]);
+  }, [ttsSpeed, autoLandscape, theme, fontFamily, syncApiKey, geminiApiKey, rsvpSettings, storageProvider, onboardingCompleted]);
 
   // Test Hook for Playwright
   useEffect(() => {
@@ -344,15 +354,24 @@ function App() {
           if (settings.autoLandscape !== undefined) setAutoLandscape(settings.autoLandscape);
           if (settings.rsvp) setRsvpSettings(prev => ({ ...prev, ...settings.rsvp }));
           
-          // Show onboarding if not completed and no API key set
-          if (!settings.onboardingCompleted && !settings.geminiApiKey) {
-            setIsOnboardingOpen(true);
+          if (settings.onboardingCompleted) {
+            setOnboardingCompleted(true);
+          } else if (!onboardingCompleted) {
+            // Show onboarding if not completed and no API key set
+            if (!settings.geminiApiKey) {
+              setIsOnboardingOpen(true);
+            }
           }
-        } else {
-          // New user (no settings doc yet)
+        } else if (!onboardingCompleted) {
+          // New user (no settings doc yet) and not marked as completed locally
           setIsOnboardingOpen(true);
         }
+      } catch (err) {
+        console.error('Failed to load settings', err);
+        // Don't show onboarding on error if we haven't confirmed it's needed
+      }
 
+      try {
         const [books, history] = await Promise.all([
             storageProvider.getAllBooks(),
             storageProvider.getAggregatedSessions()
@@ -364,12 +383,11 @@ function App() {
         // Auto-open most recent book if any, but only once per app session
         if (books.length > 0 && !currentBookId && !hasAutoOpenedRef.current) {
           const mostRecent = books[0];
-          // Only auto-open if it wasn't finished (or just open it anyway as requested)
           hasAutoOpenedRef.current = true;
           handleSelectBook(mostRecent.id);
         }
       } catch (err) {
-        console.error('Failed to load storage data', err);
+        console.error('Failed to load library/history', err);
       } finally {
         setIsLoading(false);
       }
@@ -773,7 +791,7 @@ function App() {
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, [isPlaying, wpm, words, currentIndex, nextWord, sections, isChapterBreak, rotationTrigger, lastRotationTime, rsvpSettings, playbackStartTime]);
 
-  if (isLoading && !user) {
+  if (isLoading || user === undefined) {
     return (
       <div className={`flex flex-col items-center justify-center min-h-dvh ${theme === 'bedtime' ? 'bg-black text-stone-400' : 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100'}`}>
         <div className="animate-pulse flex flex-col items-center">
@@ -784,7 +802,7 @@ function App() {
     );
   }
 
-  if (!user || !storageProvider) {
+  if (user === null || !storageProvider) {
     return (
       <div className={`min-h-dvh flex flex-col ${theme === 'bedtime' ? 'bg-black text-stone-400' : 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100'}`}>
         <div className="flex flex-col items-center justify-center pt-24 pb-12 px-6">
@@ -842,6 +860,7 @@ function App() {
         isOpen={isOnboardingOpen}
         onClose={() => {
           setIsOnboardingOpen(false);
+          setOnboardingCompleted(true);
           storageProvider.updateSettings({ onboardingCompleted: true });
         }}
         apiKey={geminiApiKey}
@@ -853,6 +872,7 @@ function App() {
         setSyncApiKey={setSyncApiKey}
         onComplete={() => {
           setIsOnboardingOpen(false);
+          setOnboardingCompleted(true);
           storageProvider.updateSettings({ 
             onboardingCompleted: true,
             syncApiKey: syncApiKey,

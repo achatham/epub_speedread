@@ -1,6 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { db as firestore, storage as firebaseStorage } from './firebase';
-import { collection, doc, setDoc, getDocs, deleteDoc, getDoc, updateDoc, runTransaction, query, where, orderBy } from 'firebase/firestore';
+import { collection, doc, setDoc, getDocs, deleteDoc, getDoc, updateDoc, runTransaction, query, where, orderBy, getDocFromCache, getDocsFromCache } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { getIncrementalAggregationPlan } from './stats';
 
@@ -157,12 +157,22 @@ export class FirestoreStorage {
 
   async getSettings(): Promise<UserSettings | null> {
     try {
+      console.log("[Storage] Fetching settings...");
       const snap = await getDoc(this.userDocRef);
+      console.log(`[Storage] Settings found: ${snap.exists()}. From cache: ${snap.metadata.fromCache}`);
       if (snap.exists()) {
         return snap.data() as UserSettings;
       }
     } catch (e) {
-      console.error("Firestore settings fetch failed", e);
+      console.warn("[Storage] Fetch settings failed, trying cache...", e);
+      try {
+        const snap = await getDocFromCache(this.userDocRef);
+        if (snap.exists()) {
+          return snap.data() as UserSettings;
+        }
+      } catch (cacheErr) {
+        console.error("[Storage] Cache settings fetch also failed", cacheErr);
+      }
     }
     return null;
   }
@@ -209,23 +219,33 @@ export class FirestoreStorage {
   }
 
   async getAllBooks(): Promise<BookRecord[]> {
+    let snapshot;
     try {
-      const snapshot = await getDocs(this.booksCollection);
-      const books = snapshot.docs.map(d => d.data() as BookRecord);
-      
-      // Attach local files if cached
-      for (const book of books) {
-          const cached = await this.fileCache.getFile(book.id);
-          if (cached) {
-              book.storage.localFile = cached;
-          }
-      }
-      // Order books by most recent activity (reading or upload)
-      return books.sort((a, b) => b.progress.lastReadAt - a.progress.lastReadAt);
+      console.log("[Storage] Fetching books...");
+      snapshot = await getDocs(this.booksCollection);
+      console.log(`[Storage] Found ${snapshot.docs.length} books. From cache: ${snapshot.metadata.fromCache}`);
     } catch (e) {
-      console.error("Firestore getAllBooks failed", e);
-      return [];
+      console.warn("[Storage] Fetch books failed, trying cache...", e);
+      try {
+        snapshot = await getDocsFromCache(this.booksCollection);
+        console.log(`[Storage] Found ${snapshot.docs.length} books in cache.`);
+      } catch (cacheErr) {
+        console.error("[Storage] Cache books fetch also failed", cacheErr);
+        return [];
+      }
     }
+
+    const books = snapshot.docs.map(d => d.data() as BookRecord);
+    
+    // Attach local files if cached
+    for (const book of books) {
+        const cached = await this.fileCache.getFile(book.id);
+        if (cached) {
+            book.storage.localFile = cached;
+        }
+    }
+    // Order books by most recent activity (reading or upload)
+    return books.sort((a, b) => (b.progress?.lastReadAt || 0) - (a.progress?.lastReadAt || 0));
   }
 
   async aggregateSessions(): Promise<void> {
@@ -379,17 +399,24 @@ export class FirestoreStorage {
   }
 
   async getAggregatedSessions(bookId?: string): Promise<ReadingSession[]> {
+    let snapshot;
     try {
-      const snapshot = await getDocs(this.aggregatedSessionsCollection);
-      let sessions = snapshot.docs.map(d => d.data() as ReadingSession);
-      if (bookId) {
-        sessions = sessions.filter(s => s.bookId === bookId);
-      }
-      return sessions.sort((a, b) => b.startTime - a.startTime);
+      snapshot = await getDocs(this.aggregatedSessionsCollection);
     } catch (e) {
-      console.error("Firestore getAggregatedSessions failed", e);
-      return [];
+      console.warn("[Storage] Fetch aggregated sessions failed, trying cache...", e);
+      try {
+        snapshot = await getDocsFromCache(this.aggregatedSessionsCollection);
+      } catch (cacheErr) {
+        console.error("[Storage] Cache aggregated sessions fetch also failed", cacheErr);
+        return [];
+      }
     }
+    
+    let sessions = snapshot.docs.map(d => d.data() as ReadingSession);
+    if (bookId) {
+      sessions = sessions.filter(s => s.bookId === bookId);
+    }
+    return sessions.sort((a, b) => b.startTime - a.startTime);
   }
 
   async getSessions(bookId?: string): Promise<ReadingSession[]> {
