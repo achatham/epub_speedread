@@ -354,6 +354,10 @@ export class FirestoreStorage {
     await updateDoc(doc(this.booksCollection, id), { archived });
   }
 
+  async updateBookTitle(id: string, title: string): Promise<void> {
+    await updateDoc(doc(this.booksCollection, id), { 'meta.title': title });
+  }
+
   async logReadingSession(sessionData: Omit<ReadingSession, 'id'>): Promise<void> {
     const sessionRef = doc(this.sessionsCollection);
     await setDoc(sessionRef, { ...sessionData, id: sessionRef.id });

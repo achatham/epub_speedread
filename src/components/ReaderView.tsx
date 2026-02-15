@@ -23,6 +23,7 @@ interface ReaderViewProps {
   onSettingsClick: () => void;
   onToggleTheme: () => void;
   onAskAiClick: () => void;
+  onBookSettingsClick: () => void;
   sections: { label: string; startIndex: number }[];
   setCurrentIndex: (index: number) => void;
   navigate: (type: 'book' | 'chapter' | 'prev-paragraph' | 'prev-sentence' | 'next-paragraph' | 'next-sentence') => void;
@@ -214,6 +215,13 @@ export function ReaderView({
 
       {!isPlaying && (
         <div className="absolute top-4 right-4 flex gap-2 z-20 landscape:top-2 landscape:right-2" onClick={(e) => e.stopPropagation()}>
+          <button
+            onClick={onBookSettingsClick}
+            className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+            title="Book Settings"
+          >
+            <Settings2 size={24} />
+          </button>
           <button
             onClick={onStatsClick}
             className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"

@@ -21,6 +21,7 @@ import { AiModal } from './components/AiModal';
 import { StatsView } from './components/StatsView';
 import { AboutView, AboutContent } from './components/AboutView';
 import { OnboardingModal } from './components/OnboardingModal';
+import { BookSettingsModal } from './components/BookSettingsModal';
 import { ConsoleLogger } from './components/ConsoleLogger';
 import { AI_QUESTIONS, WPM_VANITY_RATIO, DEFAULT_RSVP_SETTINGS } from './constants';
 import { LogIn, BookOpen } from 'lucide-react';
@@ -110,6 +111,41 @@ function App() {
   const [isNavOpen, setIsNavOpen] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
+  const [isBookSettingsOpen, setIsBookSettingsOpen] = useState(false);
+  const [isRecomputingEnd, setIsRecomputingEnd] = useState(false);
+
+  const handleUpdateBookTitle = async (newTitle: string) => {
+    if (!currentBookId || !storageProvider) return;
+    try {
+      await storageProvider.updateBookTitle(currentBookId, newTitle);
+      setBookTitle(newTitle);
+      // Refresh library list
+      setLibrary(await storageProvider.getAllBooks());
+    } catch (err) {
+      console.error("Failed to update book title:", err);
+    }
+  };
+
+  const handleRecomputeRealEnd = async () => {
+    if (!currentBookId || !storageProvider || !geminiApiKey) return;
+    setIsRecomputingEnd(true);
+    try {
+      const result = await analyzeRealEndOfBook(
+        currentBookId,
+        sections.map(s => s.label),
+        words,
+        storageProvider
+      );
+      if (result !== null) {
+        setRealEndIndex(result);
+        setLibrary(await storageProvider.getAllBooks());
+      }
+    } catch (err) {
+      console.error("Failed to recompute real end:", err);
+    } finally {
+      setIsRecomputingEnd(false);
+    }
+  };
 
   const { rotationTrigger, lastRotationTime } = useDeviceLogic({ 
     isPlaying, 
@@ -841,6 +877,15 @@ function App() {
         theme={theme}
       />
 
+      <BookSettingsModal
+        isOpen={isBookSettingsOpen}
+        onClose={() => setIsBookSettingsOpen(false)}
+        currentTitle={bookTitle}
+        onUpdateTitle={handleUpdateBookTitle}
+        onRecomputeRealEnd={handleRecomputeRealEnd}
+        isProcessing={isRecomputingEnd}
+      />
+
       {!currentBookId ? (
         <LibraryView
           library={library} isLoading={isLoading} theme={theme}
@@ -873,6 +918,7 @@ function App() {
           vanityWpmRatio={library.find(b => b.id === currentBookId)?.settings.vanityWpmRatio || rsvpSettings.vanityWpmRatio}
           theme={theme} fontFamily={fontFamily} bookTitle={bookTitle}
           onCloseBook={handleCloseBook} onSettingsClick={() => setIsSettingsOpen(true)}
+          onBookSettingsClick={() => setIsBookSettingsOpen(true)}
           onToggleTheme={toggleTheme} onAskAiClick={() => { setAiResponse(''); setIsAskAiOpen(true); }}
           isAskAiOpen={isAskAiOpen} sections={sections} setCurrentIndex={setCurrentIndex}
           navigate={navigate}

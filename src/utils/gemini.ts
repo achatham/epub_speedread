@@ -11,42 +11,80 @@ export function setGeminiApiKey(key: string) {
   localStorage.setItem(API_KEY_STORAGE_KEY, key);
 }
 
-export async function findRealEndOfBook(chapters: string[], endOfBookText: string): Promise<string | null> {
+export async function findRealEndOfBook(chapters: string[], fullText: string): Promise<string | null> {
   const apiKey = getGeminiApiKey();
   if (!apiKey) return null;
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
+  const model = genAI.getGenerativeModel({
+    model: "gemini-3-flash-preview",
+    generationConfig: { responseMimeType: "application/json" }
+  });
 
-  const prompt = `Given the following table of contents and the full text of a book, identify the "real" end of the main story (including epilogue, but excluding appendix, notes, references, bibliography, etc.).
-Quote the LAST 10 WORDS of the main story.
-Return ONLY these 10 words, without punctuation.
-
-Table of Contents:
-${chapters.join('\n')}
-
-Full Text of Book:
-${endOfBookText}
-
-Last 10 words of main story:`;
-
-  try {
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
+  const CHUNK_SIZE = 50000;
+  const TOC = chapters.join('\n');
+  
+  // Start from the middle of the book
+  let startPos = Math.floor(fullText.length / 2);
+  console.log(`[Gemini] Starting real end detection from character ${startPos} (Total length: ${fullText.length})`);
+  
+  let chunkCount = 0;
+  while (startPos < fullText.length) {
+    chunkCount++;
+    const endPos = Math.min(startPos + CHUNK_SIZE, fullText.length);
+    const chunk = fullText.slice(startPos, endPos);
     
-    if (response.usageMetadata) {
-        const cost = calculateCost("gemini-3-flash-preview", 
-            response.usageMetadata.promptTokenCount, 
-            response.usageMetadata.candidatesTokenCount);
-        console.log(`Gemini Cost (End Detection): $${cost.toFixed(6)}`);
-    }
+    console.log(`[Gemini] Processing chunk #${chunkCount} (${startPos} to ${endPos})...`);
+    
+    const prompt = `Given the Table of Contents and a slice of text from a book, determine if the "real" end of the main story (including epilogue, but excluding appendix, notes, references, bibliography, etc.) is contained within this slice.
+    
+    If the slice is still clearly part of the main story, return {"found_end": false}.
+    If the slice is already in the backmatter (appendix, notes, etc.) and the real end was in a PREVIOUS slice, return {"past_end": true}.
+    If the real end of the story is in THIS slice, return {"end_detected": "QUOTE_LAST_10_WORDS"} where QUOTE_LAST_10_WORDS is the last 10 words of the main story without punctuation.
 
-    const text = response.text().trim();
-    // Clean up response to just words
-    return text.toLowerCase().replace(/[^\w\s]/g, '');
-  } catch (error) {
-    console.error("Error finding real end of book:", error);
+    Table of Contents:
+    ${TOC}
+
+    Text Slice (starting at character ${startPos}):
+    ${chunk}
+    
+    JSON response:`;
+
+    try {
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      
+      if (response.usageMetadata) {
+          const cost = calculateCost("gemini-3-flash-preview", 
+              response.usageMetadata.promptTokenCount, 
+              response.usageMetadata.candidatesTokenCount);
+          console.log(`Gemini Cost (End Detection Chunk at ${startPos}): $${cost.toFixed(6)}`);
+      }
+
+      const jsonResponse = JSON.parse(response.text());
+      console.log(`[Gemini] Chunk at ${startPos}:`, jsonResponse);
+
+      if (jsonResponse.end_detected) {
+        return jsonResponse.end_detected.toLowerCase().replace(/[^\w\s]/g, '');
+      }
+      
+      if (jsonResponse.past_end) {
+        // If we are past the end, we might need to go back, but for now let's just log it.
+        // The current implementation moves forward, so being past the end suggests we started too late or missed it.
+        console.warn("[Gemini] Past end of story detected. Adjusting search backward.");
+        startPos = Math.max(0, startPos - CHUNK_SIZE);
+        if (startPos === 0) break; // Avoid infinite loop
+        continue;
+      }
+
+      // Move to next chunk
+      startPos += CHUNK_SIZE;
+    } catch (error) {
+      console.error("Error finding real end of book in chunk:", error);
+      break;
+    }
   }
+  
   return null;
 }
 
