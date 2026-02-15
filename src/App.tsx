@@ -9,7 +9,7 @@ import { auth, storage } from './utils/firebase';
 import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, getRedirectResult, signOut, type User } from 'firebase/auth';
 import { ref, getBytes } from 'firebase/storage';
 import { type WordData, calculateRsvpInterval } from './utils/text-processing';
-import { calculateNavigationTarget, findSentenceStart, type NavigationType } from './utils/navigation';
+import { calculateNavigationTarget, findRewindTarget, type NavigationType } from './utils/navigation';
 import { getGeminiApiKey, setGeminiApiKey as saveGeminiApiKey, askAboutBook, summarizeRecent, summarizeWhatJustHappened } from './utils/gemini';
 
 import { processBook, analyzeRealEndOfBook } from './utils/ebook';
@@ -104,6 +104,7 @@ function App() {
   const [isReadingAloud, setIsReadingAloud] = useState(false);
   const [isSynthesizing, setIsSynthesizing] = useState(false);
   const [isChapterBreak, setIsChapterBreak] = useState(false);
+  const [playbackStartTime, setPlaybackStartTime] = useState<number | null>(null);
 
   const [isTocOpen, setIsTocOpen] = useState(false);
   const [isNavOpen, setIsNavOpen] = useState(false);
@@ -535,10 +536,11 @@ function App() {
 
   const handleSetIsPlaying = useCallback((playing: boolean) => {
     if (playing && !isPlaying) {
+      setPlaybackStartTime(Date.now());
       if (isChapterBreak) {
         setIsChapterBreak(false);
       } else {
-        setCurrentIndex(findSentenceStart(currentIndex, words));
+        setCurrentIndex(findRewindTarget(currentIndex, words, sections));
       }
       if (isReadingAloud) {
         audioPlayerRef.current?.stop();
@@ -564,13 +566,14 @@ function App() {
         }
       }
     } else if (!playing && isPlaying) {
+      setPlaybackStartTime(null);
       if (wakeLockRef.current) {
         wakeLockRef.current.release();
         wakeLockRef.current = null;
       }
     }
     setIsPlaying(playing);
-  }, [isPlaying, currentIndex, words, isReadingAloud, autoLandscape, isChapterBreak]);
+  }, [isPlaying, currentIndex, words, isReadingAloud, autoLandscape, isChapterBreak, sections]);
 
   useEffect(() => {
     if (isPlaying) {
@@ -607,6 +610,47 @@ function App() {
             // Trigger aggregation to ensure stats are up to date
             await storageProvider.aggregateSessions();
             setSessions(await storageProvider.getAggregatedSessions());
+
+            // Update book statistics and vanity ratio
+            const bookRecord = library.find(b => b.id === currentBookId);
+            if (bookRecord) {
+              const expectedWordsThisSession = wpm * (durationMs / 60000);
+              const cumulativeWords = (bookRecord.progress.cumulativeWordsRead || 0) + wordsRead;
+              const cumulativeExpected = (bookRecord.progress.cumulativeExpectedWords || 0) + expectedWordsThisSession;
+              const cumulativeDuration = (bookRecord.progress.cumulativeDurationSeconds || 0) + Math.round(durationMs / 1000);
+
+              const newVanityRatio = cumulativeWords > 0 ? cumulativeExpected / cumulativeWords : (bookRecord.settings.vanityWpmRatio || rsvpSettings.vanityWpmRatio);
+              const oldVanityRatio = bookRecord.settings.vanityWpmRatio || rsvpSettings.vanityWpmRatio;
+
+              // Maintain same targetWpm
+              const targetWpm = wpm / oldVanityRatio;
+              const newBoostedWpm = targetWpm * newVanityRatio;
+
+              await storageProvider.updateBookStats(currentBookId, {
+                cumulativeWordsRead: cumulativeWords,
+                cumulativeExpectedWords: cumulativeExpected,
+                cumulativeDurationSeconds: cumulativeDuration,
+                vanityWpmRatio: newVanityRatio,
+                wpm: newBoostedWpm
+              });
+
+              // Update local state
+              setLibrary(prev => prev.map(b => b.id === currentBookId ? {
+                ...b,
+                progress: {
+                  ...b.progress,
+                  cumulativeWordsRead: cumulativeWords,
+                  cumulativeExpectedWords: cumulativeExpected,
+                  cumulativeDurationSeconds: cumulativeDuration
+                },
+                settings: {
+                  ...b.settings,
+                  vanityWpmRatio: newVanityRatio,
+                  wpm: newBoostedWpm
+                }
+              } : b));
+              setWpm(newBoostedWpm);
+            }
         }).catch(e => console.error("Failed to log session", e));
       } else {
         console.log("Session too short to log (< 10s)");
@@ -651,7 +695,18 @@ function App() {
         interval = rsvpSettings.chapterBreakDelay; callback = () => setIsChapterBreak(false);
       } else {
         const currentWord = words[currentIndex].text || '';
-        interval = calculateRsvpInterval(currentWord, wpm, rsvpSettings);
+
+        let effectiveWpm = wpm;
+        if (playbackStartTime && rsvpSettings.wpmRampDuration > 0) {
+          const elapsed = Date.now() - playbackStartTime;
+          if (elapsed < rsvpSettings.wpmRampDuration) {
+            const progress = elapsed / rsvpSettings.wpmRampDuration;
+            // Ramp from 0.5 to 1.0
+            effectiveWpm = wpm * (0.5 + 0.5 * progress);
+          }
+        }
+
+        interval = calculateRsvpInterval(currentWord, effectiveWpm, rsvpSettings);
 
         if (sections.some(s => s.startIndex === currentIndex + 1)) callback = () => { setCurrentIndex(prev => prev + 1); setIsChapterBreak(true); };
         else callback = nextWord;
@@ -659,7 +714,7 @@ function App() {
       timerRef.current = window.setTimeout(callback, interval);
     }
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [isPlaying, wpm, words, currentIndex, nextWord, sections, isChapterBreak, rotationTrigger, lastRotationTime, rsvpSettings]);
+  }, [isPlaying, wpm, words, currentIndex, nextWord, sections, isChapterBreak, rotationTrigger, lastRotationTime, rsvpSettings, playbackStartTime]);
 
   if (isLoading && !user) {
     return (
@@ -808,13 +863,14 @@ function App() {
           furthestIndex={furthestIndex}
           isPlaying={isPlaying}
           setIsPlaying={handleSetIsPlaying}
-          wpm={Math.round(wpm / rsvpSettings.vanityWpmRatio)}
+          wpm={Math.round(wpm / (library.find(b => b.id === currentBookId)?.settings.vanityWpmRatio || rsvpSettings.vanityWpmRatio))}
           onWpmChange={(targetWpm) => { 
-              const boosted = targetWpm * rsvpSettings.vanityWpmRatio;
+              const currentRatio = library.find(b => b.id === currentBookId)?.settings.vanityWpmRatio || rsvpSettings.vanityWpmRatio;
+              const boosted = targetWpm * currentRatio;
               setWpm(boosted); 
               storageProvider.updateBookWpm(currentBookId!, boosted); 
           }}
-          vanityWpmRatio={rsvpSettings.vanityWpmRatio}
+          vanityWpmRatio={library.find(b => b.id === currentBookId)?.settings.vanityWpmRatio || rsvpSettings.vanityWpmRatio}
           theme={theme} fontFamily={fontFamily} bookTitle={bookTitle}
           onCloseBook={handleCloseBook} onSettingsClick={() => setIsSettingsOpen(true)}
           onToggleTheme={toggleTheme} onAskAiClick={() => { setAiResponse(''); setIsAskAiOpen(true); }}

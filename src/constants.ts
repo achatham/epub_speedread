@@ -17,5 +17,6 @@ export const DEFAULT_RSVP_SETTINGS = {
   tooWideMultiplier: 1.5,
   chapterBreakDelay: 3000,
   orientationDelay: 500,
-  vanityWpmRatio: 1.25
+  vanityWpmRatio: 1.25,
+  wpmRampDuration: 5000
 } as const;

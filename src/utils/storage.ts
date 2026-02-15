@@ -12,6 +12,7 @@ export interface RsvpSettings {
   chapterBreakDelay: number;
   orientationDelay: number;
   vanityWpmRatio: number;
+  wpmRampDuration: number;
 }
 
 export interface UserSettings {
@@ -40,9 +41,13 @@ export interface BookRecord {
     wordIndex: number;
     lastReadAt: number;
     furthestWordIndex?: number;
+    cumulativeWordsRead?: number;
+    cumulativeExpectedWords?: number;
+    cumulativeDurationSeconds?: number;
   };
   settings: {
     wpm: number;
+    vanityWpmRatio?: number;
   };
   analysis: {
     realEndQuote?: string;
@@ -186,7 +191,10 @@ export class FirestoreStorage {
             id,
             meta: { title, addedAt: now, extension },
             progress: { wordIndex: 0, lastReadAt: now },
-            settings: { wpm: 300 },
+            settings: {
+              wpm: 300 * (typeof window !== 'undefined' ? (JSON.parse(localStorage.getItem('user_settings') || '{}').rsvp?.vanityWpmRatio || 1.25) : 1.25),
+              vanityWpmRatio: typeof window !== 'undefined' ? (JSON.parse(localStorage.getItem('user_settings') || '{}').rsvp?.vanityWpmRatio || 1.25) : 1.25
+            },
             analysis: {},
             storage: { cloudUrl }
         };
@@ -315,6 +323,19 @@ export class FirestoreStorage {
 
   async updateBookWpm(id: string, wpm: number): Promise<void> {
     await updateDoc(doc(this.booksCollection, id), { 'settings.wpm': wpm });
+  }
+
+  async updateBookStats(id: string, stats: Partial<BookRecord['progress'] & { vanityWpmRatio?: number; wpm?: number }>): Promise<void> {
+    const updates: any = {};
+    if (stats.cumulativeWordsRead !== undefined) updates['progress.cumulativeWordsRead'] = stats.cumulativeWordsRead;
+    if (stats.cumulativeExpectedWords !== undefined) updates['progress.cumulativeExpectedWords'] = stats.cumulativeExpectedWords;
+    if (stats.cumulativeDurationSeconds !== undefined) updates['progress.cumulativeDurationSeconds'] = stats.cumulativeDurationSeconds;
+    if (stats.vanityWpmRatio !== undefined) updates['settings.vanityWpmRatio'] = stats.vanityWpmRatio;
+    if (stats.wpm !== undefined) updates['settings.wpm'] = stats.wpm;
+
+    if (Object.keys(updates).length > 0) {
+      await updateDoc(doc(this.booksCollection, id), updates);
+    }
   }
 
   async updateBookRealEndQuote(id: string, quote: string): Promise<void> {
