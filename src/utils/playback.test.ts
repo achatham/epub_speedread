@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { findRewindTarget, getResumeIndex } from './playback';
-import { WordData } from './text-processing';
+import type { WordData } from './text-processing';
 
 describe('playback utility', () => {
   const mockWords: WordData[] = [
