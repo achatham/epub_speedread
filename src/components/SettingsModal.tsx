@@ -271,6 +271,14 @@ export function SettingsModal({
                     onChange={(v) => updateRsvp('orientationDelay', v)}
                   />
                   <RsvpControl
+                    label="WPM Ramp Duration"
+                    description="Time to reach full speed on resume"
+                    value={rsvpSettings.wpmRampDuration}
+                    min={0} max={10000} step={500}
+                    unit="ms"
+                    onChange={(v) => updateRsvp('wpmRampDuration', v)}
+                  />
+                  <RsvpControl
                     label="Vanity WPM Ratio"
                     description="Padding to match target WPM"
                     value={rsvpSettings.vanityWpmRatio}

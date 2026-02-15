@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calculateNavigationTarget, findSentenceStart } from './navigation';
+import { calculateNavigationTarget, findSentenceStart, findRewindTarget } from './navigation';
 import type { WordData } from './text-processing';
 
 describe('navigation', () => {
@@ -54,6 +54,39 @@ describe('navigation', () => {
         it('should return start of sentence if in middle', () => {
             expect(findSentenceStart(2, mockWords)).toBe(1);
             expect(findSentenceStart(4, mockWords)).toBe(3);
+        });
+    });
+
+    describe('findRewindTarget', () => {
+        const longWords: WordData[] = Array.from({ length: 50 }, (_, i) => ({
+            text: `word${i}${i % 5 === 0 ? '.' : ''}`,
+            isParagraphStart: i === 0 || i === 25,
+            isSentenceStart: i === 0 || (i > 0 && (i-1) % 5 === 0)
+        }));
+        // Sentence starts: 0, 1, 6, 11, 16, 21, 26, 31, 36, 41, 46
+
+        const sections = [
+            { label: 'Ch1', startIndex: 0 },
+            { label: 'Ch2', startIndex: 30 }
+        ];
+
+        it('should back up at least 10 words and find sentence start', () => {
+            // Index 20. -10 = 10. Sentence start before 10 is 6.
+            expect(findRewindTarget(20, longWords, sections)).toBe(6);
+        });
+
+        it('should not cross chapter boundary', () => {
+            // Index 35. -10 = 25. Chapter start is 30.
+            // Math.max(30, 25) = 30.
+            expect(findRewindTarget(35, longWords, sections)).toBe(30);
+        });
+
+        it('should stay at chapter start if already there', () => {
+            expect(findRewindTarget(30, longWords, sections)).toBe(30);
+        });
+
+        it('should handle small indices near start', () => {
+            expect(findRewindTarget(5, longWords, sections)).toBe(0);
         });
     });
 });
