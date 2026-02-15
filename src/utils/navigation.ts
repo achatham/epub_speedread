@@ -88,28 +88,3 @@ export function findSentenceStart(currentIndex: number, words: WordData[]): numb
   return currentIndex; // Fallback
 }
 
-export function findRewindTarget(
-  currentIndex: number,
-  words: WordData[],
-  sections: { startIndex: number }[]
-): number {
-  if (words.length === 0) return currentIndex;
-
-  // Find current chapter start
-  const currentChapter = sections.reduce((prev, curr) => {
-    return (curr.startIndex <= currentIndex && curr.startIndex > prev.startIndex) ? curr : prev;
-  }, sections[0] || { startIndex: 0 });
-  const chapterStart = currentChapter.startIndex;
-
-  // Back up 10 words, but not before chapter start
-  let target = Math.max(chapterStart, currentIndex - 10);
-
-  // Find sentence start from there, but don't go before chapter start
-  for (let i = target; i >= chapterStart; i--) {
-    if (words[i].isSentenceStart) {
-      return i;
-    }
-  }
-
-  return chapterStart;
-}
