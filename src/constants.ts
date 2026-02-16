@@ -18,5 +18,6 @@ export const DEFAULT_RSVP_SETTINGS = {
   chapterBreakDelay: 3000,
   orientationDelay: 500,
   vanityWpmRatio: 1.25,
-  wpmRampDuration: 5000
+  wpmRampDuration: 5000,
+  previewWordCount: 60
 } as const;

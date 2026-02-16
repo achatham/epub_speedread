@@ -2,6 +2,7 @@ import { ReaderMenu } from './ReaderMenu';
 import type { WordData } from '../utils/text-processing';
 import { splitWord } from '../utils/orp';
 import type { FontFamily } from './SettingsModal';
+import type { RsvpSettings } from '../utils/storage';
 
 type Theme = 'light' | 'dark' | 'bedtime';
 
@@ -33,6 +34,7 @@ interface ReaderViewProps {
   upcomingChapterTitle: string;
   onStatsClick?: () => void;
   vanityWpmRatio: number;
+  rsvpSettings: RsvpSettings;
 }
 
 export function ReaderView({
@@ -62,7 +64,8 @@ export function ReaderView({
   isChapterBreak,
   upcomingChapterTitle,
   onStatsClick,
-  vanityWpmRatio
+  vanityWpmRatio,
+  rsvpSettings
 }: ReaderViewProps) {
   if (words.length === 0) {
     return (
@@ -197,7 +200,7 @@ export function ReaderView({
 
 
       {/* RSVP Display or Text Preview */}
-      <div className={`relative flex items-center justify-center w-full ${isPlaying ? '' : 'max-w-2xl landscape:max-w-none landscape:my-2 landscape:flex-1 landscape:mx-12'} border-t border-b my-8 ${theme === 'bedtime' ? 'border-zinc-900' : 'border-zinc-200 dark:border-zinc-800'}`} style={{ minHeight: isPlaying ? Math.max(120, currentFontSize * 1.5) : '120px' }}>
+      <div className={`relative flex items-center justify-center w-full overflow-hidden ${isPlaying ? '' : 'max-w-2xl landscape:max-w-none landscape:my-2 flex-1 landscape:mx-12'} border-t border-b my-8 ${theme === 'bedtime' ? 'border-zinc-900' : 'border-zinc-200 dark:border-zinc-800'}`} style={{ minHeight: isPlaying ? Math.max(120, currentFontSize * 1.5) : '120px' }}>
         {isPlaying ? (
           <>
             {!isChapterBreak && (
@@ -227,8 +230,34 @@ export function ReaderView({
             )}
           </>
         ) : (
-          <div className={`text-xl leading-relaxed text-center px-8 landscape:text-base landscape:leading-snug ${theme === 'bedtime' ? 'text-stone-500' : 'text-zinc-500 dark:text-zinc-400'}`}>
-            {words.slice(currentIndex, currentIndex + 30).map(w => w.text).join(' ')}...
+          <div className={`text-xl leading-relaxed text-center px-8 landscape:text-base landscape:leading-snug ${theme === 'bedtime' ? 'text-stone-500' : 'text-zinc-500 dark:text-zinc-400'} max-h-full overflow-hidden flex items-center justify-center`}>
+            <div>
+              {(() => {
+                const half = Math.floor(rsvpSettings.previewWordCount / 2);
+                const start = Math.max(chapterStart, currentIndex - half);
+                const end = Math.min(words.length, currentIndex + half);
+
+                const before = words.slice(start, currentIndex);
+                const current = words[currentIndex];
+                const after = words.slice(currentIndex + 1, end);
+
+                return (
+                  <>
+                    {start > chapterStart && <span className="opacity-30">... </span>}
+                    {before.map((w, i) => (
+                      <span key={`before-${i}`}>{w.text} </span>
+                    ))}
+                    <span className={`font-bold ${theme === 'bedtime' ? 'text-amber-600' : 'text-zinc-900 dark:text-zinc-100 underline decoration-red-500/50'}`}>
+                      {current?.text}
+                    </span>
+                    {after.map((w, i) => (
+                      <span key={`after-${i}`}> {w.text}</span>
+                    ))}
+                    {end < words.length && <span className="opacity-30"> ...</span>}
+                  </>
+                );
+              })()}
+            </div>
           </div>
         )}
       </div>

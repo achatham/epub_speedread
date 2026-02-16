@@ -1020,6 +1020,7 @@ function App() {
             ? (sections.slice().reverse().find(s => s.startIndex <= currentIndex)?.label || '')
             : (sections.find(s => s.startIndex === currentIndex + 1)?.label || '')}
           onStatsClick={handleOpenStats}
+          rsvpSettings={rsvpSettings}
         />
       )}
       <ConsoleLogger />

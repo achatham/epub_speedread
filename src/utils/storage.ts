@@ -13,6 +13,7 @@ export interface RsvpSettings {
   orientationDelay: number;
   vanityWpmRatio: number;
   wpmRampDuration: number;
+  previewWordCount: number;
 }
 
 export interface UserSettings {
