@@ -230,28 +230,14 @@ export interface CenteredContext {
 export function getCenteredContext(
   words: WordData[],
   currentIndex: number,
-  maxWords: number = 200
+  buffer: number = 100
 ): CenteredContext {
   if (words.length === 0) return { before: [], current: null, after: [] };
 
   const safeIndex = Math.max(0, Math.min(currentIndex, words.length - 1));
 
-  let start = safeIndex - Math.floor(maxWords / 2);
-  let end = start + maxWords;
-
-  if (start < 0) {
-    start = 0;
-    end = Math.min(words.length, maxWords);
-  }
-
-  if (end > words.length) {
-    end = words.length;
-    start = Math.max(0, end - maxWords);
-  }
-
-  // Ensure safeIndex is within the window
-  start = Math.min(start, safeIndex);
-  end = Math.max(end, safeIndex + 1);
+  const start = Math.max(0, safeIndex - buffer);
+  const end = Math.min(words.length, safeIndex + buffer + 1);
 
   return {
     before: words.slice(start, safeIndex),

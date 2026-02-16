@@ -39,7 +39,7 @@ test.describe('Reader Preview and Controls', () => {
 
     // Open menu
     await menuTrigger.click();
-    await expect(page.getByText('Reading Speed')).toBeVisible();
+    await expect(page.getByText('WPM', { exact: true })).toBeVisible();
     await page.screenshot({ path: 'tests/screenshots/reader-menu-portrait.png' });
   });
 
@@ -64,7 +64,7 @@ test.describe('Reader Preview and Controls', () => {
     await page.screenshot({ path: 'tests/screenshots/reader-preview-landscape.png' });
 
     await menuTrigger.click();
-    await expect(page.getByText('Reading Speed')).toBeVisible();
+    await expect(page.getByText('WPM', { exact: true })).toBeVisible();
     await page.screenshot({ path: 'tests/screenshots/reader-menu-landscape.png' });
   });
 
