@@ -109,8 +109,6 @@ function App() {
   const [isChapterBreak, setIsChapterBreak] = useState(false);
   const [playbackStartTime, setPlaybackStartTime] = useState<number | null>(null);
 
-  const [isTocOpen, setIsTocOpen] = useState(false);
-  const [isNavOpen, setIsNavOpen] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
   const [onboardingCompleted, setOnboardingCompleted] = useState(() => {
@@ -747,7 +745,6 @@ function App() {
   const navigate = (type: NavigationType) => {
     setIsChapterBreak(false);
     setCurrentIndex(calculateNavigationTarget(currentIndex, words, sections, type));
-    setIsNavOpen(false);
   };
 
   const nextWord = useCallback(() => {
@@ -963,8 +960,6 @@ function App() {
           onToggleTheme={toggleTheme} onAskAiClick={() => { setAiResponse(''); setIsAskAiOpen(true); }}
           isAskAiOpen={isAskAiOpen} sections={sections} setCurrentIndex={setCurrentIndex}
           navigate={navigate}
-          isNavOpen={isNavOpen} toggleNav={() => setIsNavOpen(!isNavOpen)}
-          isTocOpen={isTocOpen} toggleToc={() => setIsTocOpen(!isTocOpen)}
           onReadChapter={async () => {
             if (audioPlayerRef.current?.isActive) {
               audioPlayerRef.current.stop();
