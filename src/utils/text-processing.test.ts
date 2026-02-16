@@ -1,5 +1,48 @@
 import { describe, it, expect } from 'vitest';
-import { extractWordsFromDoc } from './text-processing';
+import { extractWordsFromDoc, getCenteredContext, type WordData } from './text-processing';
+
+describe('getCenteredContext', () => {
+  const mockWords: WordData[] = [
+    { text: 'One', isParagraphStart: true, isSentenceStart: true },
+    { text: 'two', isParagraphStart: false, isSentenceStart: false },
+    { text: 'three', isParagraphStart: false, isSentenceStart: false },
+    { text: 'four', isParagraphStart: false, isSentenceStart: false },
+    { text: 'five', isParagraphStart: false, isSentenceStart: false },
+    { text: 'six', isParagraphStart: false, isSentenceStart: false },
+    { text: 'seven', isParagraphStart: false, isSentenceStart: false },
+    { text: 'eight', isParagraphStart: false, isSentenceStart: false },
+    { text: 'nine', isParagraphStart: false, isSentenceStart: false },
+    { text: 'ten', isParagraphStart: false, isSentenceStart: false },
+  ];
+
+  it('should center the word when in the middle', () => {
+    // targetCharCount: 20.
+    // "five" is 4 chars.
+    // before: "four" (4), "three" (5) = 9 chars + spaces
+    // after: "six" (3), "seven" (5) = 8 chars + spaces
+    const { words, relativeIndex } = getCenteredContext(mockWords, 4, 20);
+    expect(words.map(w => w.text)).toEqual(['three', 'four', 'five', 'six', 'seven']);
+    expect(words[relativeIndex].text).toBe('five');
+  });
+
+  it('should handle start of array', () => {
+    const { words, relativeIndex } = getCenteredContext(mockWords, 0, 20);
+    expect(words[0].text).toBe('One');
+    expect(relativeIndex).toBe(0);
+    expect(words.length).toBeGreaterThan(1);
+  });
+
+  it('should handle end of array', () => {
+    const { words, relativeIndex } = getCenteredContext(mockWords, 9, 20);
+    expect(words[words.length - 1].text).toBe('ten');
+    expect(relativeIndex).toBe(words.length - 1);
+  });
+
+  it('should return empty for empty input', () => {
+    const { words } = getCenteredContext([], 0, 20);
+    expect(words).toEqual([]);
+  });
+});
 
 describe('extractWordsFromDoc', () => {
   it('should extract words from a simple paragraph', () => {

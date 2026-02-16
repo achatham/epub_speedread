@@ -221,6 +221,45 @@ export function chunkWordsByParagraph(words: WordData[], minWords: number = 300)
   return chunks;
 }
 
+export function getCenteredContext(
+  words: WordData[],
+  currentIndex: number,
+  targetCharCount: number = 600
+): { words: WordData[]; relativeIndex: number } {
+  if (words.length === 0) return { words: [], relativeIndex: 0 };
+  if (currentIndex < 0 || currentIndex >= words.length) return { words: [], relativeIndex: 0 };
+
+  let start = currentIndex;
+  let end = currentIndex + 1;
+  let charsBefore = 0;
+  let charsAfter = words[currentIndex].text.length;
+
+  const half = targetCharCount / 2;
+
+  while ((charsBefore < half || charsAfter < half) && (start > 0 || end < words.length)) {
+    // Try to balance: add to the side that has less relative to its goal
+    // We favor adding to the beginning if it's "shorter" than the end,
+    // or if the end is already at the boundary.
+    if (start > 0 && (charsBefore <= charsAfter || end === words.length)) {
+      start--;
+      charsBefore += words[start].text.length + 1; // +1 for space
+    } else if (end < words.length) {
+      charsAfter += words[end].text.length + 1;
+      end++;
+    } else if (start > 0) {
+      start--;
+      charsBefore += words[start].text.length + 1;
+    } else {
+      break;
+    }
+  }
+
+  return {
+    words: words.slice(start, end),
+    relativeIndex: currentIndex - start
+  };
+}
+
 export function chunkTextByParagraph(text: string, minWords: number = 300): TextChunk[] {
   // Split by paragraph markers
   const paragraphs = text.split(/\n+/);

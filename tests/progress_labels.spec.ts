@@ -18,8 +18,7 @@ test('verify progress labels are below the progress bars and aligned', async ({ 
   await page.screenshot({ path: 'tests/screenshots/before-play.png' });
 
   // Start playback
-  const playButton = page.getByRole('button', { name: 'Play' });
-  await playButton.click();
+  await page.click('body');
 
   // Wait for progress labels to be visible
   const chapterLabel = page.locator('text=Chapter Progress');
@@ -27,8 +26,8 @@ test('verify progress labels are below the progress bars and aligned', async ({ 
   await expect(chapterLabel).toBeVisible();
   await expect(bookLabel).toBeVisible();
 
-  // Find the progress bars (h-1 elements)
-  const progressBars = page.locator('.h-1');
+  // Find the progress bars (h-1 or h-1.5 elements)
+  const progressBars = page.locator('.h-1, .h-1\\.5');
   await expect(progressBars).toHaveCount(2);
   const chapterBar = progressBars.first();
   const bookBar = progressBars.nth(1);

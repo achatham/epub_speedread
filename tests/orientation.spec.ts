@@ -26,7 +26,7 @@ test.describe('Mobile Orientation Layout', () => {
     });
 
     // Close the book to see the library
-    await page.getByText('Close Book').click();
+    await page.getByText('← Library').click();
 
     // Verify we are in Library View
     await expect(page.getByRole('heading', { name: 'Library' })).toBeVisible();
@@ -46,7 +46,7 @@ test.describe('Mobile Orientation Layout', () => {
       ]);
     });
 
-    await page.getByText('Close Book').click();
+    await page.getByText('← Library').click();
 
     await expect(page.getByRole('heading', { name: 'Library' })).toBeVisible();
 
@@ -75,8 +75,8 @@ test.describe('Mobile Orientation Layout', () => {
       ]);
     });
 
-    // Verify we are in Reader View by checking something else visible in portrait
-    await expect(page.getByText('Speed')).toBeVisible();
+    // Verify we are in Reader View by checking the book title (default mock)
+    await expect(page.getByText('Mock Book')).toBeVisible();
 
     await page.screenshot({ path: 'tests/screenshots/reader-portrait.png' });
   });
@@ -100,7 +100,7 @@ test.describe('Mobile Orientation Layout', () => {
       ]);
     });
 
-    await expect(page.locator('text=Chapter 1')).toBeVisible();
+    await expect(page.locator('text=Mock Book')).toBeVisible();
 
     await page.screenshot({ path: 'tests/screenshots/reader-landscape.png' });
   });
@@ -119,13 +119,13 @@ test.describe('Mobile Orientation Layout', () => {
     });
 
     // Start playing
-    await page.getByLabel('Play').click();
+    await page.click('body');
     
     // Check for the RSVP focus word
     await expect(page.getByText('Active')).toBeVisible();
     
-    // Ensure the interface has cleaned up (Play button should be gone in active mode)
-    await expect(page.getByLabel('Play')).not.toBeVisible();
+    // Ensure the interface has cleaned up (Menu FAB should be gone in active mode)
+    await expect(page.locator('button[title="Open Menu"]')).not.toBeVisible();
 
     await page.screenshot({ path: 'tests/screenshots/active-reading-portrait.png' });
   });
@@ -142,10 +142,10 @@ test.describe('Mobile Orientation Layout', () => {
       ]);
     });
 
-    await page.getByLabel('Play').click();
+    await page.click('body');
 
     await expect(page.getByText('Active')).toBeVisible();
-    await expect(page.getByLabel('Play')).not.toBeVisible();
+    await expect(page.locator('button[title="Open Menu"]')).not.toBeVisible();
 
     await page.screenshot({ path: 'tests/screenshots/active-reading-landscape.png' });
   });
