@@ -958,7 +958,7 @@ function App() {
           onCloseBook={handleCloseBook} onSettingsClick={() => setIsSettingsOpen(true)}
           onBookSettingsClick={() => setIsBookSettingsOpen(true)}
           onToggleTheme={toggleTheme} onAskAiClick={() => { setAiResponse(''); setIsAskAiOpen(true); }}
-          isAskAiOpen={isAskAiOpen} sections={sections} setCurrentIndex={setCurrentIndex}
+          sections={sections} setCurrentIndex={setCurrentIndex}
           navigate={navigate}
           onReadChapter={async () => {
             if (audioPlayerRef.current?.isActive) {

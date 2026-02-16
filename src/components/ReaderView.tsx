@@ -1,5 +1,4 @@
 import { ReaderMenu } from './ReaderMenu';
-import { Minus, Moon, Pause, Plus, Settings, Settings2, SkipBack, Sparkles, Sun, Sunset, Volume2, Loader2, Square, BarChart2 } from 'lucide-react';
 import type { WordData } from '../utils/text-processing';
 import { splitWord } from '../utils/orp';
 import type { FontFamily } from './SettingsModal';
@@ -27,7 +26,6 @@ interface ReaderViewProps {
   sections: { label: string; startIndex: number }[];
   setCurrentIndex: (index: number) => void;
   navigate: (type: 'book' | 'chapter' | 'prev-paragraph' | 'prev-sentence' | 'next-paragraph' | 'next-sentence') => void;
-  isAskAiOpen: boolean;
   onReadChapter: () => void;
   isReadingAloud: boolean;
   isSynthesizing: boolean;
@@ -58,7 +56,6 @@ export function ReaderView({
   sections,
   setCurrentIndex,
   navigate,
-  isAskAiOpen,
   onReadChapter,
   isReadingAloud,
   isSynthesizing,
