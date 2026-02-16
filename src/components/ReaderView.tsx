@@ -1,8 +1,9 @@
-import { useEffect, useRef } from 'react';
-import { Minus, Moon, Pause, Play, Plus, Settings, Settings2, SkipBack, Sparkles, Sun, Sunset, Volume2, Loader2, Square, BarChart2 } from 'lucide-react';
-import type { WordData } from '../utils/text-processing';
+import { useEffect, useRef, useMemo } from 'react';
+import { SkipBack, X } from 'lucide-react';
+import { type WordData, getCenteredContext } from '../utils/text-processing';
 import { splitWord } from '../utils/orp';
 import type { FontFamily } from './SettingsModal';
+import { ReaderMenu } from './ReaderMenu';
 
 type Theme = 'light' | 'dark' | 'bedtime';
 
@@ -27,8 +28,6 @@ interface ReaderViewProps {
   sections: { label: string; startIndex: number }[];
   setCurrentIndex: (index: number) => void;
   navigate: (type: 'book' | 'chapter' | 'prev-paragraph' | 'prev-sentence' | 'next-paragraph' | 'next-sentence') => void;
-  isNavOpen: boolean;
-  toggleNav: () => void;
   isTocOpen: boolean;
   toggleToc: () => void;
   isAskAiOpen: boolean;
@@ -62,8 +61,6 @@ export function ReaderView({
   sections,
   setCurrentIndex,
   navigate,
-  isNavOpen,
-  toggleNav,
   isTocOpen,
   toggleToc,
   isAskAiOpen,
@@ -76,12 +73,28 @@ export function ReaderView({
   vanityWpmRatio
 }: ReaderViewProps) {
   const activeChapterRef = useRef<HTMLButtonElement>(null);
+  const currentWordRef = useRef<HTMLSpanElement>(null);
+
+  const centeredContext = useMemo(() => {
+    if (isPlaying) return null;
+    return getCenteredContext(words, currentIndex, 500);
+  }, [words, currentIndex, isPlaying]);
 
   useEffect(() => {
     if (isTocOpen && activeChapterRef.current) {
       activeChapterRef.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
   }, [isTocOpen]);
+
+  useEffect(() => {
+    if (!isPlaying && currentWordRef.current) {
+      // Use a small timeout to ensure layout has settled
+      const timer = setTimeout(() => {
+        currentWordRef.current?.scrollIntoView({ block: 'center', behavior: 'instant' });
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [currentIndex, isPlaying, centeredContext]);
 
   if (words.length === 0) {
     return (
@@ -119,7 +132,7 @@ export function ReaderView({
       targetFontSize = Math.min(targetFontSize, currentFittingFontSize);
   }
 
-  const currentFontSize = isPlaying ? targetFontSize : 48;
+  const currentFontSize = isPlaying ? targetFontSize : 32;
 
   // Theme-derived classes
   const mainBg = theme === 'bedtime' ? 'bg-black' : 'bg-white dark:bg-zinc-900';
@@ -191,7 +204,7 @@ export function ReaderView({
   
   return (
     <div 
-      className={`flex flex-col items-center justify-center h-dvh transition-colors duration-300 relative ${mainBg} ${mainText} ${!isPlaying ? 'cursor-pointer landscape:flex-row landscape:items-stretch landscape:justify-start' : ''}`}
+      className={`flex flex-col ${isPlaying ? 'items-center justify-center' : 'items-stretch'} h-dvh transition-colors duration-300 relative ${mainBg} ${mainText} ${!isPlaying ? 'cursor-pointer' : ''}`}
       style={{ fontFamily: fontStyles[fontFamily] }}
       onClick={() => { if (!isPlaying) setIsPlaying(true); }}
     >
@@ -214,41 +227,8 @@ export function ReaderView({
         </div>
       )}
 
-      {!isPlaying && (
-        <div className="absolute top-4 right-4 flex gap-2 z-20 landscape:top-2 landscape:right-2" onClick={(e) => e.stopPropagation()}>
-          <button
-            onClick={onBookSettingsClick}
-            className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-            title="Book Settings"
-          >
-            <Settings2 size={24} />
-          </button>
-          <button
-            onClick={onStatsClick}
-            className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-            title="Reading Stats"
-          >
-            <BarChart2 size={24} />
-          </button>
-          <button
-            onClick={onSettingsClick}
-            className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-            title="Settings"
-          >
-            <Settings size={24} />
-          </button>
-          <button
-              onClick={onToggleTheme}
-              className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-              title={`Theme: ${theme}`}
-          >
-              {theme === 'light' ? <Sun size={24} /> : theme === 'dark' ? <Moon size={24} /> : <Sunset size={24} className="text-amber-600" />}
-          </button>
-        </div>
-      )}
-
       {/* RSVP Display or Text Preview */}
-      <div className={`relative flex items-center justify-center w-full ${isPlaying ? '' : 'max-w-2xl landscape:max-w-none landscape:my-2 landscape:flex-1 landscape:mx-12'} border-t border-b my-8 ${theme === 'bedtime' ? 'border-zinc-900' : 'border-zinc-200 dark:border-zinc-800'}`} style={{ minHeight: isPlaying ? Math.max(120, currentFontSize * 1.5) : '120px' }}>
+      <div className={`relative flex ${isPlaying ? 'items-center justify-center' : 'flex-col items-stretch flex-1'} w-full ${isPlaying ? '' : 'max-w-4xl landscape:max-w-none landscape:my-2 landscape:mx-12 overflow-y-auto'} border-t border-b my-8 ${theme === 'bedtime' ? 'border-zinc-900' : 'border-zinc-200 dark:border-zinc-800'}`} style={{ minHeight: isPlaying ? Math.max(120, currentFontSize * 1.5) : '120px' }}>
         {isPlaying ? (
           <>
             {!isChapterBreak && (
@@ -278,20 +258,58 @@ export function ReaderView({
             )}
           </>
         ) : (
-          <div className={`text-xl leading-relaxed text-center px-8 landscape:text-base landscape:leading-snug ${theme === 'bedtime' ? 'text-stone-500' : 'text-zinc-500 dark:text-zinc-400'}`}>
-            {words.slice(currentIndex, currentIndex + 30).map(w => w.text).join(' ')}...
+          <div
+            className={`text-xl leading-relaxed text-center px-8 landscape:text-base landscape:leading-snug ${theme === 'bedtime' ? 'text-stone-500' : 'text-zinc-500 dark:text-zinc-400'}`}
+            style={{ fontSize: `${currentFontSize}px`, paddingTop: '50vh', paddingBottom: '50vh' }}
+          >
+            <div className="flex flex-wrap justify-center gap-x-1.5 gap-y-3 opacity-100">
+              {centeredContext?.before.map((w, i) => (
+                <span key={`b-${i}`} className="opacity-25">{w.text}</span>
+              ))}
+              <span
+                ref={currentWordRef}
+                className={`font-bold underline ${rsvpFocusColor} scale-125 px-1.5 transition-transform duration-300`}
+              >
+                {centeredContext?.current?.text}
+              </span>
+              {centeredContext?.after.map((w, i) => (
+                <span key={`a-${i}`} className="opacity-25">{w.text}</span>
+              ))}
+            </div>
           </div>
         )}
       </div>
 
-      {/* Controls */}
+      {!isPlaying && (
+        <ReaderMenu
+          theme={theme}
+          onToggleTheme={onToggleTheme}
+          onSettingsClick={onSettingsClick}
+          onBookSettingsClick={onBookSettingsClick}
+          onStatsClick={onStatsClick || (() => {})}
+          onReadChapter={onReadChapter}
+          onAskAiClick={onAskAiClick}
+          isReadingAloud={isReadingAloud}
+          isSynthesizing={isSynthesizing}
+          isAskAiOpen={isAskAiOpen}
+          wpm={wpm}
+          onWpmChange={onWpmChange}
+          onTocClick={toggleToc}
+          isTocOpen={isTocOpen}
+          bookTitle={bookTitle}
+          chapterLabel={sections[activeChapterIdx]?.label}
+          navigate={navigate}
+        />
+      )}
+
+      {/* Progress Bars */}
       <div
         className={`flex flex-col gap-6 items-center relative z-50
-          ${isPlaying ? 'w-full max-w-md px-4' : 'landscape:fixed landscape:left-0 landscape:top-0 landscape:bottom-0 landscape:w-24 landscape:max-w-[96px] landscape:bg-white landscape:dark:bg-zinc-900 landscape:border-r landscape:border-zinc-200 landscape:dark:border-zinc-800 landscape:justify-center landscape:gap-4 landscape:px-2 portrait:w-full portrait:max-w-md portrait:px-4 landscape:pointer-events-none'}
-          ${!isPlaying && theme === 'bedtime' ? 'landscape:bg-black landscape:border-zinc-900' : ''}`}
+          ${isPlaying ? 'w-full max-w-md px-4' : 'landscape:fixed landscape:bottom-6 landscape:left-12 landscape:right-32 landscape:w-auto landscape:gap-4 portrait:w-full portrait:max-w-md portrait:px-4'}
+          ${!isPlaying && theme === 'bedtime' ? 'landscape:bg-black' : ''}`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className={`w-full space-y-4 landscape:pointer-events-auto ${!isPlaying ? 'landscape:fixed landscape:bottom-4 landscape:left-28 landscape:right-64 landscape:w-auto landscape:space-y-4' : ''}`}>
+        <div className={`w-full space-y-4`}>
           {/* Chapter Progress */}
           <div className="space-y-1">
             {isPlaying && (
@@ -345,177 +363,51 @@ export function ReaderView({
           </div>
         </div>
 
-        {!isPlaying && (
-          <div className="flex gap-4 items-center landscape:flex-col landscape:gap-4 landscape:pointer-events-auto">
-            {/* Navigation Menu */}
-            <div className="relative">
-              <button
-                className={`bg-transparent border p-2 px-4 rounded-md cursor-pointer flex items-center gap-2 transition-all ${theme === 'bedtime' ? 'border-zinc-800 text-stone-400 hover:bg-zinc-900' : 'border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-900 dark:text-zinc-100'} ${isNavOpen ? (theme === 'bedtime' ? 'bg-zinc-900' : 'bg-zinc-100 dark:bg-zinc-800') : ''}`}
-                onClick={toggleNav}
-              >
-                <SkipBack size={20} />
-              </button>
-              {isNavOpen && (
-                <div className={`absolute bottom-full mb-2 left-0 w-64 border rounded-lg shadow-xl z-50 flex flex-col p-1 overflow-y-auto max-h-[70vh] landscape:bottom-auto landscape:left-full landscape:ml-2 landscape:top-0 ${theme === 'bedtime' ? 'bg-black border-zinc-800' : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700'}`}>
-                  <div className={`px-3 py-2 text-xs font-semibold uppercase tracking-wider border-b mb-1 ${theme === 'bedtime' ? 'text-stone-600 border-zinc-900' : 'text-zinc-500 dark:text-zinc-400 border-zinc-100 dark:border-zinc-800'}`}>
-                    Navigate
-                  </div>
-                  <button onClick={() => navigate('prev-paragraph')} className={`text-left px-3 py-2 text-sm rounded flex justify-between items-center group ${theme === 'bedtime' ? 'text-stone-400 hover:bg-zinc-900' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300'}`}>
-                    <span>Previous Paragraph</span>
-                    <span className="opacity-50 text-xs group-hover:opacity-100">Paragraph</span>
-                  </button>
-                  <button onClick={() => navigate('prev-sentence')} className={`text-left px-3 py-2 text-sm rounded flex justify-between items-center group ${theme === 'bedtime' ? 'text-stone-400 hover:bg-zinc-900' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300'}`}>
-                    <span>Previous Sentence</span>
-                    <span className="opacity-50 text-xs group-hover:opacity-100">Sentence</span>
-                  </button>
-                  <div className={`border-t my-1 ${theme === 'bedtime' ? 'border-zinc-900' : 'border-zinc-100 dark:border-zinc-800'}`}></div>
-                  <button onClick={() => navigate('next-sentence')} className={`text-left px-3 py-2 text-sm rounded flex justify-between items-center ${theme === 'bedtime' ? 'text-stone-400 hover:bg-zinc-900' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300'}`}>
-                    <span>Next Sentence</span>
-                  </button>
-                  <button onClick={() => navigate('next-paragraph')} className={`text-left px-3 py-2 text-sm rounded flex justify-between items-center ${theme === 'bedtime' ? 'text-stone-400 hover:bg-zinc-900' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300'}`}>
-                    <span>Next Paragraph</span>
-                  </button>
-                  <div className={`border-t my-1 ${theme === 'bedtime' ? 'border-zinc-900' : 'border-zinc-100 dark:border-zinc-800'}`}></div>
-                  <button 
-                    onClick={() => {
-                      if (furthestIndex !== null && furthestIndex > currentIndex + 10) {
-                        setCurrentIndex(furthestIndex);
-                        toggleNav();
-                      }
-                    }} 
-                    disabled={!(furthestIndex !== null && furthestIndex > currentIndex + 10)}
-                    className={`text-left px-3 py-2 text-sm rounded flex justify-between items-center group transition-opacity ${
-                      theme === 'bedtime' 
-                        ? 'text-stone-400 hover:enabled:bg-zinc-900 disabled:opacity-20' 
-                        : 'hover:enabled:bg-zinc-100 dark:hover:enabled:bg-zinc-800 text-zinc-700 dark:text-zinc-300 disabled:opacity-30'
-                    }`}
-                  >
-                    <span>Jump to Furthest</span>
-                    <span className="opacity-50 text-xs">
-                      {furthestIndex !== null ? `${(furthestIndex / effectiveTotalWords * 100).toFixed(0)}%` : '0%'}
-                    </span>
-                  </button>
-                  <button onClick={() => navigate('chapter')} className={`text-left px-3 py-2 text-sm rounded ${theme === 'bedtime' ? 'text-stone-400 hover:bg-zinc-900' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300'}`}>
-                    Restart Chapter
-                  </button>
-                  <button onClick={() => navigate('book')} className={`text-left px-3 py-2 text-sm rounded font-semibold ${theme === 'bedtime' ? 'text-amber-700 hover:bg-zinc-900' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-red-600 dark:text-red-400'}`}>
-                    Restart Book
-                  </button>
-                </div>
-              )}
-            </div>
-
-            <button
-              className={`border-none p-2 px-4 rounded-md cursor-pointer flex items-center gap-2 transition-all ${theme === 'bedtime' ? 'bg-stone-800 text-stone-200 hover:bg-stone-700' : 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200'}`}
-              onClick={(e) => { e.stopPropagation(); setIsPlaying(!isPlaying); }}
-              title={isPlaying ? "Pause" : "Play"}
-              aria-label={isPlaying ? "Pause" : "Play"}
-            >
-              {isPlaying ? <Pause size={24} /> : <Play size={24} />}
-            </button>
-
-            <button
-              className={`bg-transparent border p-2 px-4 rounded-md cursor-pointer flex items-center gap-2 transition-all ${theme === 'bedtime' ? 'border-zinc-800 text-stone-400 hover:bg-zinc-900' : 'border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-900 dark:text-zinc-100'} ${(isReadingAloud || isSynthesizing) ? (theme === 'bedtime' ? 'bg-zinc-900 text-amber-600' : 'bg-zinc-100 dark:bg-zinc-800 text-red-600 dark:text-red-400') : ''}`}
-              onClick={onReadChapter}
-              title={isReadingAloud ? "Stop reading chapter" : isSynthesizing ? "Synthesizing..." : "Read chapter aloud"}
-              disabled={isSynthesizing && !isReadingAloud}
-            >
-              {isSynthesizing ? <Loader2 size={20} className="animate-spin" /> : isReadingAloud ? <Square size={20} fill="currentColor" /> : <Volume2 size={20} />}
-            </button>
-
-            <button
-              className={`bg-transparent border p-2 px-4 rounded-md cursor-pointer flex items-center gap-2 transition-all ${theme === 'bedtime' ? 'border-zinc-800 text-stone-400 hover:bg-zinc-900' : 'border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-900 dark:text-zinc-100'} ${isAskAiOpen ? (theme === 'bedtime' ? 'bg-zinc-900' : 'bg-zinc-100 dark:bg-zinc-800') : ''} ${!onAskAiClick ? 'hidden' : ''}`}
-              onClick={onAskAiClick}
-              title="Ask AI about book"
-            >
-              <Sparkles size={20} />
-            </button>
-
-            <div className="relative">
-              <button
-                className={`bg-transparent border p-2 px-4 rounded-md cursor-pointer flex items-center gap-2 transition-all ${theme === 'bedtime' ? 'border-zinc-800 text-stone-400 hover:bg-zinc-900' : 'border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-900 dark:text-zinc-100'} ${isTocOpen ? (theme === 'bedtime' ? 'bg-zinc-900' : 'bg-zinc-100 dark:bg-zinc-800') : ''}`}
-                onClick={toggleToc}
-              >
-                <Settings2 size={20} />
-              </button>
-
-              {isTocOpen && (
-                <div className={`absolute bottom-full mb-2 right-0 w-80 max-h-[70vh] overflow-y-auto border rounded-lg shadow-xl z-50 flex flex-col p-2 gap-1 landscape:bottom-auto landscape:left-full landscape:ml-2 landscape:top-0 ${theme === 'bedtime' ? 'bg-black border-zinc-800' : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700'}`}>
-                  <div className={`px-3 py-2 text-xs font-semibold uppercase tracking-wider border-b mb-1 sticky top-0 z-10 ${theme === 'bedtime' ? 'text-stone-600 border-zinc-900 bg-black' : 'text-zinc-500 dark:text-zinc-400 border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900'}`}>
-                    Table of Contents
-                  </div>
-                  {sections.length === 0 ? (
-                    <div className="px-3 py-4 text-sm text-center text-zinc-400">No chapters found</div>
-                  ) : (
-                    sections.map((section, idx) => {
-                      const isCurrent = idx === activeChapterIdx;
-                      return (
-                        <button
-                          key={idx}
-                          ref={isCurrent ? activeChapterRef : null}
-                          className={`text-left px-3 py-2.5 text-sm rounded-md transition-colors leading-normal ${isCurrent
-                              ? (theme === 'bedtime' ? 'bg-zinc-900 text-amber-600 font-bold' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-bold')
-                              : (theme === 'bedtime' ? 'text-stone-400 hover:bg-zinc-900' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300')
-                            }`}
-                          onClick={() => {
-                            setCurrentIndex(section.startIndex);
-                            toggleToc();
-                          }}
-                        >
-                          {section.label}
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {!isPlaying && (
-          <div className={`flex items-center justify-between w-full landscape:flex-col landscape:gap-4 landscape:pointer-events-auto ${theme === 'bedtime' ? 'text-stone-500' : 'text-zinc-900 dark:text-zinc-100'}`}>
-            <span className="text-sm font-medium opacity-70 uppercase tracking-wider landscape:hidden">Speed</span>
-            <div className="flex items-center gap-3 landscape:flex-col-reverse landscape:gap-2">
-              <button
-                onClick={() => onWpmChange(Math.max(100, wpm - 25))}
-                className={`p-2 rounded-lg border transition-colors ${theme === 'bedtime' ? 'border-zinc-800 hover:bg-zinc-900' : 'border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}
-                title="Decrease Speed"
-              >
-                <Minus size={20} />
-              </button>
-              <div className="flex flex-col items-center min-w-[3rem]">
-                <span className="text-xl font-bold landscape:text-lg">{wpm}</span>
-                <span className="text-[10px] opacity-40 font-semibold uppercase">WPM</span>
-              </div>
-              <button
-                onClick={() => onWpmChange(Math.min(1200, wpm + 25))}
-                className={`p-2 rounded-lg border transition-colors ${theme === 'bedtime' ? 'border-zinc-800 hover:bg-zinc-900' : 'border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}
-                title="Increase Speed"
-              >
-                <Plus size={20} />
-              </button>
-            </div>
-          </div>
-        )}
       </div>
 
-      {!isPlaying && (
-        <div className="hidden landscape:flex fixed bottom-6 right-6 z-50 flex-col items-end pointer-events-none" onClick={(e) => e.stopPropagation()}>
-          <div className={`px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm shadow-sm max-w-[200px] ${theme === 'bedtime' ? 'border-zinc-900 bg-black/80' : ''}`}>
-            <p className="text-[10px] uppercase tracking-widest opacity-40 font-bold mb-0.5">Chapter</p>
-            <p className="text-xs font-medium truncate">{sections[activeChapterIdx]?.label || 'No Chapter'}</p>
-          </div>
-        </div>
-      )}
 
-      {!isPlaying && (
+      {!isPlaying && !isTocOpen && (
         <button
-          className="absolute bottom-8 landscape:bottom-auto landscape:top-4 landscape:right-48 opacity-30 hover:opacity-60 transition-opacity background-none border-none cursor-pointer text-inherit text-sm"
+          className="absolute top-4 left-4 landscape:top-4 landscape:left-4 opacity-30 hover:opacity-60 transition-opacity background-none border-none cursor-pointer text-inherit text-sm flex items-center gap-1 z-50"
           onClick={(e) => { e.stopPropagation(); onCloseBook(); }}
         >
-          Close Book
+          <SkipBack size={16} />
+          Library
         </button>
+      )}
+
+      {isTocOpen && (
+        <div className={`fixed inset-0 z-[110] flex items-center justify-center p-4 backdrop-blur-sm bg-black/20`} onClick={toggleToc}>
+            <div className={`w-full max-w-md max-h-[80vh] overflow-y-auto border rounded-2xl shadow-2xl flex flex-col p-4 gap-2 animate-in zoom-in duration-200 ${theme === 'bedtime' ? 'bg-black border-zinc-800' : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700'}`} onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between border-b pb-2 mb-2 border-zinc-100 dark:border-zinc-800">
+                    <h3 className="text-sm font-bold uppercase tracking-widest opacity-50">Table of Contents</h3>
+                    <button onClick={toggleToc} className="opacity-50 hover:opacity-100"><X size={20} /></button>
+                </div>
+                {sections.length === 0 ? (
+                <div className="px-3 py-4 text-sm text-center text-zinc-400">No chapters found</div>
+                ) : (
+                sections.map((section, idx) => {
+                    const isCurrent = idx === activeChapterIdx;
+                    return (
+                    <button
+                        key={idx}
+                        ref={isCurrent ? activeChapterRef : null}
+                        className={`text-left px-4 py-3 text-sm rounded-xl transition-colors leading-normal ${isCurrent
+                            ? (theme === 'bedtime' ? 'bg-zinc-900 text-amber-600 font-bold' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-bold')
+                            : (theme === 'bedtime' ? 'text-stone-400 hover:bg-zinc-900' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300')
+                        }`}
+                        onClick={() => {
+                        setCurrentIndex(section.startIndex);
+                        toggleToc();
+                        }}
+                    >
+                        {section.label}
+                    </button>
+                    );
+                })
+                )}
+            </div>
+        </div>
       )}
     </div>
   );
