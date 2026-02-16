@@ -25,15 +25,15 @@ test('pausing during chapter interlude should advance to next chapter and not ba
   await expect(menuFab).toBeVisible();
   await page.click('body');
 
-  // Wait for the "Next Chapter" interlude to appear
+  // Wait for the interlude to appear
   // It appears when currentIndex is 3 and isChapterBreak becomes true
-  const interludeLabel = page.locator('div').filter({ hasText: /^Next Chapter$/ });
+  const interludeLabel = page.locator('text=Upcoming Chapter');
   await expect(interludeLabel).toBeVisible({ timeout: 15000 });
   await expect(page.locator('text=Chapter 2')).toBeVisible();
 
   // Now we are in the interlude. currentIndex is 3.
   // Click to pause.
-  await page.locator('.fixed.inset-0.z-40').click();
+  await page.mouse.click(200, 400);
 
   // Verify we are paused (Menu FAB should be visible again)
   await expect(menuFab).toBeVisible();
@@ -76,7 +76,7 @@ test('pausing normally should back up to start of sentence on resume', async ({ 
   await expect(rsvpContainer).toHaveText(/end\./, { timeout: 20000 });
 
   // Pause
-  await page.locator('.fixed.inset-0.z-40').click();
+  await page.mouse.click(200, 400);
   await expect(menuFab).toBeVisible();
 
   // Play again

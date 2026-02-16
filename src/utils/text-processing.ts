@@ -1,6 +1,8 @@
 import { splitWord } from './orp';
 import { type RsvpSettings } from './storage';
 
+export { splitWord };
+
 export interface WordData {
   text: string;
   isParagraphStart: boolean;
@@ -63,7 +65,7 @@ export function extractWordsFromDoc(doc: Document): WordData[] {
     const processedBuffer = currentTextBuffer
         .replace(/—/g, ' — ')
         .replace(/–/g, ' – ')
-        .replace(/(\w)-(\w)/g, '$1- $2');
+        .replace(/(\w)-(?=\w)/g, '$1- ');
 
     const rawWords = processedBuffer
         .replace(/\s+/g, ' ')
@@ -148,7 +150,7 @@ export function extractWordsFromText(text: string): WordData[] {
     const processedPara = para
       .replace(/—/g, ' — ')
       .replace(/–/g, ' – ')
-      .replace(/(\w)-(\w)/g, '$1- $2');
+      .replace(/(\w)-(?=\w)/g, '$1- ');
 
     const rawWords = processedPara
       .replace(/\s+/g, ' ')

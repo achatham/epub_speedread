@@ -16,7 +16,7 @@ import { getGeminiApiKey, setGeminiApiKey as saveGeminiApiKey, askAboutBook, sum
 import { processBook, analyzeRealEndOfBook } from './utils/ebook';
 import { AudioBookPlayer } from './utils/AudioBookPlayer';
 import { LibraryView } from './components/LibraryView';
-import { ReaderView } from './components/ReaderView';
+import ReaderView from './components/ReaderView';
 import { SettingsModal, type FontFamily } from './components/SettingsModal';
 import { AiModal } from './components/AiModal';
 import { StatsView } from './components/StatsView';
@@ -55,22 +55,26 @@ const MOCK_STORAGE = {
 function App() {
   const [library, setLibrary] = useState<BookRecord[]>([]);
   const [currentBookId, setCurrentBookId] = useState<string | null>(null);
-  const currentBookIdRef = useRef<string | null>(null);
-  const lastLoadedBookIdRef = useRef<string | null>(null);
-  const hasAutoOpenedRef = useRef(false);
-
-  useEffect(() => {
-    currentBookIdRef.current = currentBookId;
-  }, [currentBookId]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [user, setUser] = useState<User | null | undefined>(undefined);
-  const [storageProvider, setStorageProvider] = useState<FirestoreStorage | null>(null);
-
   const [words, setWords] = useState<WordData[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [wpm, setWpm] = useState(300 * WPM_VANITY_RATIO);
   const [bookTitle, setBookTitle] = useState('');
+
+  const currentBookIdRef = useRef<string | null>(null);
+  const currentIndexRef = useRef(0);
+  const wpmRef = useRef(300);
+  const bookTitleRef = useRef('');
+  const lastLoadedBookIdRef = useRef<string | null>(null);
+  const hasAutoOpenedRef = useRef(false);
+
+  useEffect(() => { currentBookIdRef.current = currentBookId; }, [currentBookId]);
+  useEffect(() => { currentIndexRef.current = currentIndex; }, [currentIndex]);
+  useEffect(() => { wpmRef.current = wpm; }, [wpm]);
+  useEffect(() => { bookTitleRef.current = bookTitle; }, [bookTitle]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [user, setUser] = useState<User | null | undefined>(undefined);
+  const [storageProvider, setStorageProvider] = useState<FirestoreStorage | null>(null);
   const [sections, setSections] = useState<{ label: string; startIndex: number }[]>([]);
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -532,9 +536,11 @@ function App() {
 
   const handleProcessBook = useCallback(async (bookRecord: BookRecord) => {
     if (!storageProvider) return;
+    if (lastLoadedBookIdRef.current === bookRecord.id) return;
     try {
       const result = await processBook(bookRecord, storageProvider);
       
+      console.log(`[App] Loaded book ${bookRecord.id} at index ${result.wordIndex}`);
       lastLoadedBookIdRef.current = bookRecord.id;
       setBookTitle(result.title);
       setWords(result.words);
@@ -590,18 +596,23 @@ function App() {
     }
   }, [currentBookId, handleProcessBook, library, storageProvider]);
 
+  // Save progress (debounced)
   useEffect(() => {
-    if (!isPlaying && currentBookId && storageProvider) storageProvider.updateBookProgress(currentBookId, currentIndex);
-    if (furthestIndex !== null && currentIndex > furthestIndex) {
-      setFurthestIndex(currentIndex);
+    if (currentBookId && storageProvider && currentBookId === lastLoadedBookIdRef.current) {
+      // If playing, we don't save progress on every word (handled by session log)
+      // but we do want to save if they pause or seek.
+      const timer = setTimeout(() => {
+        storageProvider.updateBookProgress(currentBookId, currentIndex);
+      }, isPlaying ? 5000 : 500); // Save every 5s if playing, or 0.5s after pause/seek
+      return () => clearTimeout(timer);
     }
-  }, [isPlaying, currentIndex, currentBookId, storageProvider, furthestIndex]);
+  }, [currentIndex, isPlaying, currentBookId, storageProvider]);
 
   const handleSetIsPlaying = useCallback((playing: boolean) => {
     if (playing && !isPlaying) {
       setPlaybackStartTime(Date.now());
 
-      const nextIndex = getResumeIndex(currentIndex, words, sections, isChapterBreak);
+      const nextIndex = getResumeIndex(currentIndexRef.current, words, sections, isChapterBreak);
       if (isChapterBreak) {
         setIsChapterBreak(false);
       }
@@ -638,22 +649,26 @@ function App() {
       }
     }
     setIsPlaying(playing);
-  }, [isPlaying, currentIndex, words, isReadingAloud, autoLandscape, isChapterBreak, sections]);
+  }, [isPlaying, words, isReadingAloud, autoLandscape, isChapterBreak, sections]);
 
   useEffect(() => {
     if (isPlaying) {
       if (sessionStartTimeRef.current === null) {
         sessionStartTimeRef.current = Date.now();
         wordsReadInSessionRef.current = 0;
-        sessionStartIndexRef.current = currentIndex;
+        sessionStartIndexRef.current = currentIndexRef.current;
       }
-    } else if (sessionStartTimeRef.current !== null && currentBookId && storageProvider) {
-      const savedBookId = currentBookId;
-      const savedIndex = currentIndex;
-      const savedWpm = wpm;
+    } else if (sessionStartTimeRef.current !== null && currentBookIdRef.current && storageProvider) {
+      const savedBookId = currentBookIdRef.current;
+      const savedIndex = currentIndexRef.current;
+      const savedWpm = wpmRef.current;
       const savedStartTime = sessionStartTimeRef.current;
       const savedStartIndex = sessionStartIndexRef.current || 0;
-      const savedBookTitle = bookTitle;
+      const savedBookTitle = bookTitleRef.current;
+
+      if (furthestIndex !== null && savedIndex > furthestIndex) {
+        setFurthestIndex(savedIndex);
+      }
 
       const durationMs = Date.now() - savedStartTime;
       const durationMins = durationMs / 60000;
@@ -736,7 +751,7 @@ function App() {
       wordsReadInSessionRef.current = 0;
       sessionStartIndexRef.current = null;
     }
-  }, [isPlaying, wpm, currentBookId, storageProvider, currentIndex, bookTitle, library, rsvpSettings.vanityWpmRatio]);
+  }, [isPlaying, storageProvider, library, rsvpSettings.vanityWpmRatio, furthestIndex]);
 
   // Track words read
   useEffect(() => {
@@ -951,7 +966,7 @@ function App() {
           isPlaying={isPlaying}
           setIsPlaying={handleSetIsPlaying}
           wpm={Math.round(wpm / (library.find(b => b.id === currentBookId)?.settings.vanityWpmRatio || rsvpSettings.vanityWpmRatio))}
-          onWpmChange={(targetWpm) => { 
+          onWpmChange={(targetWpm: number) => {
               const currentRatio = library.find(b => b.id === currentBookId)?.settings.vanityWpmRatio || rsvpSettings.vanityWpmRatio;
               const boosted = targetWpm * currentRatio;
               setWpm(boosted); 

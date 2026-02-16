@@ -19,14 +19,10 @@ test.describe('Mobile Orientation Layout', () => {
       ], [
         { label: "Chapter 1", startIndex: 0 }
       ]);
-      
-      // Add a mock book to the library via the internal state if possible, 
-      // but __loadMockWords directly enters the reader. 
-      // Let's go back to library if we want to see it.
     });
 
     // Close the book to see the library
-    await page.getByText('← Library').click();
+    await page.locator('button[title="Back to Library"]').click();
 
     // Verify we are in Library View
     await expect(page.getByRole('heading', { name: 'Library' })).toBeVisible();
@@ -46,7 +42,7 @@ test.describe('Mobile Orientation Layout', () => {
       ]);
     });
 
-    await page.getByText('← Library').click();
+    await page.locator('button[title="Back to Library"]').click();
 
     await expect(page.getByRole('heading', { name: 'Library' })).toBeVisible();
 
@@ -75,8 +71,8 @@ test.describe('Mobile Orientation Layout', () => {
       ]);
     });
 
-    // Verify we are in Reader View by checking the book title (default mock)
-    await expect(page.getByText('Mock Book')).toBeVisible();
+    // Verify we are in Reader View by checking the progress
+    await expect(page.locator('header span.text-sm.font-medium.opacity-60')).toBeVisible();
 
     await page.screenshot({ path: 'tests/screenshots/reader-portrait.png' });
   });
@@ -100,7 +96,7 @@ test.describe('Mobile Orientation Layout', () => {
       ]);
     });
 
-    await expect(page.locator('text=Mock Book')).toBeVisible();
+    await expect(page.locator('header span.text-sm.font-medium.opacity-60')).toBeVisible();
 
     await page.screenshot({ path: 'tests/screenshots/reader-landscape.png' });
   });

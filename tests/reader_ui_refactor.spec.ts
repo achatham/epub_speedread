@@ -3,6 +3,7 @@ import { test, expect } from '@playwright/test';
 test.describe('Reader UI Refactor', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
+    await page.waitForFunction(() => typeof (window as any).__loadMockWords === 'function');
     // Inject mock words to bypass auth and load reader
     await page.evaluate(() => {
       const mockWords = Array.from({ length: 100 }, (_, i) => ({
@@ -13,7 +14,7 @@ test.describe('Reader UI Refactor', () => {
       (window as any).__loadMockWords(mockWords, [{ label: 'Chapter 1', startIndex: 0 }]);
     });
     // Wait for ReaderView to render
-    await expect(page.locator('header h3')).toBeVisible();
+    await expect(page.locator('button[title="Back to Library"]')).toBeVisible();
   });
 
   test('should show expanded text preview in portrait', async ({ page }) => {

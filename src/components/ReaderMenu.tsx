@@ -7,7 +7,9 @@ import {
 
 type Theme = 'light' | 'dark' | 'bedtime';
 
-interface ReaderMenuProps {
+export interface ReaderMenuProps {
+  isOpen: boolean;
+  setIsOpen: (open: boolean) => void;
   wpm: number;
   onWpmChange: (wpm: number) => void;
   theme: Theme;
@@ -22,13 +24,15 @@ interface ReaderMenuProps {
   sections: { label: string; startIndex: number }[];
   activeChapterIdx: number;
   setCurrentIndex: (index: number) => void;
-  navigate: (type: 'book' | 'chapter' | 'prev-paragraph' | 'prev-sentence' | 'next-paragraph' | 'next-sentence') => void;
+  navigate: (type: any) => void;
   furthestIndex: number | null;
   effectiveTotalWords: number;
   currentIndex: number;
 }
 
 export function ReaderMenu({
+  isOpen,
+  setIsOpen,
   wpm,
   onWpmChange,
   theme,
@@ -48,7 +52,6 @@ export function ReaderMenu({
   effectiveTotalWords,
   currentIndex
 }: ReaderMenuProps) {
-  const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'main' | 'toc' | 'nav'>('main');
 
   const mainBg = theme === 'bedtime' ? 'bg-black' : 'bg-white dark:bg-zinc-900';
