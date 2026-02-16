@@ -286,6 +286,14 @@ export function SettingsModal({
                     unit="x"
                     onChange={(v) => updateRsvp('vanityWpmRatio', v)}
                   />
+                  <RsvpControl
+                    label="Preview Word Count"
+                    description="Words shown when paused"
+                    value={rsvpSettings.previewWordCount}
+                    min={10} max={200} step={10}
+                    unit=" words"
+                    onChange={(v) => updateRsvp('previewWordCount', v)}
+                  />
                 </div>
               </div>
             </div>
