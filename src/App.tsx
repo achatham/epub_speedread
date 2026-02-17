@@ -960,7 +960,6 @@ function App() {
           furthestIndex={furthestIndex}
           isPlaying={isPlaying}
           setIsPlaying={handleSetIsPlaying}
-          isHoldPaused={isHoldPaused}
           setIsHoldPaused={setIsHoldPaused}
           wpm={Math.round(wpm / (library.find(b => b.id === currentBookId)?.settings.vanityWpmRatio || rsvpSettings.vanityWpmRatio))}
           onWpmChange={(targetWpm) => { 

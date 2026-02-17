@@ -15,7 +15,6 @@ interface ReaderViewProps {
   furthestIndex: number | null;
   isPlaying: boolean;
   setIsPlaying: (playing: boolean) => void;
-  isHoldPaused: boolean;
   setIsHoldPaused: (paused: boolean) => void;
   wpm: number;
   onWpmChange: (wpm: number) => void;
@@ -48,7 +47,6 @@ export function ReaderView({
   furthestIndex,
   isPlaying,
   setIsPlaying,
-  isHoldPaused,
   setIsHoldPaused,
   wpm,
   onWpmChange,
@@ -134,7 +132,7 @@ export function ReaderView({
     setIsHoldPaused(true);
   };
 
-  const handlePointerUp = (e: React.PointerEvent) => {
+  const handlePointerUp = () => {
     if (pressStartTimeRef.current === null) return;
 
     const duration = Date.now() - pressStartTimeRef.current;
