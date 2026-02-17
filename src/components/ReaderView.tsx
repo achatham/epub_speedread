@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { ReaderMenu } from './ReaderMenu';
 import type { WordData } from '../utils/text-processing';
 import { splitWord } from '../utils/orp';
@@ -14,6 +15,8 @@ interface ReaderViewProps {
   furthestIndex: number | null;
   isPlaying: boolean;
   setIsPlaying: (playing: boolean) => void;
+  isHoldPaused: boolean;
+  setIsHoldPaused: (paused: boolean) => void;
   wpm: number;
   onWpmChange: (wpm: number) => void;
   theme: Theme;
@@ -45,6 +48,8 @@ export function ReaderView({
   furthestIndex,
   isPlaying,
   setIsPlaying,
+  isHoldPaused,
+  setIsHoldPaused,
   wpm,
   onWpmChange,
   theme,
@@ -121,6 +126,37 @@ export function ReaderView({
   const rsvpContextClass = theme === 'bedtime' ? 'text-stone-600' : 'opacity-90';
   const guidelinesClass = theme === 'bedtime' ? 'bg-amber-900/30' : 'bg-red-600 dark:bg-red-500 opacity-30';
 
+  const pressStartTimeRef = useRef<number | null>(null);
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    pressStartTimeRef.current = Date.now();
+    setIsHoldPaused(true);
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (pressStartTimeRef.current === null) return;
+
+    const duration = Date.now() - pressStartTimeRef.current;
+    pressStartTimeRef.current = null;
+
+    if (duration < 300) {
+      // Short tap: full pause
+      setIsPlaying(false);
+      setIsHoldPaused(false);
+    } else {
+      // Long press: resume
+      setIsHoldPaused(false);
+    }
+  };
+
+  const handlePointerCancel = () => {
+    if (pressStartTimeRef.current !== null) {
+      pressStartTimeRef.current = null;
+      setIsHoldPaused(false);
+    }
+  };
+
   // Find current chapter
   let activeChapterIdx = -1;
   for (let i = 0; i < sections.length; i++) {
@@ -184,8 +220,10 @@ export function ReaderView({
       {isPlaying && (
         <div 
           className="fixed inset-0 z-40 bg-transparent cursor-pointer"
-          onClick={(e) => { e.stopPropagation(); setIsPlaying(false); }}
-          title="Click to pause"
+          onPointerDown={handlePointerDown}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerCancel}
+          title="Hold to pause, tap for menu"
         />
       )}
       
