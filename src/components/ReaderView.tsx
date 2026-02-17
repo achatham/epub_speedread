@@ -347,7 +347,7 @@ export function ReaderView({
       </div>
 
       {!isPlaying && (
-        <div className="hidden landscape:flex fixed bottom-24 right-6 z-50 flex-col items-end pointer-events-none" onClick={(e) => e.stopPropagation()}>
+        <div className="hidden landscape:flex fixed top-4 right-6 z-50 flex-col items-end pointer-events-none" onClick={(e) => e.stopPropagation()}>
           <div className={`px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm shadow-sm max-w-[200px] ${theme === 'bedtime' ? 'border-zinc-900 bg-black/80' : ''}`}>
             <p className="text-[10px] uppercase tracking-widest opacity-40 font-bold mb-0.5">Chapter</p>
             <p className="text-xs font-medium truncate">{sections[activeChapterIdx]?.label || 'No Chapter'}</p>
