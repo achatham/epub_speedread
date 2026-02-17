@@ -159,13 +159,15 @@ export function ReaderView({
     };
 
     return (
-        <div className={`mt-4 text-xs space-y-1 landscape:mt-2 ${theme === 'bedtime' ? 'text-stone-500' : 'text-zinc-500 dark:text-zinc-400'}`}>
+        <div className={`mt-4 text-xs space-y-1 landscape:mt-1 ${theme === 'bedtime' ? 'text-stone-500' : 'text-zinc-500 dark:text-zinc-400'}`}>
             <div className="flex gap-4 justify-center landscape:justify-start">
                 <span>{percentage}% Complete</span>
                 <span>•</span>
                 <span>Page {Math.floor(currentIndex / 300) + 1} of {Math.ceil(effectiveTotalWords / 300)}</span>
+                <span className="hidden landscape:inline opacity-40">•</span>
+                <span className="hidden landscape:inline font-mono opacity-80">{formatDuration(wordsLeftInBook)} left</span>
             </div>
-            <div className="flex gap-4 justify-center landscape:justify-start font-mono opacity-80">
+            <div className="flex gap-4 justify-center landscape:justify-start landscape:hidden font-mono opacity-80">
                 <span>Chapter: {formatDuration(wordsLeftInChapter)} left</span>
                 <span>Book: {formatDuration(wordsLeftInBook)} left</span>
             </div>
@@ -175,7 +177,7 @@ export function ReaderView({
   
   return (
     <div 
-      className={`flex flex-col items-center justify-center h-dvh transition-colors duration-300 relative ${mainBg} ${mainText} ${!isPlaying ? 'cursor-pointer landscape:flex-row landscape:items-stretch landscape:justify-start' : ''}`}
+      className={`flex flex-col items-center justify-center h-dvh transition-colors duration-300 relative ${mainBg} ${mainText} ${!isPlaying ? 'cursor-pointer' : ''}`}
       style={{ fontFamily: fontStyles[fontFamily] }}
       onClick={() => { if (!isPlaying) setIsPlaying(true); }}
     >
@@ -188,19 +190,15 @@ export function ReaderView({
       )}
       
       {!isPlaying && (
-        <div className="absolute top-8 text-center w-full px-4 landscape:top-4 landscape:left-28 landscape:text-left landscape:w-auto landscape:px-0 z-20" onClick={(e) => e.stopPropagation()}>
+        <div className="absolute top-8 text-center w-full px-4 landscape:top-4 landscape:left-8 landscape:text-left landscape:w-auto landscape:px-0 z-20" onClick={(e) => e.stopPropagation()}>
           <h3 className="m-0 font-normal opacity-60 text-lg truncate max-w-2xl mx-auto landscape:mx-0 landscape:max-w-md">{bookTitle}</h3>
-          <p className="my-2 text-sm opacity-40 landscape:my-1 landscape:text-xs">
-            {currentIndex + 1} / {effectiveTotalWords} words
-            {realEndIndex && currentIndex >= realEndIndex && " (Back Matter)"}
-          </p>
           {getProgressStats()}
         </div>
       )}
 
 
       {/* RSVP Display or Text Preview */}
-      <div className={`relative flex items-center justify-center w-full overflow-hidden ${isPlaying ? '' : 'max-w-2xl landscape:max-w-none landscape:my-2 flex-1 landscape:mx-12'} border-t border-b my-8 ${theme === 'bedtime' ? 'border-zinc-900' : 'border-zinc-200 dark:border-zinc-800'}`} style={{ minHeight: isPlaying ? Math.max(120, currentFontSize * 1.5) : '120px' }}>
+      <div className={`relative flex items-center justify-center w-full overflow-hidden ${isPlaying ? '' : 'max-w-2xl landscape:max-w-none landscape:my-2 flex-1 landscape:mx-8'} border-t border-b my-8 ${theme === 'bedtime' ? 'border-zinc-900' : 'border-zinc-200 dark:border-zinc-800'}`} style={{ minHeight: isPlaying ? Math.max(120, currentFontSize * 1.5) : '120px' }}>
         {isPlaying ? (
           <>
             {!isChapterBreak && (
@@ -265,11 +263,10 @@ export function ReaderView({
       {/* Controls */}
       <div
         className={`flex flex-col gap-6 items-center relative z-50
-          ${isPlaying ? 'w-full max-w-md px-4' : 'landscape:fixed landscape:left-0 landscape:top-0 landscape:bottom-0 landscape:w-24 landscape:max-w-[96px] landscape:bg-white landscape:dark:bg-zinc-900 landscape:border-r landscape:border-zinc-200 landscape:dark:border-zinc-800 landscape:justify-center landscape:gap-4 landscape:px-2 portrait:w-full portrait:max-w-md portrait:px-4 landscape:pointer-events-none'}
-          ${!isPlaying && theme === 'bedtime' ? 'landscape:bg-black landscape:border-zinc-900' : ''}`}
+          ${isPlaying ? 'w-full max-w-md px-4' : 'portrait:w-full portrait:max-w-md portrait:px-4 landscape:pointer-events-none'}`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className={`w-full space-y-4 landscape:pointer-events-auto ${!isPlaying ? 'landscape:fixed landscape:bottom-4 landscape:left-28 landscape:right-64 landscape:w-auto landscape:space-y-4' : ''}`}>
+        <div className={`w-full space-y-4 landscape:pointer-events-auto ${!isPlaying ? 'landscape:fixed landscape:bottom-4 landscape:left-8 landscape:right-64 landscape:w-auto landscape:space-y-4' : ''}`}>
           {/* Chapter Progress */}
           <div className="space-y-1">
             {isPlaying && (
@@ -350,7 +347,7 @@ export function ReaderView({
       </div>
 
       {!isPlaying && (
-        <div className="hidden landscape:flex fixed bottom-6 right-6 z-50 flex-col items-end pointer-events-none" onClick={(e) => e.stopPropagation()}>
+        <div className="hidden landscape:flex fixed bottom-24 right-6 z-50 flex-col items-end pointer-events-none" onClick={(e) => e.stopPropagation()}>
           <div className={`px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm shadow-sm max-w-[200px] ${theme === 'bedtime' ? 'border-zinc-900 bg-black/80' : ''}`}>
             <p className="text-[10px] uppercase tracking-widest opacity-40 font-bold mb-0.5">Chapter</p>
             <p className="text-xs font-medium truncate">{sections[activeChapterIdx]?.label || 'No Chapter'}</p>
