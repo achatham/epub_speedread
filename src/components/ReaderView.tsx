@@ -165,7 +165,9 @@ export function ReaderView({
                 <span>•</span>
                 <span>Page {Math.floor(currentIndex / 300) + 1} of {Math.ceil(effectiveTotalWords / 300)}</span>
                 <span className="hidden landscape:inline opacity-40">•</span>
-                <span className="hidden landscape:inline font-mono opacity-80">{formatDuration(wordsLeftInBook)} left</span>
+                <span className="hidden landscape:inline font-mono opacity-80">{formatDuration(wordsLeftInChapter)} chapter</span>
+                <span className="hidden landscape:inline opacity-40">•</span>
+                <span className="hidden landscape:inline font-mono opacity-80">{formatDuration(wordsLeftInBook)} book</span>
             </div>
             <div className="flex gap-4 justify-center landscape:justify-start landscape:hidden font-mono opacity-80">
                 <span>Chapter: {formatDuration(wordsLeftInChapter)} left</span>
