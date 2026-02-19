@@ -111,3 +111,46 @@ describe('extractWordsFromDoc', () => {
     ]);
   });
 });
+
+import { getCenteredContext } from './text-processing';
+
+describe('getCenteredContext', () => {
+  const mockWords = [
+    { text: 'One', isParagraphStart: true, isSentenceStart: true },
+    { text: 'Two', isParagraphStart: false, isSentenceStart: false },
+    { text: 'Three', isParagraphStart: false, isSentenceStart: false },
+    { text: 'Four', isParagraphStart: false, isSentenceStart: false },
+    { text: 'Five', isParagraphStart: false, isSentenceStart: false },
+  ];
+
+  it('should return empty context for empty words array', () => {
+    expect(getCenteredContext([], 0)).toEqual({ before: [], current: null, after: [] });
+  });
+
+  it('should center the word correctly in the middle', () => {
+    const result = getCenteredContext(mockWords, 2, 1);
+    expect(result.current?.text).toBe('Three');
+    expect(result.before.map(w => w.text)).toEqual(['Two']);
+    expect(result.after.map(w => w.text)).toEqual(['Four']);
+  });
+
+  it('should handle start boundary', () => {
+    const result = getCenteredContext(mockWords, 0, 1);
+    expect(result.current?.text).toBe('One');
+    expect(result.before).toHaveLength(0);
+    expect(result.after.map(w => w.text)).toEqual(['Two']);
+  });
+
+  it('should handle end boundary', () => {
+    const result = getCenteredContext(mockWords, 4, 1);
+    expect(result.current?.text).toBe('Five');
+    expect(result.before.map(w => w.text)).toEqual(['Four']);
+    expect(result.after).toHaveLength(0);
+  });
+
+  it('should handle buffer larger than total words', () => {
+    const result = getCenteredContext(mockWords, 2, 10);
+    expect(result.before.map(w => w.text)).toEqual(['One', 'Two']);
+    expect(result.after.map(w => w.text)).toEqual(['Four', 'Five']);
+  });
+});

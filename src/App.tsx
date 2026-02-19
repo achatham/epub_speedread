@@ -110,7 +110,6 @@ function App() {
   const [playbackStartTime, setPlaybackStartTime] = useState<number | null>(null);
 
   const [isTocOpen, setIsTocOpen] = useState(false);
-  const [isNavOpen, setIsNavOpen] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
   const [onboardingCompleted, setOnboardingCompleted] = useState(() => {
@@ -224,7 +223,7 @@ function App() {
 
   // Test Hook for Playwright
   useEffect(() => {
-    (window as any).__loadMockWords = (mockWords: any[], mockSections?: any[], mockSessions?: any[]) => {
+    (window as any).__loadMockWords = (mockWords: any[], mockSections?: any[], mockSessions?: any[], initialIndex?: number) => {
       isMockModeRef.current = true;
       if (mockWords === null) {
         // Special case: Simulate logged-in Library View with empty library
@@ -245,7 +244,7 @@ function App() {
       setWords(processedWords);
       setSections(mockSections || [{ label: 'Mock Chapter', startIndex: 0 }]);
       if (mockSessions) setSessions(mockSessions);
-      setCurrentIndex(0);
+      setCurrentIndex(initialIndex || 0);
       setCurrentBookId('mock');
       setIsPlaying(false);
       setUser(u => u || (MOCK_USER as any));
@@ -747,7 +746,6 @@ function App() {
   const navigate = (type: NavigationType) => {
     setIsChapterBreak(false);
     setCurrentIndex(calculateNavigationTarget(currentIndex, words, sections, type));
-    setIsNavOpen(false);
   };
 
   const nextWord = useCallback(() => {
@@ -963,7 +961,6 @@ function App() {
           onToggleTheme={toggleTheme} onAskAiClick={() => { setAiResponse(''); setIsAskAiOpen(true); }}
           isAskAiOpen={isAskAiOpen} sections={sections} setCurrentIndex={setCurrentIndex}
           navigate={navigate}
-          isNavOpen={isNavOpen} toggleNav={() => setIsNavOpen(!isNavOpen)}
           isTocOpen={isTocOpen} toggleToc={() => setIsTocOpen(!isTocOpen)}
           onReadChapter={async () => {
             if (audioPlayerRef.current?.isActive) {

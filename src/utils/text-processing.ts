@@ -221,6 +221,31 @@ export function chunkWordsByParagraph(words: WordData[], minWords: number = 300)
   return chunks;
 }
 
+export interface CenteredContext {
+  before: WordData[];
+  current: WordData | null;
+  after: WordData[];
+}
+
+export function getCenteredContext(
+  words: WordData[],
+  currentIndex: number,
+  buffer: number = 100
+): CenteredContext {
+  if (words.length === 0) return { before: [], current: null, after: [] };
+
+  const safeIndex = Math.max(0, Math.min(currentIndex, words.length - 1));
+
+  const start = Math.max(0, safeIndex - buffer);
+  const end = Math.min(words.length, safeIndex + buffer + 1);
+
+  return {
+    before: words.slice(start, safeIndex),
+    current: words[safeIndex],
+    after: words.slice(safeIndex + 1, end)
+  };
+}
+
 export function chunkTextByParagraph(text: string, minWords: number = 300): TextChunk[] {
   // Split by paragraph markers
   const paragraphs = text.split(/\n+/);
