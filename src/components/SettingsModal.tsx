@@ -56,7 +56,7 @@ export function SettingsModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4 text-zinc-900 dark:text-zinc-100">
-      <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl w-full max-w-md shadow-2xl border border-zinc-200 dark:border-zinc-800 max-h-[90vh] overflow-y-auto">
+      <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl w-full max-w-md landscape:max-w-4xl shadow-2xl border border-zinc-200 dark:border-zinc-800 max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-semibold">Settings</h2>
           <button onClick={onClose} className="opacity-50 hover:opacity-100">
@@ -88,9 +88,9 @@ export function SettingsModal({
 
         <div className="space-y-6">
           {activeTab === 'general' ? (
-            <>
+            <div className="space-y-6 landscape:grid landscape:grid-cols-2 landscape:gap-6 landscape:space-y-0">
               {/* Account Section */}
-          <div>
+          <div className="landscape:col-span-2">
             <label className="block text-sm font-medium mb-3 opacity-70 flex items-center gap-2">
               <Cloud size={16} />
               Sync & Account
@@ -141,7 +141,7 @@ export function SettingsModal({
             </div>
           </div>
 
-          <div>
+          <div className="landscape:row-span-2">
             <label className="block text-sm font-medium mb-3 opacity-70 flex items-center gap-2">
               <Type size={16} />
               Reader Font
@@ -188,7 +188,7 @@ export function SettingsModal({
             </div>
           </div>
 
-          <div>
+          <div className="landscape:col-span-2">
             <label htmlFor="api-key" className="block text-sm font-medium mb-1.5 opacity-70">Gemini API Key</label>
             <input
               id="api-key"
@@ -213,7 +213,7 @@ export function SettingsModal({
             </div>
           </div>
 
-            </>
+            </div>
           ) : (
             <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-200">
               <div>
@@ -221,7 +221,7 @@ export function SettingsModal({
                   <Settings2 size={16} />
                   RSVP Timing
                 </label>
-                <div className="space-y-5">
+                <div className="space-y-5 landscape:grid landscape:grid-cols-2 landscape:gap-6 landscape:space-y-0">
                   <RsvpControl
                     label="Period Multiplier"
                     description="Delay after . ! ?"

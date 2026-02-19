@@ -57,6 +57,13 @@ export function ReaderMenu({
   const [activeTab, setActiveTab] = useState<'main' | 'toc' | 'nav'>('main');
   const activeChapterRef = useRef<HTMLButtonElement>(null);
 
+  // Reset to main tab when menu opens
+  useEffect(() => {
+    if (isOpen) {
+      setActiveTab('main');
+    }
+  }, [isOpen]);
+
   useEffect(() => {
     if (activeTab === 'toc' && activeChapterRef.current) {
       activeChapterRef.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -86,7 +93,7 @@ export function ReaderMenu({
         onClick={() => setIsOpen(false)}
       />
 
-      <div className={`relative w-full max-w-sm sm:w-80 max-h-[80vh] overflow-hidden rounded-2xl border shadow-2xl flex flex-col pointer-events-auto ${menuBg} ${textColor} animate-in slide-in-from-bottom-4 duration-200`}>
+      <div className={`relative w-full max-w-sm sm:w-80 landscape:sm:max-w-xl landscape:sm:w-full max-h-[90vh] overflow-hidden rounded-2xl border shadow-2xl flex flex-col pointer-events-auto ${menuBg} ${textColor} animate-in slide-in-from-bottom-4 duration-200`}>
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-zinc-100 dark:border-zinc-800">
           <div className="flex items-center gap-2">
@@ -98,7 +105,7 @@ export function ReaderMenu({
                 <ChevronLeft size={20} />
               </button>
             )}
-            <h2 className="font-semibold truncate max-w-[180px]">
+            <h2 className="font-semibold truncate max-w-[180px] landscape:max-w-md">
               {activeTab === 'main' ? bookTitle : activeTab === 'toc' ? 'Table of Contents' : 'Navigate'}
             </h2>
           </div>
@@ -140,7 +147,7 @@ export function ReaderMenu({
               </div>
 
               {/* Grid Actions */}
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-3 gap-2 landscape:grid-cols-6">
                 <MenuButton
                   icon={<BarChart2 size={20} />}
                   label="Stats"
@@ -182,7 +189,7 @@ export function ReaderMenu({
               </div>
 
               {/* Sub-menu Triggers */}
-              <div className="space-y-1 pt-2">
+              <div className="space-y-1 pt-2 landscape:flex landscape:gap-2 landscape:space-y-0">
                 <button
                   onClick={() => setActiveTab('toc')}
                   className={`w-full flex items-center justify-between p-3 rounded-lg transition-colors ${itemHover}`}
@@ -207,7 +214,7 @@ export function ReaderMenu({
               </div>
 
               {/* Close Book */}
-              <div className="pt-2">
+              <div className="pt-2 landscape:pt-0">
                 <button
                   onClick={onCloseBook}
                   className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors text-red-500 hover:bg-red-500/10`}
@@ -249,7 +256,7 @@ export function ReaderMenu({
           )}
 
           {activeTab === 'nav' && (
-            <div className="p-1 space-y-1">
+            <div className="p-1 space-y-1 landscape:grid landscape:grid-cols-2 landscape:gap-1 landscape:space-y-0">
               <NavButton
                 label="Previous Paragraph"
                 sub="Paragraph"
@@ -262,7 +269,7 @@ export function ReaderMenu({
                 onClick={() => { navigate('prev-sentence'); setIsOpen(false); }}
                 hoverClass={itemHover}
               />
-              <div className="h-px bg-zinc-100 dark:bg-zinc-800 my-1 mx-2" />
+              <div className="h-px bg-zinc-100 dark:bg-zinc-800 my-1 mx-2 landscape:hidden" />
               <NavButton
                 label="Next Sentence"
                 onClick={() => { navigate('next-sentence'); setIsOpen(false); }}
@@ -273,7 +280,7 @@ export function ReaderMenu({
                 onClick={() => { navigate('next-paragraph'); setIsOpen(false); }}
                 hoverClass={itemHover}
               />
-              <div className="h-px bg-zinc-100 dark:bg-zinc-800 my-1 mx-2" />
+              <div className="h-px bg-zinc-100 dark:bg-zinc-800 my-1 mx-2 landscape:hidden" />
               <button
                 onClick={() => {
                   if (furthestIndex !== null && furthestIndex > currentIndex + 10) {
@@ -300,7 +307,7 @@ export function ReaderMenu({
               />
               <button
                 onClick={() => { navigate('book'); setIsOpen(false); }}
-                className={`w-full text-left px-3 py-3 text-sm rounded-lg font-semibold text-red-600 dark:text-red-400 ${itemHover}`}
+                className={`w-full text-left px-3 py-3 text-sm rounded-lg font-semibold text-red-600 dark:text-red-400 ${itemHover} landscape:col-span-2`}
               >
                 Restart Book
               </button>
