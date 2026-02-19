@@ -16,12 +16,12 @@ test('font size should remain stable for "accessibility;" within tolerance', asy
     ]);
   });
 
-  // 3. Wait for the reader to load and the Play button to be visible
-  const playButton = page.getByRole('button', { name: 'Play' });
-  await expect(playButton).toBeVisible();
+  // 3. Wait for the reader to load and the menu to be visible
+  await expect(page.locator('button[title="Open Menu"]')).toBeVisible();
 
   // 4. Measure "The" (first word)
-  await playButton.click();
+  // Click on the screen to start playback
+  await page.mouse.click(400, 300);
   
   const rsvpContainer = page.locator('.flex.w-full.items-baseline');
   await expect(rsvpContainer).toBeVisible();

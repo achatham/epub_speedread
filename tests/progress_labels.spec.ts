@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 test('verify progress labels are below the progress bars and aligned', async ({ page }) => {
-  await page.goto('http://localhost:5173/');
+  await page.goto('/');
 
   // Wait for the mock function to be available
   await page.waitForFunction(() => typeof (window as any).__loadMockWords === 'function', { timeout: 15000 });
@@ -15,11 +15,13 @@ test('verify progress labels are below the progress bars and aligned', async ({ 
     ]);
   });
 
+  // Wait for the menu to be visible
+  await expect(page.locator('button[title="Open Menu"]')).toBeVisible();
+
   await page.screenshot({ path: 'tests/screenshots/before-play.png' });
 
   // Start playback
-  const playButton = page.getByRole('button', { name: 'Play' });
-  await playButton.click();
+  await page.mouse.click(400, 400);
 
   // Wait for progress labels to be visible
   const chapterLabel = page.locator('text=Chapter Progress');

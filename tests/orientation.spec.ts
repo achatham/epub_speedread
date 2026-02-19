@@ -11,7 +11,6 @@ test.describe('Mobile Orientation Layout', () => {
   test('Library View - Portrait', async ({ page }) => {
     await page.setViewportSize(iPhone13.viewport);
     
-    // Load mock data to ensure we are "logged in" and have content
     await page.evaluate(() => {
       (window as any).__loadMockWords([
         { text: "Mock", isParagraphStart: true, isSentenceStart: true },
@@ -19,18 +18,10 @@ test.describe('Mobile Orientation Layout', () => {
       ], [
         { label: "Chapter 1", startIndex: 0 }
       ]);
-      
-      // Add a mock book to the library via the internal state if possible, 
-      // but __loadMockWords directly enters the reader. 
-      // Let's go back to library if we want to see it.
     });
 
-    // Close the book to see the library
-    await page.getByText('Close Book').click();
-
-    // Verify we are in Library View
+    await page.getByRole('button', { name: 'Library' }).click();
     await expect(page.getByRole('heading', { name: 'Library' })).toBeVisible();
-
     await page.screenshot({ path: 'tests/screenshots/library-portrait.png' });
   });
 
@@ -46,10 +37,8 @@ test.describe('Mobile Orientation Layout', () => {
       ]);
     });
 
-    await page.getByText('Close Book').click();
-
+    await page.getByRole('button', { name: 'Library' }).click();
     await expect(page.getByRole('heading', { name: 'Library' })).toBeVisible();
-
     await page.screenshot({ path: 'tests/screenshots/library-landscape.png' });
   });
 
@@ -57,27 +46,17 @@ test.describe('Mobile Orientation Layout', () => {
     await page.setViewportSize(iPhone13.viewport);
     
     await page.evaluate(() => {
-      // Disable auto-landscape to allow testing portrait reader
       localStorage.setItem('user_settings', JSON.stringify({ autoLandscape: false }));
 
       (window as any).__loadMockWords([
         { text: "The", isParagraphStart: true, isSentenceStart: true },
-        { text: "quick", isParagraphStart: false, isSentenceStart: false },
-        { text: "brown", isParagraphStart: false, isSentenceStart: false },
-        { text: "fox", isParagraphStart: false, isSentenceStart: false },
-        { text: "jumps", isParagraphStart: false, isSentenceStart: false },
-        { text: "over", isParagraphStart: false, isSentenceStart: false },
-        { text: "the", isParagraphStart: false, isSentenceStart: false },
-        { text: "lazy", isParagraphStart: false, isSentenceStart: false },
-        { text: "dog.", isParagraphStart: false, isSentenceStart: false }
+        { text: "quick", isParagraphStart: false, isSentenceStart: false }
       ], [
         { label: "Chapter 1", startIndex: 0 }
       ]);
     });
 
-    // Verify we are in Reader View by checking something else visible in portrait
-    await expect(page.getByText('Speed')).toBeVisible();
-
+    await expect(page.locator('button[title="Open Menu"]')).toBeVisible();
     await page.screenshot({ path: 'tests/screenshots/reader-portrait.png' });
   });
 
@@ -87,21 +66,14 @@ test.describe('Mobile Orientation Layout', () => {
     await page.evaluate(() => {
       (window as any).__loadMockWords([
         { text: "The", isParagraphStart: true, isSentenceStart: true },
-        { text: "quick", isParagraphStart: false, isSentenceStart: false },
-        { text: "brown", isParagraphStart: false, isSentenceStart: false },
-        { text: "fox", isParagraphStart: false, isSentenceStart: false },
-        { text: "jumps", isParagraphStart: false, isSentenceStart: false },
-        { text: "over", isParagraphStart: false, isSentenceStart: false },
-        { text: "the", isParagraphStart: false, isSentenceStart: false },
-        { text: "lazy", isParagraphStart: false, isSentenceStart: false },
-        { text: "dog.", isParagraphStart: false, isSentenceStart: false }
+        { text: "quick", isParagraphStart: false, isSentenceStart: false }
       ], [
         { label: "Chapter 1", startIndex: 0 }
       ]);
     });
 
-    await expect(page.locator('text=Chapter 1')).toBeVisible();
-
+    // In landscape, we have the fixed chapter title at top-right
+    await expect(page.getByText('Chapter 1').last()).toBeVisible();
     await page.screenshot({ path: 'tests/screenshots/reader-landscape.png' });
   });
 
@@ -118,14 +90,12 @@ test.describe('Mobile Orientation Layout', () => {
       ]);
     });
 
-    // Start playing
-    await page.getByLabel('Play').click();
+    // Start playing by clicking the word
+    await page.getByText('Active').click();
     
     // Check for the RSVP focus word
     await expect(page.getByText('Active')).toBeVisible();
-    
-    // Ensure the interface has cleaned up (Play button should be gone in active mode)
-    await expect(page.getByLabel('Play')).not.toBeVisible();
+    await expect(page.locator('button[title="Open Menu"]')).not.toBeVisible();
 
     await page.screenshot({ path: 'tests/screenshots/active-reading-portrait.png' });
   });
@@ -142,10 +112,10 @@ test.describe('Mobile Orientation Layout', () => {
       ]);
     });
 
-    await page.getByLabel('Play').click();
+    await page.getByText('Active').click();
 
     await expect(page.getByText('Active')).toBeVisible();
-    await expect(page.getByLabel('Play')).not.toBeVisible();
+    await expect(page.locator('button[title="Open Menu"]')).not.toBeVisible();
 
     await page.screenshot({ path: 'tests/screenshots/active-reading-landscape.png' });
   });

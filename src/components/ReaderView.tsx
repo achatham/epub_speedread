@@ -1,4 +1,5 @@
 import { useRef } from 'react';
+import { ChevronLeft } from 'lucide-react';
 import { ReaderMenu } from './ReaderMenu';
 import type { WordData } from '../utils/text-processing';
 import { splitWord } from '../utils/orp';
@@ -128,19 +129,21 @@ export function ReaderView({
 
   const handlePointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0 && e.pointerType === 'mouse') return;
+    e.stopPropagation();
     pressStartTimeRef.current = Date.now();
     setIsHoldPaused(true);
   };
 
-  const handlePointerUp = () => {
+  const handlePointerUp = (e: React.PointerEvent) => {
     if (pressStartTimeRef.current === null) return;
+    e.stopPropagation();
 
     const duration = Date.now() - pressStartTimeRef.current;
     pressStartTimeRef.current = null;
 
     if (duration < 300) {
-      // Short tap: full pause
-      setIsPlaying(false);
+      // Short tap: exit to library
+      onCloseBook();
       setIsHoldPaused(false);
     } else {
       // Long press: resume
@@ -193,8 +196,8 @@ export function ReaderView({
     };
 
     return (
-        <div className={`mt-4 text-xs space-y-1 landscape:mt-1 ${theme === 'bedtime' ? 'text-stone-500' : 'text-zinc-500 dark:text-zinc-400'}`}>
-            <div className="flex gap-4 justify-center landscape:justify-start">
+        <div className={`mt-2 text-xs space-y-1 landscape:mt-1 ${theme === 'bedtime' ? 'text-stone-500' : 'text-zinc-500 dark:text-zinc-400'}`}>
+            <div className="flex gap-4 justify-center md:justify-end">
                 <span>{percentage}% Complete</span>
                 <span>•</span>
                 <span>Page {Math.floor(currentIndex / 300) + 1} of {Math.ceil(effectiveTotalWords / 300)}</span>
@@ -203,7 +206,7 @@ export function ReaderView({
                 <span className="hidden landscape:inline opacity-40">•</span>
                 <span className="hidden landscape:inline font-mono opacity-80">{formatDuration(wordsLeftInBook)} book</span>
             </div>
-            <div className="flex gap-4 justify-center landscape:justify-start landscape:hidden font-mono opacity-80">
+            <div className="flex gap-4 justify-center md:justify-end landscape:hidden font-mono opacity-80">
                 <span>Chapter: {formatDuration(wordsLeftInChapter)} left</span>
                 <span>Book: {formatDuration(wordsLeftInBook)} left</span>
             </div>
@@ -228,10 +231,30 @@ export function ReaderView({
       )}
       
       {!isPlaying && (
-        <div className="absolute top-8 text-center w-full px-4 landscape:top-4 landscape:left-8 landscape:text-left landscape:w-auto landscape:px-0 z-20" onClick={(e) => e.stopPropagation()}>
-          <h3 className="m-0 font-normal opacity-60 text-lg truncate max-w-2xl mx-auto landscape:mx-0 landscape:max-w-md">{bookTitle}</h3>
-          {getProgressStats()}
-        </div>
+        <header
+          className="absolute top-0 left-0 right-0 p-4 md:p-6 flex items-start justify-between z-20 select-none landscape:left-8 landscape:right-8"
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+          onPointerUp={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onCloseBook();
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+            onPointerUp={(e) => e.stopPropagation()}
+            className="flex items-center gap-2 px-3 py-2 -ml-3 text-slate-500 hover:text-slate-800 hover:bg-slate-100/50 rounded-lg transition-colors"
+          >
+            <ChevronLeft className="w-5 h-5" />
+            <span className="font-medium">Library</span>
+          </button>
+
+          <div className="text-right">
+            <h3 className="m-0 font-normal opacity-60 text-base md:text-lg truncate max-w-[150px] sm:max-w-xs md:max-w-md ml-auto">{bookTitle}</h3>
+            {getProgressStats()}
+          </div>
+        </header>
       )}
 
 
@@ -303,6 +326,8 @@ export function ReaderView({
         className={`flex flex-col gap-6 items-center relative z-50
           ${isPlaying ? 'w-full max-w-md px-4' : 'portrait:w-full portrait:max-w-md portrait:px-4 landscape:pointer-events-none'}`}
         onClick={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
+        onPointerUp={(e) => e.stopPropagation()}
       >
         <div className={`w-full space-y-4 landscape:pointer-events-auto ${!isPlaying ? 'landscape:fixed landscape:bottom-4 landscape:left-8 landscape:right-64 landscape:w-auto landscape:space-y-4' : ''}`}>
           {/* Chapter Progress */}
