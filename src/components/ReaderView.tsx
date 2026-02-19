@@ -125,22 +125,29 @@ export function ReaderView({
   const guidelinesClass = theme === 'bedtime' ? 'bg-amber-900/30' : 'bg-red-600 dark:bg-red-500 opacity-30';
 
   const pressStartTimeRef = useRef<number | null>(null);
+  const lastPauseTimeRef = useRef<number>(0);
 
   const handlePointerDown = (e: React.PointerEvent) => {
+    e.stopPropagation();
     if (e.button !== 0 && e.pointerType === 'mouse') return;
     pressStartTimeRef.current = Date.now();
     setIsHoldPaused(true);
   };
 
-  const handlePointerUp = () => {
+  const handlePointerUp = (e: React.PointerEvent) => {
+    e.stopPropagation();
     if (pressStartTimeRef.current === null) return;
 
     const duration = Date.now() - pressStartTimeRef.current;
     pressStartTimeRef.current = null;
 
     if (duration < 300) {
-      // Short tap: full pause
-      setIsPlaying(false);
+      // Short tap
+      if (isPlaying) {
+        // Full pause
+        setIsPlaying(false);
+        lastPauseTimeRef.current = Date.now();
+      }
       setIsHoldPaused(false);
     } else {
       // Long press: resume
@@ -148,7 +155,8 @@ export function ReaderView({
     }
   };
 
-  const handlePointerCancel = () => {
+  const handlePointerCancel = (e: React.PointerEvent) => {
+    e.stopPropagation();
     if (pressStartTimeRef.current !== null) {
       pressStartTimeRef.current = null;
       setIsHoldPaused(false);
@@ -215,7 +223,10 @@ export function ReaderView({
     <div 
       className={`flex flex-col items-center justify-center h-dvh transition-colors duration-300 relative ${mainBg} ${mainText} ${!isPlaying ? 'cursor-pointer' : ''}`}
       style={{ fontFamily: fontStyles[fontFamily] }}
-      onClick={() => { if (!isPlaying) setIsPlaying(true); }}
+      onClick={() => { 
+        if (Date.now() - lastPauseTimeRef.current < 400) return;
+        if (!isPlaying) setIsPlaying(true); 
+      }}
     >
       {isPlaying && (
         <div 
