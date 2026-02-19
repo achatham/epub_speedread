@@ -18,6 +18,7 @@ export interface RsvpSettings {
 
 export interface UserSettings {
   geminiApiKey?: string;
+  deepgramApiKey?: string;
   syncApiKey?: boolean;
   theme?: string;
   fontFamily?: string;

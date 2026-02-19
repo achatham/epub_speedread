@@ -12,6 +12,7 @@ import { type WordData, calculateRsvpInterval } from './utils/text-processing';
 import { calculateNavigationTarget, type NavigationType } from './utils/navigation';
 import { getResumeIndex } from './utils/playback';
 import { getGeminiApiKey, setGeminiApiKey as saveGeminiApiKey, askAboutBook, summarizeRecent, summarizeWhatJustHappened } from './utils/gemini';
+import { getDeepgramApiKey, setDeepgramApiKey as saveDeepgramApiKey } from './utils/deepgram';
 
 import { processBook, analyzeRealEndOfBook } from './utils/ebook';
 import { AudioBookPlayer } from './utils/AudioBookPlayer';
@@ -89,6 +90,10 @@ function App() {
 
   const [geminiApiKey, setGeminiApiKey] = useState(() => {
     return getGeminiApiKey() || '';
+  });
+
+  const [deepgramApiKey, setDeepgramApiKey] = useState(() => {
+    return getDeepgramApiKey() || '';
   });
 
   const [syncApiKey, setSyncApiKey] = useState(true);
@@ -198,11 +203,12 @@ function App() {
       fontFamily,
       syncApiKey,
       geminiApiKey: syncApiKey ? geminiApiKey : undefined,
+      deepgramApiKey: syncApiKey ? deepgramApiKey : undefined,
       rsvp: rsvpSettings,
       onboardingCompleted
     };
     localStorage.setItem('user_settings', JSON.stringify(settings));
-  }, [ttsSpeed, autoLandscape, theme, fontFamily, syncApiKey, geminiApiKey, rsvpSettings, onboardingCompleted]);
+  }, [ttsSpeed, autoLandscape, theme, fontFamily, syncApiKey, geminiApiKey, deepgramApiKey, rsvpSettings, onboardingCompleted]);
 
   useEffect(() => {
     if (!storageProvider) return;
@@ -214,12 +220,13 @@ function App() {
         fontFamily,
         syncApiKey,
         geminiApiKey: syncApiKey ? geminiApiKey : undefined,
+        deepgramApiKey: syncApiKey ? deepgramApiKey : undefined,
         rsvp: rsvpSettings,
         onboardingCompleted
       });
     }, 1000);
     return () => clearTimeout(timer);
-  }, [ttsSpeed, autoLandscape, theme, fontFamily, syncApiKey, geminiApiKey, rsvpSettings, storageProvider, onboardingCompleted]);
+  }, [ttsSpeed, autoLandscape, theme, fontFamily, syncApiKey, geminiApiKey, deepgramApiKey, rsvpSettings, storageProvider, onboardingCompleted]);
 
   // Test Hook for Playwright
   useEffect(() => {
@@ -284,16 +291,17 @@ function App() {
   // Initialize Player
   useEffect(() => {
     if (storageProvider) {
-      audioPlayerRef.current = new AudioBookPlayer(storageProvider, geminiApiKey);
+      audioPlayerRef.current = new AudioBookPlayer(storageProvider, geminiApiKey, deepgramApiKey);
     }
-  }, [storageProvider, geminiApiKey]);
+  }, [storageProvider]);
 
-  // Update API Key
+  // Update API Keys
   useEffect(() => {
     if (audioPlayerRef.current) {
-      audioPlayerRef.current.updateApiKey(geminiApiKey);
+      audioPlayerRef.current.updateGeminiApiKey(geminiApiKey);
+      audioPlayerRef.current.updateDeepgramApiKey(deepgramApiKey);
     }
-  }, [geminiApiKey, audioPlayerRef]);
+  }, [geminiApiKey, deepgramApiKey]);
 
   // --- Auth & Storage Init ---
   useEffect(() => {
@@ -343,9 +351,15 @@ function App() {
           if (settings.syncApiKey !== undefined) setSyncApiKey(settings.syncApiKey);
           
           // Only load API key from Firestore if syncing is enabled
-          if (settings.syncApiKey !== false && settings.geminiApiKey) {
-            setGeminiApiKey(settings.geminiApiKey);
-            saveGeminiApiKey(settings.geminiApiKey);
+          if (settings.syncApiKey !== false) {
+            if (settings.geminiApiKey) {
+              setGeminiApiKey(settings.geminiApiKey);
+              saveGeminiApiKey(settings.geminiApiKey);
+            }
+            if (settings.deepgramApiKey) {
+              setDeepgramApiKey(settings.deepgramApiKey);
+              saveDeepgramApiKey(settings.deepgramApiKey);
+            }
           }
           if (settings.theme) setTheme(settings.theme as Theme);
           if (settings.fontFamily) setFontFamily(settings.fontFamily as FontFamily);
@@ -850,6 +864,11 @@ function App() {
         setApiKey={(k) => { 
           setGeminiApiKey(k); 
           saveGeminiApiKey(k); 
+        }}
+        deepgramApiKey={deepgramApiKey}
+        setDeepgramApiKey={(k) => {
+          setDeepgramApiKey(k);
+          saveDeepgramApiKey(k);
         }}
         syncApiKey={syncApiKey}
         setSyncApiKey={setSyncApiKey}

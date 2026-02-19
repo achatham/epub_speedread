@@ -1,5 +1,5 @@
 import { type FirestoreStorage, type AudioChunk } from './storage';
-import { synthesizeChapterAudio, schedulePcmChunk } from './tts';
+import { synthesizeChapterAudio, playEncodedChunk } from './tts';
 import type { WordData } from './text-processing';
 
 export interface PlayerCallbacks {
@@ -30,32 +30,35 @@ export class AudioBookPlayer {
     wordCount: number 
   }[] = [];
   
-  private storage: FirestoreStorage;
-  private apiKey: string;
+  private deepgramApiKey: string;
 
   // Track state internally to prevent race conditions
   private _isSynthesizing = false;
   private _isPlaying = false;
 
   constructor(
-    storage: FirestoreStorage,
-    apiKey: string
+    _storage: FirestoreStorage,
+    _geminiApiKey: string,
+    deepgramApiKey: string
   ) {
-    this.storage = storage;
-    this.apiKey = apiKey;
+    this.deepgramApiKey = deepgramApiKey;
   }
 
   get isActive() {
     return this._isSynthesizing || this._isPlaying;
   }
 
-  updateApiKey(key: string) {
-    this.apiKey = key;
+  updateGeminiApiKey(_key: string) {
+    // No longer used for TTS
+  }
+
+  updateDeepgramApiKey(key: string) {
+    this.deepgramApiKey = key;
   }
 
   async playChapter(
-    bookId: string,
-    chapterIndex: number,
+    _bookId: string,
+    _chapterIndex: number,
     chapterWords: WordData[],
     globalStartIndex: number,
     currentWordIndex: number,
@@ -70,27 +73,18 @@ export class AudioBookPlayer {
     this.updateState(true, false, callbacks);
 
     try {
-      // 1. Check Cache
-      let chunks = await this.storage.getChapterAudio(bookId, chapterIndex, speed);
-
-      // 2. Synthesize if needed
-      if (!chunks) {
-        if (!this.apiKey) {
-          throw new Error("API Key required for TTS");
-        }
-        
-        chunks = await synthesizeChapterAudio(chapterWords, speed, this.apiKey);
-        
-        if (this.stopRequested) return; // Check cancel
-
-        if (chunks.length > 0) {
-          await this.storage.saveChapterAudio(bookId, chapterIndex, speed, chunks);
-        }
+      // 1. Synthesize (No caching as requested)
+      if (!this.deepgramApiKey) {
+        throw new Error("Deepgram API Key required for TTS");
       }
+      
+      const chunks = await synthesizeChapterAudio(chapterWords, speed, this.deepgramApiKey);
+      
+      if (this.stopRequested) return; // Check cancel
 
       this.updateState(false, true, callbacks);
 
-      // 3. Playback
+      // 2. Playback
       if (chunks && chunks.length > 0) {
         await this.playAudioChunks(chunks, globalStartIndex, currentWordIndex, callbacks);
       } else {
@@ -112,7 +106,8 @@ export class AudioBookPlayer {
     callbacks: PlayerCallbacks
   ) {
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    this.audioCtx = new AudioContextClass({ sampleRate: 24000 });
+    // Deepgram Aura uses 48kHz
+    this.audioCtx = new AudioContextClass({ sampleRate: 48000 });
     
     console.log(`[AudioPlayer] Starting playback. Chapter Start: ${globalChapterStart}, Current UI Index: ${initialWordIndex}`);
 
@@ -154,7 +149,7 @@ export class AudioBookPlayer {
       }
 
       // Schedule Audio
-      const duration = schedulePcmChunk(this.audioCtx, chunk.audio, nextStartTime);
+      const duration = await playEncodedChunk(this.audioCtx, chunk.audio, nextStartTime);
       
       // Track timing for interpolation
       this.scheduledChunks.push({

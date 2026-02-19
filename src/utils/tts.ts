@@ -1,6 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import { getGeminiApiKey } from './gemini';
-import { calculateCost } from './pricing';
+import { getDeepgramApiKey } from './deepgram';
 import { chunkTextByParagraph, chunkWordsByParagraph, type WordData } from './text-processing';
 import type { AudioChunk } from './storage';
 
@@ -10,10 +8,10 @@ export interface AudioController {
     onChunkStarted?: (metadata: { startIndex: number, wordCount: number }) => void;
 }
 
-export async function synthesizeSpeech(text: string, speed: number = 2.0): Promise<AudioController | null> {
-    const apiKey = getGeminiApiKey();
+export async function synthesizeSpeech(text: string, speed: number = 1.0): Promise<AudioController | null> {
+    const apiKey = getDeepgramApiKey();
     if (!apiKey) {
-        console.error("No API key found for TTS");
+        console.error("No Deepgram API key found for TTS");
         return null;
     }
 
@@ -24,28 +22,26 @@ export async function synthesizeSpeech(text: string, speed: number = 2.0): Promi
 
     // Start processing in background
     processChunks(text, apiKey, audioCtx, controller, speed).catch(err => {
-        console.error("TTS processing error", err);
+        console.error("Deepgram TTS processing error", err);
         controller.stop();
     });
 
     return controller;
 }
 
-export async function synthesizeChapterAudio(wordsOrText: WordData[] | string, speed: number, apiKey: string): Promise<AudioChunk[]> {
+export async function synthesizeChapterAudio(wordsOrText: WordData[] | string, _speed: number, apiKey: string): Promise<AudioChunk[]> {
     const chunks = typeof wordsOrText === 'string'
         ? chunkTextByParagraph(wordsOrText, 300)
         : chunkWordsByParagraph(wordsOrText, 300);
 
     if (chunks.length === 0) return [];
 
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-preview-tts" });
-
-    // Dummy controller that is never stopped
+    // Note: Caching is disabled as requested, but synthesizeChapterAudio is used by AudioBookPlayer 
+    // which expects a list of chunks. We fetch them all.
     const controller = { state: { isStopped: false } };
 
     const tasks = chunks.map(async (chunk, index) => {
-        const audio = await fetchChunkAudio(model, chunk.text, index, controller, speed);
+        const audio = await fetchDeepgramAudio(apiKey, chunk.text, index, controller);
         if (!audio) return null;
         return {
             audio,
@@ -64,7 +60,7 @@ async function getAudioContext(): Promise<AudioContext | null> {
         console.error("Web Audio API not supported");
         return null;
     }
-    const ctx = new AudioContextClass({ sampleRate: 24000 });
+    const ctx = new AudioContextClass({ sampleRate: 48000 }); // Deepgram Aura uses 48kHz by default
     if (ctx.state === 'suspended') {
         await ctx.resume();
     }
@@ -88,10 +84,10 @@ function createAudioController(audioCtx: AudioContext): AudioController & { stat
     };
 }
 
-async function fetchChunkAudio(model: any, chunkText: string, index: number, controller: any, speed: number = 2.0): Promise<ArrayBuffer | null> {
+async function fetchDeepgramAudio(apiKey: string, text: string, index: number, controller: any): Promise<ArrayBuffer | null> {
     if (controller.state.isStopped) return null;
 
-    const cleanText = chunkText
+    const cleanText = text
         .replace(/[#*`_~]/g, '')
         .replace(/\b\[([^\]]+)\]\(([^)]+)\)\b/g, '$1')
         .replace(/\n+/g, '. ');
@@ -100,134 +96,89 @@ async function fetchChunkAudio(model: any, chunkText: string, index: number, con
 
     const startTime = performance.now();
     try {
-        const result = await model.generateContent({
-            contents: [{ role: "user", parts: [{ text: `Pacing: Speak at ${speed}x the normal speed.\n` + cleanText }] }],
-            generationConfig: {
-                responseModalities: ["AUDIO"] as any,
-                speechConfig: {
-                    voiceConfig: { prebuiltVoiceConfig: { voiceName: "Puck" } }
-                }
-            } as any
+        const response = await fetch("https://api.deepgram.com/v1/speak?model=aura-asteria-en", {
+            method: "POST",
+            headers: {
+                "Authorization": `Token ${apiKey}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ text: cleanText })
         });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Deepgram API error: ${response.status} ${errorText}`);
+        }
 
         if (controller.state.isStopped) return null;
 
-        const response = result.response;
-        if (response.usageMetadata) {
-            const cost = calculateCost("gemini-2.5-flash-preview-tts",
-                response.usageMetadata.promptTokenCount,
-                response.usageMetadata.candidatesTokenCount || 0);
-            console.log(`Gemini Cost (TTS Chunk ${index}): $${cost.toFixed(6)}`);
-        }
-
-        const candidate = response.candidates?.[0];
-        const audioPart = candidate?.content?.parts?.find((p: any) => p.inlineData);
-
-        if (audioPart?.inlineData?.data) {
-            console.log(`Chunk ${index} fetched in ${(performance.now() - startTime).toFixed(0)}ms, size: ${audioPart.inlineData.data.length}`);
-            return base64ToArrayBuffer(audioPart.inlineData.data);
-        }
-
-        return null;
+        const buffer = await response.arrayBuffer();
+        console.log(`Chunk ${index} fetched from Deepgram in ${(performance.now() - startTime).toFixed(0)}ms, size: ${buffer.byteLength}`);
+        return buffer;
     } catch (e) {
-        console.error(`Error processing chunk ${index}`, e);
+        console.error(`Error fetching Deepgram audio for chunk ${index}`, e);
         return null;
     }
 }
 
-async function processChunks(fullText: string, apiKey: string, audioCtx: AudioContext, controller: any, speed: number = 2.0) {
-    // 1. Split text by paragraphs with a minimum of 300 words
+async function processChunks(fullText: string, apiKey: string, audioCtx: AudioContext, controller: any, _speed: number = 1.0) {
+    // Deepgram /v1/speak doesn't support a simple 'speed' param in the same way, 
+    // although Aura is very fast. For now ignoring speed or could be handled via AudioContext playbackRate.
+    
     const chunks = chunkTextByParagraph(fullText, 300);
-
     if (chunks.length === 0) return;
 
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-preview-tts" });
-
-    // 2. Create promise tasks for all chunks
-    const tasks = chunks.map(async (chunk, index) => {
-        const audio = await fetchChunkAudio(model, chunk.text, index, controller, speed);
-        if (!audio) return null;
-        return {
-            audio,
-            startIndex: chunk.startIndex,
-            wordCount: chunk.wordCount
-        };
-    });
-
-    // 3. Sequential playback loop
-    // No monitor interval needed here, we check in the loop and final check
-
-    // Override stop
-    const originalStop = controller.stop;
-    controller.stop = () => {
-        originalStop();
-    };
-
+    // Sequential playback loop
     let allChunksPlayed = false;
 
-    // Loop through tasks sequentially for playback
-    for (let i = 0; i < tasks.length; i++) {
+    for (let i = 0; i < chunks.length; i++) {
         if (controller.state.isStopped) break;
 
         try {
-            const chunkData = await tasks[i];
+            const chunk = chunks[i];
+            const audioData = await fetchDeepgramAudio(apiKey, chunk.text, i, controller);
 
             if (controller.state.isStopped) break;
-            if (chunkData && chunkData.audio) {
-                // Check context state
-                if (audioCtx.state === 'suspended') {
-                    await audioCtx.resume();
-                }
+            if (audioData) {
+                if (audioCtx.state === 'suspended') await audioCtx.resume();
 
-                // Schedule this chunk
-                // If it's the first chunk, start now (or nextStartTime which is initialized to audioCtx.currentTime)
-                // Ensure nextStartTime is at least currentTime
                 if (controller.state.nextStartTime < audioCtx.currentTime) {
                     controller.state.nextStartTime = audioCtx.currentTime;
                 }
 
-                console.log(`Scheduling chunk ${i} at ${controller.state.nextStartTime.toFixed(2)}s`);
-                
-                // Track progress
                 if (controller.onChunkStarted) {
-                    // Schedule the callback to align with audio start
                     const delay = (controller.state.nextStartTime - audioCtx.currentTime) * 1000;
                     setTimeout(() => {
                         if (!controller.state.isStopped) {
-                            controller.onChunkStarted({ 
-                                startIndex: chunkData.startIndex, 
-                                wordCount: chunkData.wordCount 
+                            controller.onChunkStarted!({ 
+                                startIndex: chunk.startIndex, 
+                                wordCount: chunk.wordCount 
                             });
                         }
                     }, Math.max(0, delay));
                 }
 
-                const duration = schedulePcmChunk(audioCtx, chunkData.audio, controller.state.nextStartTime);
+                const duration = await playEncodedChunk(audioCtx, audioData, controller.state.nextStartTime);
                 controller.state.nextStartTime += duration;
                 controller.state.hasStarted = true;
             }
         } catch (e) {
-            console.error(`Error waiting for chunk ${i}`, e);
+            console.error(`Error processing chunk ${i}`, e);
         }
     }
 
     allChunksPlayed = true;
 
-    // Final check for end
     const finalCheck = setInterval(() => {
         if (controller.state.isStopped) {
             clearInterval(finalCheck);
             return;
         }
-        // If we haven't started yet (e.g. all fetches failed), we should probably exit too
-        // But assuming at least one played:
         if (allChunksPlayed && controller.state.hasStarted && audioCtx.currentTime >= controller.state.nextStartTime) {
             clearInterval(finalCheck);
             if (controller.onEnded) controller.onEnded();
             audioCtx.close();
         } else if (allChunksPlayed && !controller.state.hasStarted) {
-            // Nothing played
             clearInterval(finalCheck);
             if (controller.onEnded) controller.onEnded();
             audioCtx.close();
@@ -235,30 +186,11 @@ async function processChunks(fullText: string, apiKey: string, audioCtx: AudioCo
     }, 200);
 }
 
-export function schedulePcmChunk(audioCtx: AudioContext, pcmData: ArrayBuffer, startTime: number): number {
-    const float32 = new Float32Array(pcmData.byteLength / 2);
-    const view = new DataView(pcmData);
-    for (let i = 0; i < pcmData.byteLength / 2; i++) {
-        float32[i] = view.getInt16(i * 2, true) / 32768.0;
-    }
-
-    const audioBuffer = audioCtx.createBuffer(1, float32.length, 24000);
-    audioBuffer.getChannelData(0).set(float32);
-
+export async function playEncodedChunk(audioCtx: AudioContext, audioData: ArrayBuffer, startTime: number): Promise<number> {
+    const audioBuffer = await audioCtx.decodeAudioData(audioData);
     const source = audioCtx.createBufferSource();
     source.buffer = audioBuffer;
     source.connect(audioCtx.destination);
-
     source.start(startTime);
     return audioBuffer.duration;
-}
-
-function base64ToArrayBuffer(base64: string) {
-    const binaryString = window.atob(base64);
-    const len = binaryString.length;
-    const bytes = new Uint8Array(len);
-    for (let i = 0; i < len; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-    }
-    return bytes.buffer;
 }
