@@ -25,7 +25,8 @@ test.describe('Mobile Orientation Layout', () => {
       // Let's go back to library if we want to see it.
     });
 
-    // Close the book to see the library
+    // Open Reader Menu and close the book to see the library
+    await page.click('button[title="Open Menu"]');
     await page.getByText('Close Book').click();
 
     // Verify we are in Library View
@@ -46,6 +47,7 @@ test.describe('Mobile Orientation Layout', () => {
       ]);
     });
 
+    await page.click('button[title="Open Menu"]');
     await page.getByText('Close Book').click();
 
     await expect(page.getByRole('heading', { name: 'Library' })).toBeVisible();
@@ -76,6 +78,7 @@ test.describe('Mobile Orientation Layout', () => {
     });
 
     // Verify we are in Reader View by checking something else visible in portrait
+    await page.click('button[title="Open Menu"]');
     await expect(page.getByText('Speed')).toBeVisible();
 
     await page.screenshot({ path: 'tests/screenshots/reader-portrait.png' });

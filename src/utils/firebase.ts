@@ -31,7 +31,7 @@ try {
         })
       });
       console.log("Firestore initialized with persistent cache");
-    } catch (e: any) {
+    } catch {
       // If already initialized, just get the existing instance
       console.warn("Firestore already initialized, getting existing instance. Persistence might not be configured if initialized elsewhere.");
       db = getFirestore(app);

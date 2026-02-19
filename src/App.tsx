@@ -123,6 +123,23 @@ function App() {
   const [isBookSettingsOpen, setIsBookSettingsOpen] = useState(false);
   const [isRecomputingEnd, setIsRecomputingEnd] = useState(false);
 
+  const handleSelectBook = useCallback(async (id: string) => {
+    setCurrentBookId(id);
+    if (autoLandscape) {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().then(() => {
+          if ((screen.orientation as any)?.lock) {
+            (screen.orientation as any).lock('landscape').catch((e: any) => console.warn('Orientation lock failed', e));
+          }
+        }).catch(e => console.warn('Fullscreen failed via gesture', e));
+      } else {
+        if ((screen.orientation as any)?.lock) {
+          (screen.orientation as any).lock('landscape').catch((e: any) => console.warn('Orientation lock failed', e));
+        }
+      }
+    }
+  }, [autoLandscape]);
+
   const handleUpdateBookTitle = async (newTitle: string) => {
     if (!currentBookId || !storageProvider) return;
     try {
@@ -392,7 +409,7 @@ function App() {
       }
     };
     init();
-  }, [storageProvider]);
+  }, [storageProvider, currentBookId, handleSelectBook, onboardingCompleted]);
 
   useEffect(() => {
     if (theme === 'dark' || theme === 'bedtime') {
@@ -491,23 +508,6 @@ function App() {
     if (!storageProvider) return;
     await storageProvider.updateBookArchived(id, archived);
     setLibrary(await storageProvider.getAllBooks());
-  };
-
-  const handleSelectBook = async (id: string) => {
-    setCurrentBookId(id);
-    if (autoLandscape) {
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().then(() => {
-          if ((screen.orientation as any)?.lock) {
-            (screen.orientation as any).lock('landscape').catch((e: any) => console.warn('Orientation lock failed', e));
-          }
-        }).catch(e => console.warn('Fullscreen failed via gesture', e));
-      } else {
-        if ((screen.orientation as any)?.lock) {
-          (screen.orientation as any).lock('landscape').catch((e: any) => console.warn('Orientation lock failed', e));
-        }
-      }
-    }
   };
 
   const handleCloseBook = async () => {
@@ -735,7 +735,7 @@ function App() {
       wordsReadInSessionRef.current = 0;
       sessionStartIndexRef.current = null;
     }
-  }, [isPlaying, wpm, currentBookId, storageProvider, currentIndex, bookTitle]);
+  }, [isPlaying, wpm, currentBookId, storageProvider, currentIndex, bookTitle, library, rsvpSettings.vanityWpmRatio]);
 
   // Track words read
   useEffect(() => {

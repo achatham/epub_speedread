@@ -25,15 +25,20 @@ test.describe('AI Features & Dark Mode', () => {
   });
 
   test('AI Modal respects dark mode', async ({ page }) => {
+    // Open Reader Menu
+    await page.click('button[title="Open Menu"]');
     // Switch to dark theme
-    const themeButton = page.getByTitle(/Theme: /);
-    await themeButton.click(); // to dark
+    await page.getByRole('button', { name: 'Theme' }).click(); // to dark
 
     // Verify html has dark class
     await expect(page.locator('html')).toHaveClass(/dark/);
 
+    // Open Reader Menu again (it might have closed or we need it to open AI)
+    // Actually the menu stays open usually unless we navigate.
+    // In ReaderMenu.tsx, onToggleTheme doesn't close the menu.
+
     // Open AI Modal
-    await page.getByTitle('Ask AI about book').click();
+    await page.getByRole('button', { name: 'Ask AI' }).click();
 
     // Check modal background color - should be dark
     // Use a more specific selector to avoid matching the ReaderView background
@@ -48,8 +53,10 @@ test.describe('AI Features & Dark Mode', () => {
   });
 
   test('AI Modal respects bedtime mode (extra dark)', async ({ page }) => {
+    // Open Reader Menu
+    await page.click('button[title="Open Menu"]');
     // Switch to bedtime theme
-    const themeButton = page.getByTitle(/Theme: /);
+    const themeButton = page.getByRole('button', { name: 'Theme' });
     await themeButton.click(); // to dark
     await themeButton.click(); // to bedtime
 
@@ -57,7 +64,7 @@ test.describe('AI Features & Dark Mode', () => {
     await expect(page.locator('html')).toHaveClass(/dark/);
 
     // Open AI Modal
-    await page.getByTitle('Ask AI about book').click();
+    await page.getByRole('button', { name: 'Ask AI' }).click();
 
     const modalContent = page.locator('.fixed.inset-0 .bg-white, .fixed.inset-0 .dark\\:bg-zinc-900').first();
     await expect(modalContent).toBeVisible();
@@ -67,7 +74,9 @@ test.describe('AI Features & Dark Mode', () => {
   });
 
   test('Summary buttons are available in AI Modal', async ({ page }) => {
-    await page.getByTitle('Ask AI about book').click();
+    // Open Reader Menu
+    await page.click('button[title="Open Menu"]');
+    await page.getByRole('button', { name: 'Ask AI' }).click();
 
     await expect(page.getByText('What just happened?')).toBeVisible();
     await expect(page.getByText('Remind me what happened recently')).toBeVisible();

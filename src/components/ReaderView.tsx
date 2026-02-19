@@ -70,6 +70,8 @@ export function ReaderView({
   vanityWpmRatio,
   rsvpSettings
 }: ReaderViewProps) {
+  const pressStartTimeRef = useRef<number | null>(null);
+
   if (words.length === 0) {
     return (
       <div className={`flex flex-col items-center justify-center h-dvh ${theme === 'bedtime' ? 'bg-black text-stone-400' : 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100'}`}>
@@ -124,16 +126,16 @@ export function ReaderView({
   const rsvpContextClass = theme === 'bedtime' ? 'text-stone-600' : 'opacity-90';
   const guidelinesClass = theme === 'bedtime' ? 'bg-amber-900/30' : 'bg-red-600 dark:bg-red-500 opacity-30';
 
-  const pressStartTimeRef = useRef<number | null>(null);
-
   const handlePointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0 && e.pointerType === 'mouse') return;
+    e.stopPropagation();
     pressStartTimeRef.current = Date.now();
     setIsHoldPaused(true);
   };
 
-  const handlePointerUp = () => {
+  const handlePointerUp = (e: React.PointerEvent) => {
     if (pressStartTimeRef.current === null) return;
+    e.stopPropagation();
 
     const duration = Date.now() - pressStartTimeRef.current;
     pressStartTimeRef.current = null;
@@ -216,6 +218,8 @@ export function ReaderView({
       className={`flex flex-col items-center justify-center h-dvh transition-colors duration-300 relative ${mainBg} ${mainText} ${!isPlaying ? 'cursor-pointer' : ''}`}
       style={{ fontFamily: fontStyles[fontFamily] }}
       onClick={() => { if (!isPlaying) setIsPlaying(true); }}
+      role={!isPlaying ? "button" : undefined}
+      aria-label={!isPlaying ? "Play" : undefined}
     >
       {isPlaying && (
         <div 
@@ -223,6 +227,7 @@ export function ReaderView({
           onPointerDown={handlePointerDown}
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerCancel}
+          onClick={(e) => e.stopPropagation()}
           title="Hold to pause, tap for menu"
         />
       )}
