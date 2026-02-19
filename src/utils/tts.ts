@@ -1,5 +1,5 @@
 import { getDeepgramApiKey } from './deepgram';
-import { chunkTextByParagraph, chunkWordsByParagraph, type WordData } from './text-processing';
+import { chunkTextByCharLimit, chunkWordsByCharLimit, type WordData } from './text-processing';
 import type { AudioChunk } from './storage';
 
 export interface AudioController {
@@ -31,8 +31,8 @@ export async function synthesizeSpeech(text: string, speed: number = 1.0): Promi
 
 export async function synthesizeChapterAudio(wordsOrText: WordData[] | string, _speed: number, apiKey: string): Promise<AudioChunk[]> {
     const chunks = typeof wordsOrText === 'string'
-        ? chunkTextByParagraph(wordsOrText, 200)
-        : chunkWordsByParagraph(wordsOrText, 200);
+        ? chunkTextByCharLimit(wordsOrText, 1900)
+        : chunkWordsByCharLimit(wordsOrText, 1900);
 
     if (chunks.length === 0) return [];
 
@@ -129,11 +129,8 @@ async function fetchDeepgramAudio(apiKey: string, text: string, index: number, c
     }
 }
 
-async function processChunks(fullText: string, apiKey: string, audioCtx: AudioContext, controller: any, _speed: number = 1.0) {
-    // Deepgram /v1/speak doesn't support a simple 'speed' param in the same way, 
-    // although Aura is very fast. For now ignoring speed or could be handled via AudioContext playbackRate.
-    
-    const chunks = chunkTextByParagraph(fullText, 200);
+async function processChunks(fullText: string, apiKey: string, audioCtx: AudioContext, controller: any, speed: number = 1.0) {
+    const chunks = chunkTextByCharLimit(fullText, 1900);
     if (chunks.length === 0) return;
 
     // Sequential playback loop
@@ -166,7 +163,7 @@ async function processChunks(fullText: string, apiKey: string, audioCtx: AudioCo
                     }, Math.max(0, delay));
                 }
 
-                const duration = await playEncodedChunk(audioCtx, audioData, controller.state.nextStartTime);
+                const duration = await playEncodedChunk(audioCtx, audioData, controller.state.nextStartTime, speed);
                 controller.state.nextStartTime += duration;
                 controller.state.hasStarted = true;
             }
@@ -194,11 +191,12 @@ async function processChunks(fullText: string, apiKey: string, audioCtx: AudioCo
     }, 200);
 }
 
-export async function playEncodedChunk(audioCtx: AudioContext, audioData: ArrayBuffer, startTime: number): Promise<number> {
+export async function playEncodedChunk(audioCtx: AudioContext, audioData: ArrayBuffer, startTime: number, speed: number = 1.0): Promise<number> {
     const audioBuffer = await audioCtx.decodeAudioData(audioData);
     const source = audioCtx.createBufferSource();
     source.buffer = audioBuffer;
+    source.playbackRate.value = speed;
     source.connect(audioCtx.destination);
     source.start(startTime);
-    return audioBuffer.duration;
+    return audioBuffer.duration / speed;
 }

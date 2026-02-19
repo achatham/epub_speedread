@@ -86,7 +86,7 @@ export class AudioBookPlayer {
 
       // 2. Playback
       if (chunks && chunks.length > 0) {
-        await this.playAudioChunks(chunks, globalStartIndex, currentWordIndex, callbacks);
+        await this.playAudioChunks(chunks, globalStartIndex, currentWordIndex, speed, callbacks);
       } else {
         // No audio generated?
         this.stop();
@@ -103,6 +103,7 @@ export class AudioBookPlayer {
     chunks: AudioChunk[], 
     globalChapterStart: number, 
     initialWordIndex: number,
+    speed: number,
     callbacks: PlayerCallbacks
   ) {
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
@@ -149,7 +150,7 @@ export class AudioBookPlayer {
       }
 
       // Schedule Audio
-      const duration = await playEncodedChunk(this.audioCtx, chunk.audio, nextStartTime);
+      const duration = await playEncodedChunk(this.audioCtx, chunk.audio, nextStartTime, speed);
       
       // Track timing for interpolation
       this.scheduledChunks.push({

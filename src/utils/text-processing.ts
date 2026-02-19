@@ -186,6 +186,73 @@ export interface TextChunk {
   wordCount: number;
 }
 
+/**
+ * Chunks words into blocks based on character limit, 
+ * attempting to break only at sentence boundaries.
+ */
+export function chunkWordsByCharLimit(words: WordData[], maxChars: number = 1900): TextChunk[] {
+  const chunks: TextChunk[] = [];
+  let currentChunkWords: WordData[] = [];
+  let currentChars = 0;
+  let chunkStartIndex = 0;
+
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i];
+    const wordWithSpace = (currentChunkWords.length > 0 ? " " : "") + word.text;
+    
+    if (currentChars + wordWithSpace.length > maxChars) {
+      // Need to flush. Find the last sentence end.
+      let splitPoint = -1;
+      for (let j = currentChunkWords.length - 1; j >= 0; j--) {
+        if (/[.!?]['")\]]*$/.test(currentChunkWords[j].text)) {
+          splitPoint = j;
+          break;
+        }
+      }
+
+      if (splitPoint !== -1) {
+        // We found a sentence end. Flush up to there.
+        const flushWords = currentChunkWords.slice(0, splitPoint + 1);
+        const remainingWords = currentChunkWords.slice(splitPoint + 1);
+        
+        chunks.push({
+          text: flushWords.map(w => w.text).join(' '),
+          startIndex: chunkStartIndex,
+          wordCount: flushWords.length
+        });
+
+        currentChunkWords = [...remainingWords, word];
+        chunkStartIndex += flushWords.length;
+        currentChars = currentChunkWords.map((w, idx) => (idx > 0 ? " " : "") + w.text).join('').length;
+      } else {
+        // No sentence end in this whole block? Forced break.
+        chunks.push({
+          text: currentChunkWords.map(w => w.text).join(' '),
+          startIndex: chunkStartIndex,
+          wordCount: currentChunkWords.length
+        });
+        
+        chunkStartIndex += currentChunkWords.length;
+        currentChunkWords = [word];
+        currentChars = word.text.length;
+      }
+    } else {
+      currentChunkWords.push(word);
+      currentChars += wordWithSpace.length;
+    }
+  }
+
+  if (currentChunkWords.length > 0) {
+    chunks.push({
+      text: currentChunkWords.map(w => w.text).join(' '),
+      startIndex: chunkStartIndex,
+      wordCount: currentChunkWords.length
+    });
+  }
+
+  return chunks;
+}
+
 export function chunkWordsByParagraph(words: WordData[], minWords: number = 300): TextChunk[] {
   const chunks: TextChunk[] = [];
   let currentChunkWords: string[] = [];
@@ -215,6 +282,50 @@ export function chunkWordsByParagraph(words: WordData[], minWords: number = 300)
       text: currentChunkWords.join(' '),
       startIndex: chunkStartIndex,
       wordCount: count
+    });
+  }
+
+  return chunks;
+}
+
+/**
+ * Chunks raw text into blocks based on character limit, 
+ * attempting to break only at sentence boundaries.
+ */
+export function chunkTextByCharLimit(text: string, maxChars: number = 1900): TextChunk[] {
+  // Use regex to find sentence boundaries while keeping the delimiter
+  const sentences = text.match(/[^.!?]+[.!?]['")\]]*\s*|[^.!?]+$/g) || [text];
+  
+  const chunks: TextChunk[] = [];
+  let currentText = "";
+  let currentWordCount = 0;
+  let chunkStartIndex = 0;
+  let totalWordIndex = 0;
+
+  for (const sentence of sentences) {
+    const sentenceWordCount = sentence.trim().split(/\s+/).length;
+    
+    if (currentText.length + sentence.length > maxChars && currentText.length > 0) {
+      chunks.push({
+        text: currentText.trim(),
+        startIndex: chunkStartIndex,
+        wordCount: currentWordCount
+      });
+      currentText = sentence;
+      chunkStartIndex = totalWordIndex;
+      currentWordCount = sentenceWordCount;
+    } else {
+      currentText += sentence;
+      currentWordCount += sentenceWordCount;
+    }
+    totalWordIndex += sentenceWordCount;
+  }
+
+  if (currentText.trim()) {
+    chunks.push({
+      text: currentText.trim(),
+      startIndex: chunkStartIndex,
+      wordCount: currentWordCount
     });
   }
 
