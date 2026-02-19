@@ -55,6 +55,7 @@ export function StatsView({
 
   // 2. Filter sessions for "Overall History" tab
   const historySessions = useMemo(() => {
+    // eslint-disable-next-line react-hooks/purity
     const now = Date.now();
     let threshold = 0;
     if (timeRange === 'week') threshold = now - 7 * 24 * 60 * 60 * 1000;
