@@ -392,6 +392,7 @@ function App() {
       }
     };
     init();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageProvider]);
 
   useEffect(() => {
@@ -735,6 +736,7 @@ function App() {
       wordsReadInSessionRef.current = 0;
       sessionStartIndexRef.current = null;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlaying, wpm, currentBookId, storageProvider, currentIndex, bookTitle]);
 
   // Track words read

@@ -86,7 +86,10 @@ export function ReaderMenu({
         onClick={() => setIsOpen(false)}
       />
 
-      <div className={`relative w-full max-w-sm sm:w-80 max-h-[80vh] overflow-hidden rounded-2xl border shadow-2xl flex flex-col pointer-events-auto ${menuBg} ${textColor} animate-in slide-in-from-bottom-4 duration-200`}>
+      <div
+        className={`relative w-full max-w-sm sm:w-80 max-h-[80vh] overflow-hidden rounded-2xl border shadow-2xl flex flex-col pointer-events-auto ${menuBg} ${textColor} animate-in slide-in-from-bottom-4 duration-200`}
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-zinc-100 dark:border-zinc-800">
           <div className="flex items-center gap-2">

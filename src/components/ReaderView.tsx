@@ -1,5 +1,6 @@
 import { useRef } from 'react';
 import { ReaderMenu } from './ReaderMenu';
+import { Square } from 'lucide-react';
 import type { WordData } from '../utils/text-processing';
 import { splitWord } from '../utils/orp';
 import type { FontFamily } from './SettingsModal';
@@ -70,6 +71,8 @@ export function ReaderView({
   vanityWpmRatio,
   rsvpSettings
 }: ReaderViewProps) {
+  const pressStartTimeRef = useRef<number | null>(null);
+
   if (words.length === 0) {
     return (
       <div className={`flex flex-col items-center justify-center h-dvh ${theme === 'bedtime' ? 'bg-black text-stone-400' : 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100'}`}>
@@ -123,8 +126,6 @@ export function ReaderView({
   const rsvpFocusColor = theme === 'bedtime' ? 'text-amber-600' : (theme === 'dark' ? 'text-red-500' : 'text-red-600');
   const rsvpContextClass = theme === 'bedtime' ? 'text-stone-600' : 'opacity-90';
   const guidelinesClass = theme === 'bedtime' ? 'bg-amber-900/30' : 'bg-red-600 dark:bg-red-500 opacity-30';
-
-  const pressStartTimeRef = useRef<number | null>(null);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0 && e.pointerType === 'mouse') return;
@@ -228,10 +229,29 @@ export function ReaderView({
       )}
       
       {!isPlaying && (
-        <div className="absolute top-8 text-center w-full px-4 landscape:top-4 landscape:left-8 landscape:text-left landscape:w-auto landscape:px-0 z-20" onClick={(e) => e.stopPropagation()}>
-          <h3 className="m-0 font-normal opacity-60 text-lg truncate max-w-2xl mx-auto landscape:mx-0 landscape:max-w-md">{bookTitle}</h3>
-          {getProgressStats()}
-        </div>
+        <>
+          <div className="absolute top-8 text-center w-full px-4 landscape:top-4 landscape:left-8 landscape:text-left landscape:w-auto landscape:px-0 z-20" onClick={(e) => e.stopPropagation()}>
+            <h3 className="m-0 font-normal opacity-60 text-lg truncate max-w-2xl mx-auto landscape:mx-0 landscape:max-w-md">{bookTitle}</h3>
+            {getProgressStats()}
+          </div>
+
+          <div className="fixed bottom-12 left-0 right-0 flex justify-center z-40 pointer-events-none">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onCloseBook();
+              }}
+              className={`pointer-events-auto flex items-center gap-2 px-8 py-3 rounded-full shadow-2xl border-2 transform transition-all hover:scale-105 active:scale-95 ${
+                theme === 'bedtime'
+                  ? 'bg-zinc-900 border-zinc-800 text-red-500'
+                  : 'bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-red-600 dark:text-red-500'
+              }`}
+            >
+              <Square size={20} fill="currentColor" />
+              <span className="font-bold uppercase tracking-widest text-sm">Stop Reading</span>
+            </button>
+          </div>
+        </>
       )}
 
 
@@ -302,7 +322,6 @@ export function ReaderView({
       <div
         className={`flex flex-col gap-6 items-center relative z-50
           ${isPlaying ? 'w-full max-w-md px-4' : 'portrait:w-full portrait:max-w-md portrait:px-4 landscape:pointer-events-none'}`}
-        onClick={(e) => e.stopPropagation()}
       >
         <div className={`w-full space-y-4 landscape:pointer-events-auto ${!isPlaying ? 'landscape:fixed landscape:bottom-4 landscape:left-8 landscape:right-64 landscape:w-auto landscape:space-y-4' : ''}`}>
           {/* Chapter Progress */}
@@ -326,6 +345,7 @@ export function ReaderView({
               className={`w-full h-1 rounded-sm cursor-pointer relative group ${theme === 'bedtime' ? 'bg-zinc-900' : 'bg-zinc-200 dark:bg-zinc-800'}`}
               onClick={(e) => {
                 if (isPlaying) return;
+                e.stopPropagation();
                 const rect = e.currentTarget.getBoundingClientRect();
                 const x = e.clientX - rect.left;
                 const percentage = x / rect.width;
