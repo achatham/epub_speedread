@@ -31,27 +31,29 @@ export async function synthesizeSpeech(text: string, speed: number = 1.0): Promi
 
 export async function synthesizeChapterAudio(wordsOrText: WordData[] | string, _speed: number, apiKey: string): Promise<AudioChunk[]> {
     const chunks = typeof wordsOrText === 'string'
-        ? chunkTextByParagraph(wordsOrText, 300)
-        : chunkWordsByParagraph(wordsOrText, 300);
+        ? chunkTextByParagraph(wordsOrText, 200)
+        : chunkWordsByParagraph(wordsOrText, 200);
 
     if (chunks.length === 0) return [];
 
-    // Note: Caching is disabled as requested, but synthesizeChapterAudio is used by AudioBookPlayer 
-    // which expects a list of chunks. We fetch them all.
     const controller = { state: { isStopped: false } };
+    const results: AudioChunk[] = [];
 
-    const tasks = chunks.map(async (chunk, index) => {
-        const audio = await fetchDeepgramAudio(apiKey, chunk.text, index, controller);
-        if (!audio) return null;
-        return {
-            audio,
-            startIndex: chunk.startIndex,
-            wordCount: chunk.wordCount
-        };
-    });
-    const results = await Promise.all(tasks);
+    // Fetch chunks sequentially to avoid 429 rate limits
+    for (let i = 0; i < chunks.length; i++) {
+        if (controller.state.isStopped) break;
+        const chunk = chunks[i];
+        const audio = await fetchDeepgramAudio(apiKey, chunk.text, i, controller);
+        if (audio) {
+            results.push({
+                audio,
+                startIndex: chunk.startIndex,
+                wordCount: chunk.wordCount
+            });
+        }
+    }
 
-    return results.filter((b): b is AudioChunk => b !== null);
+    return results;
 }
 
 async function getAudioContext(): Promise<AudioContext | null> {
@@ -87,12 +89,18 @@ function createAudioController(audioCtx: AudioContext): AudioController & { stat
 async function fetchDeepgramAudio(apiKey: string, text: string, index: number, controller: any): Promise<ArrayBuffer | null> {
     if (controller.state.isStopped) return null;
 
-    const cleanText = text
+    let cleanText = text
         .replace(/[#*`_~]/g, '')
         .replace(/\b\[([^\]]+)\]\(([^)]+)\)\b/g, '$1')
         .replace(/\n+/g, '. ');
 
     if (!cleanText.trim()) return null;
+
+    // Safety check: Deepgram REST API has a 2000 character limit
+    if (cleanText.length > 2000) {
+        console.warn(`Chunk ${index} too long (${cleanText.length} chars), truncating to 2000.`);
+        cleanText = cleanText.substring(0, 2000);
+    }
 
     const startTime = performance.now();
     try {
@@ -125,7 +133,7 @@ async function processChunks(fullText: string, apiKey: string, audioCtx: AudioCo
     // Deepgram /v1/speak doesn't support a simple 'speed' param in the same way, 
     // although Aura is very fast. For now ignoring speed or could be handled via AudioContext playbackRate.
     
-    const chunks = chunkTextByParagraph(fullText, 300);
+    const chunks = chunkTextByParagraph(fullText, 200);
     if (chunks.length === 0) return;
 
     // Sequential playback loop
