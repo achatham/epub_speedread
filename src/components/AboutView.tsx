@@ -8,7 +8,14 @@ export function AboutContent({ onSignIn }: AboutContentProps) {
   return (
     <div className="max-w-2xl mx-auto px-6">
       <header className="mb-16">
-        <h1 className="text-4xl font-light mb-4">Read faster, smarter.</h1>
+        <div className="space-y-2 mb-8">
+          <h1 className="text-4xl font-light leading-tight">
+            Speed-read and ask an AI about your ebooks—all for free*
+          </h1>
+          <p className="text-[10px] opacity-40 italic leading-relaxed">
+            * This app is free. While optional AI features require your own API key (typically costing only a few cents to use), this reader does not charge any fees.
+          </p>
+        </div>
         <p className="text-xl opacity-70 font-light">
           A minimalist EPUB reader designed for focus and comprehension.
         </p>

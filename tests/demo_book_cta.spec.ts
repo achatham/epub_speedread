@@ -31,7 +31,7 @@ test('verify demo book cta styling', async ({ page }) => {
 
     await infoButton.click();
 
-    await expect(page.locator('text=Read faster, smarter.')).toBeVisible();
+    await expect(page.locator('text=Speed-read and ask an AI about your ebooks—all for free*')).toBeVisible();
 
     
 
