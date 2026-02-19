@@ -142,8 +142,8 @@ export function ReaderView({
     pressStartTimeRef.current = null;
 
     if (duration < 300) {
-      // Short tap: exit to library
-      onCloseBook();
+      // Short tap: pause and show menu/preview
+      setIsPlaying(false);
       setIsHoldPaused(false);
     } else {
       // Long press: resume

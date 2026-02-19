@@ -29,29 +29,12 @@ test('pausing during chapter interlude should advance to next chapter and not ba
   await expect(interludeLabel).toBeVisible({ timeout: 15000 });
   await expect(page.locator('text=Chapter 2')).toBeVisible();
 
-  // Tap to exit to library. Click anywhere on the overlay.
+  // Tap to pause (show menu/preview)
   await page.mouse.click(400, 300);
-  await expect(page.getByRole('heading', { name: 'Library' })).toBeVisible();
+  await expect(page.locator('button[title="Open Menu"]')).toBeVisible();
 
-  // Re-enter book
-  await page.evaluate(() => {
-    (window as any).__loadMockWords([
-      { text: "This", isParagraphStart: true, isSentenceStart: true },
-      { text: "is", isParagraphStart: false, isSentenceStart: false },
-      { text: "the", isParagraphStart: false, isSentenceStart: false },
-      { text: "end.", isParagraphStart: false, isSentenceStart: false },
-      { text: "Beginning", isParagraphStart: true, isSentenceStart: true },
-      { text: "of", isParagraphStart: false, isSentenceStart: false },
-      { text: "new", isParagraphStart: false, isSentenceStart: false },
-      { text: "section.", isParagraphStart: false, isSentenceStart: false }
-    ], [
-      { label: "Chapter 1", startIndex: 0 },
-      { label: "Chapter 2", startIndex: 4 }
-    ]);
-  });
-
-  // Tap to start again
-  await page.getByText('Beginning').click();
+  // Resume by clicking background
+  await page.click('body', { position: { x: 100, y: 100 } });
 
   const rsvpContainer = page.locator('.flex.w-full.items-baseline');
   await expect(rsvpContainer).toHaveText(/Beginning|of|new/, { timeout: 10000 });
@@ -81,24 +64,12 @@ test('pausing normally should back up to start of sentence on resume', async ({ 
   const rsvpContainer = page.locator('.flex.w-full.items-baseline');
   await expect(rsvpContainer).toHaveText(/end\./, { timeout: 20000 });
 
-  // Tap to exit
+  // Tap to pause
   await page.mouse.click(400, 300);
-  await expect(page.getByRole('heading', { name: 'Library' })).toBeVisible();
+  await expect(page.locator('button[title="Open Menu"]')).toBeVisible();
 
-  // Re-enter
-  await page.evaluate(() => {
-    (window as any).__loadMockWords([
-      { text: "This", isParagraphStart: true, isSentenceStart: true },
-      { text: "is", isParagraphStart: false, isSentenceStart: false },
-      { text: "the", isParagraphStart: false, isSentenceStart: false },
-      { text: "end.", isParagraphStart: false, isSentenceStart: false }
-    ], [
-      { label: "Chapter 1", startIndex: 0 }
-    ]);
-  });
-
-  // Play again
-  await page.getByText('This').click();
+  // Resume
+  await page.click('body', { position: { x: 100, y: 100 } });
 
   // Should have backed up to "This"
   await expect(rsvpContainer).toHaveText(/This/, { timeout: 10000 });
