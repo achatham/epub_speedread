@@ -17,6 +17,8 @@ interface ReaderViewProps {
   isPlaying: boolean;
   setIsPlaying: (playing: boolean) => void;
   setIsHoldPaused: (paused: boolean) => void;
+  isPausedInPlace: boolean;
+  setIsPausedInPlace: (paused: boolean) => void;
   wpm: number;
   onWpmChange: (wpm: number) => void;
   theme: Theme;
@@ -49,6 +51,8 @@ export function ReaderView({
   isPlaying,
   setIsPlaying,
   setIsHoldPaused,
+  isPausedInPlace,
+  setIsPausedInPlace,
   wpm,
   onWpmChange,
   theme,
@@ -140,8 +144,8 @@ export function ReaderView({
     pressStartTimeRef.current = null;
 
     if (duration < 300) {
-      // Short tap: full pause
-      setIsPlaying(false);
+      // Short tap: toggle pause in place
+      setIsPausedInPlace(!isPausedInPlace);
       setIsHoldPaused(false);
     } else {
       // Long press: resume
@@ -229,17 +233,19 @@ export function ReaderView({
       )}
       
       {!isPlaying && (
-        <>
-          <div className="absolute top-8 text-center w-full px-4 landscape:top-4 landscape:left-8 landscape:text-left landscape:w-auto landscape:px-0 z-20" onClick={(e) => e.stopPropagation()}>
-            <h3 className="m-0 font-normal opacity-60 text-lg truncate max-w-2xl mx-auto landscape:mx-0 landscape:max-w-md">{bookTitle}</h3>
-            {getProgressStats()}
-          </div>
+        <div className="absolute top-8 text-center w-full px-4 landscape:top-4 landscape:left-8 landscape:text-left landscape:w-auto landscape:px-0 z-20" onClick={(e) => e.stopPropagation()}>
+          <h3 className="m-0 font-normal opacity-60 text-lg truncate max-w-2xl mx-auto landscape:mx-0 landscape:max-w-md">{bookTitle}</h3>
+          {getProgressStats()}
+        </div>
+      )}
 
-          <div className="fixed bottom-12 left-0 right-0 flex justify-center z-40 pointer-events-none">
+      {isPlaying && isPausedInPlace && (
+          <div className="fixed bottom-12 left-0 right-0 flex justify-center z-50 pointer-events-none">
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                onCloseBook();
+                setIsPlaying(false);
+                setIsPausedInPlace(false);
               }}
               className={`pointer-events-auto flex items-center gap-2 px-8 py-3 rounded-full shadow-2xl border-2 transform transition-all hover:scale-105 active:scale-95 ${
                 theme === 'bedtime'
@@ -251,7 +257,6 @@ export function ReaderView({
               <span className="font-bold uppercase tracking-widest text-sm">Stop Reading</span>
             </button>
           </div>
-        </>
       )}
 
 
@@ -321,7 +326,7 @@ export function ReaderView({
       {/* Controls */}
       <div
         className={`flex flex-col gap-6 items-center relative z-50
-          ${isPlaying ? 'w-full max-w-md px-4' : 'portrait:w-full portrait:max-w-md portrait:px-4 landscape:pointer-events-none'}`}
+          ${isPlaying ? 'w-full max-w-md px-4 pointer-events-none' : 'portrait:w-full portrait:max-w-md portrait:px-4 landscape:pointer-events-none'}`}
       >
         <div className={`w-full space-y-4 landscape:pointer-events-auto ${!isPlaying ? 'landscape:fixed landscape:bottom-4 landscape:left-8 landscape:right-64 landscape:w-auto landscape:space-y-4' : ''}`}>
           {/* Chapter Progress */}

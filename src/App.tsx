@@ -70,6 +70,7 @@ function App() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isHoldPaused, setIsHoldPaused] = useState(false);
+  const [isPausedInPlace, setIsPausedInPlace] = useState(false);
   const [wpm, setWpm] = useState(300 * WPM_VANITY_RATIO);
   const [bookTitle, setBookTitle] = useState('');
   const [sections, setSections] = useState<{ label: string; startIndex: number }[]>([]);
@@ -632,6 +633,7 @@ function App() {
     } else if (!playing && isPlaying) {
       setPlaybackStartTime(null);
       setIsHoldPaused(false);
+      setIsPausedInPlace(false);
       if (wakeLockRef.current) {
         wakeLockRef.current.release();
         wakeLockRef.current = null;
@@ -759,7 +761,7 @@ function App() {
   }, [words.length]);
 
   useEffect(() => {
-    if (isPlaying && !isHoldPaused) {
+    if (isPlaying && !isHoldPaused && !isPausedInPlace) {
       if (!playbackStartTime) {
         setPlaybackStartTime(Date.now());
       }
@@ -768,10 +770,10 @@ function App() {
         setPlaybackStartTime(null);
       }
     }
-  }, [isHoldPaused, isPlaying, playbackStartTime]);
+  }, [isHoldPaused, isPlaying, isPausedInPlace, playbackStartTime]);
 
   useEffect(() => {
-    if (isPlaying && !isHoldPaused && playbackStartTime && words.length > 0) {
+    if (isPlaying && !isHoldPaused && !isPausedInPlace && playbackStartTime && words.length > 0) {
       const timeSinceRotation = Date.now() - lastRotationTime;
       if (timeSinceRotation < rsvpSettings.orientationDelay) {
         // Just let the effect re-run naturally since it depends on rotationTrigger
@@ -802,7 +804,7 @@ function App() {
       timerRef.current = window.setTimeout(callback, interval);
     }
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [isPlaying, isHoldPaused, wpm, words, currentIndex, nextWord, sections, isChapterBreak, rotationTrigger, lastRotationTime, rsvpSettings, playbackStartTime]);
+  }, [isPlaying, isHoldPaused, isPausedInPlace, wpm, words, currentIndex, nextWord, sections, isChapterBreak, rotationTrigger, lastRotationTime, rsvpSettings, playbackStartTime]);
 
   if (isLoading || user === undefined) {
     return (
@@ -963,6 +965,8 @@ function App() {
           isPlaying={isPlaying}
           setIsPlaying={handleSetIsPlaying}
           setIsHoldPaused={setIsHoldPaused}
+          isPausedInPlace={isPausedInPlace}
+          setIsPausedInPlace={setIsPausedInPlace}
           wpm={Math.round(wpm / (library.find(b => b.id === currentBookId)?.settings.vanityWpmRatio || rsvpSettings.vanityWpmRatio))}
           onWpmChange={(targetWpm) => { 
               const currentRatio = library.find(b => b.id === currentBookId)?.settings.vanityWpmRatio || rsvpSettings.vanityWpmRatio;
