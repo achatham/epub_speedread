@@ -20,7 +20,7 @@ export function calculateRsvpInterval(
 ): number {
   let multiplier = 1;
   
-  if (/[.!?]['")\]]*$/.test(word)) {
+  if (/[.!?]['")\]]*$/.test(word) || word === '—' || word === '–') {
     multiplier = settings.periodMultiplier;
   } else if (/[,;:]['")\]]*$/.test(word)) {
     multiplier = settings.commaMultiplier;
@@ -60,10 +60,13 @@ export function extractWordsFromDoc(doc: Document): WordData[] {
     // Replace em-dashes and en-dashes with padded versions to ensure they split into separate words
     // "word—word" -> "word — word"
     // Also split hyphenated words, keeping the hyphen on the preceding word
+    // Standardize ellipses (...) and single-char ellipses (…) as distinct padded tokens
     const processedBuffer = currentTextBuffer
         .replace(/—/g, ' — ')
         .replace(/–/g, ' – ')
-        .replace(/(\w)-(\w)/g, '$1- $2');
+        .replace(/(\w)-(\w)/g, '$1- $2')
+        .replace(/…/g, ' ... ')
+        .replace(/(?:\. ?){3,}/g, ' ... ');
 
     const rawWords = processedBuffer
         .replace(/\s+/g, ' ')
@@ -148,7 +151,9 @@ export function extractWordsFromText(text: string): WordData[] {
     const processedPara = para
       .replace(/—/g, ' — ')
       .replace(/–/g, ' – ')
-      .replace(/(\w)-(\w)/g, '$1- $2');
+      .replace(/(\w)-(\w)/g, '$1- $2')
+      .replace(/…/g, ' ... ')
+      .replace(/(?:\. ?){3,}/g, ' ... ');
 
     const rawWords = processedPara
       .replace(/\s+/g, ' ')

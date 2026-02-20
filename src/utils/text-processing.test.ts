@@ -110,4 +110,16 @@ describe('extractWordsFromDoc', () => {
       'The', 'well-', 'known', 'multi-', 'hyphenated-', 'word', 'is', 'here.'
     ]);
   });
+
+  it('should split ellipses into standalone tokens', () => {
+    const html = '<p>Word...word word... word word . . . word word…word</p>';
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const words = extractWordsFromDoc(doc);
+
+    const texts = words.map(w => w.text);
+    // Standardizing all to "..." as per plan
+    expect(texts).toEqual([
+      'Word', '...', 'word', 'word', '...', 'word', 'word', '...', 'word', 'word', '...', 'word'
+    ]);
+  });
 });
