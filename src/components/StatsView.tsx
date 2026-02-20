@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { X, Clock, BookOpen, BarChart2, TrendingUp, Volume2, Library } from 'lucide-react';
 import type { ReadingSession, BookRecord } from '../utils/storage';
-import { getSessionKey, getDayKey, getHistoryRangeData, getBookProgressTrendData } from '../utils/stats';
+import { getSessionKey, getHistoryRangeData, getBookProgressTrendData } from '../utils/stats';
 
 interface StatsViewProps {
   isOpen: boolean;

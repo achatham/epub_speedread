@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { getIncrementalAggregationPlan, getHistoryRangeData, getBookProgressTrendData } from './stats';
 import type { ReadingSession } from './storage';
 
