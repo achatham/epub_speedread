@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { X, Clock, BookOpen, BarChart2, TrendingUp, Volume2, Library } from 'lucide-react';
 import type { ReadingSession, BookRecord } from '../utils/storage';
-import { getSessionKey, getDayKey } from '../utils/stats';
+import { getSessionKey, getHistoryRangeData, getBookProgressTrendData } from '../utils/stats';
 
 interface StatsViewProps {
   isOpen: boolean;
@@ -98,30 +98,8 @@ export function StatsView({
     const bookTotalWords = bookToView.analysis.realEndIndex || bookToView.progress.wordIndex || 1;
     const maxIndex = Math.max(bookTotalWords, ...bookSessions.map(s => s.endWordIndex));
     
-    // Sort sessions chronologically for the chart
-    const chrono = [...bookSessions].sort((a, b) => a.startTime - b.startTime);
-    
-    // Group by day to find max position per day (regardless of modality)
-    const dailyMax = new Map<string, ReadingSession>();
-    for (const s of chrono) {
-        const date = getDayKey(s.startTime);
-        const existing = dailyMax.get(date);
-        // If multiple sessions on the same day, take the one that reached the furthest index
-        if (!existing || s.endWordIndex >= existing.endWordIndex) {
-            dailyMax.set(date, s);
-        }
-    }
-
-    const pointsDataSessions = Array.from(dailyMax.values()).sort((a, b) => a.startTime - b.startTime);
-
-    // If only one day of activity, show start and end of that day's max session
-    let pointsData = pointsDataSessions.map(s => ({ index: s.endWordIndex, time: s.endTime }));
-    if (pointsDataSessions.length === 1) {
-        pointsData = [
-            { index: pointsDataSessions[0].startWordIndex, time: pointsDataSessions[0].startTime },
-            { index: pointsDataSessions[0].endWordIndex, time: pointsDataSessions[0].endTime }
-        ];
-    }
+    const pointsData = getBookProgressTrendData(bookSessions);
+    if (pointsData.length === 0) return null;
     
     const width = 400;
     const height = 180;
@@ -169,16 +147,16 @@ export function StatsView({
             points={points}
           />
           
-          {/* Dots with Tooltips */}
+          {/* Dots with Tooltips - only show for days with activity */}
           {pointsData.map((p, i) => {
+             if (!p.hasActivity) return null;
+
              const x = paddingLeft + (i / (pointsData.length - 1)) * (width - paddingLeft - paddingRight);
              const y = height - paddingBottom - (p.index / maxIndex) * (height - paddingTop - paddingBottom);
              const percent = Math.round((p.index / maxIndex) * 100);
              const dateStr = new Date(p.time).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
              
-             // Find original session for type
-             const session = bookSessions.find(s => s.endTime === p.time);
-             const isListen = session?.type === 'listening';
+             const isListen = p.type === 'listening';
              
              return (
                 <g key={i} className="group/point">
@@ -210,29 +188,13 @@ export function StatsView({
   };
 
   const renderHistoryChart = () => {
-    if (historySessions.length === 0) return (
+    const sortedData = getHistoryRangeData(timeRange, historySessions);
+
+    if (sortedData.length === 0) return (
         <div className="h-32 flex items-center justify-center opacity-40 italic text-sm">
             No activity data for this period.
         </div>
     );
-
-    const isYear = timeRange === 'year';
-    const dailyData = new Map<string, { read: number, listen: number, timestamp: number }>();
-
-    for (const s of historySessions) {
-        const d = new Date(s.startTime);
-        const key = isYear
-            ? d.toLocaleDateString(undefined, { month: 'short', year: '2-digit' })
-            : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-        const existing = dailyData.get(key) || { read: 0, listen: 0, timestamp: s.startTime };
-        if (s.type === 'listening') existing.listen += s.durationSeconds / 60;
-        else existing.read += s.durationSeconds / 60;
-        dailyData.set(key, existing);
-    }
-
-    const sortedData = Array.from(dailyData.entries())
-        .sort((a, b) => a[1].timestamp - b[1].timestamp)
-        .map(([key, val]) => ({ key, ...val }));
 
     const width = 400;
     const height = 180;

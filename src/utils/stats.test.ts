@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getIncrementalAggregationPlan } from './stats';
+import { getIncrementalAggregationPlan, getHistoryRangeData, getBookProgressTrendData } from './stats';
 import type { ReadingSession } from './storage';
 
 // Mock crypto.randomUUID
@@ -160,5 +160,90 @@ describe('incremental stats aggregation', () => {
         const plan = getIncrementalAggregationPlan([existing], newSessions);
         expect(plan.createSessions[0].endWordIndex).toBe(2000);
         expect(plan.createSessions[0].wordsRead).toBe(2500);
+    });
+});
+
+describe('getHistoryRangeData', () => {
+    it('should return 7 days for week range, even with no data', () => {
+        const data = getHistoryRangeData('week', []);
+        expect(data).toHaveLength(7);
+        expect(data.every(d => d.read === 0 && d.listen === 0)).toBe(true);
+    });
+
+    it('should aggregate sessions into correct day buckets', () => {
+        const now = Date.now();
+        const sessions: ReadingSession[] = [{
+            id: 's1',
+            bookId: 'b1',
+            bookTitle: 'B1',
+            startTime: now,
+            endTime: now + 60000,
+            startWordIndex: 0,
+            endWordIndex: 100,
+            wordsRead: 100,
+            durationSeconds: 60,
+            type: 'reading'
+        }];
+        const data = getHistoryRangeData('week', sessions);
+        expect(data).toHaveLength(7);
+        const todayKey = new Date(now).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        const todayData = data.find(d => d.key === todayKey);
+        expect(todayData?.read).toBe(1);
+    });
+
+    it('should return 12 months for year range', () => {
+        const data = getHistoryRangeData('year', []);
+        expect(data).toHaveLength(12);
+    });
+});
+
+describe('getBookProgressTrendData', () => {
+    it('should handle single day session with start/end points', () => {
+        const now = Date.now();
+        const sessions: ReadingSession[] = [{
+            id: 's1',
+            bookId: 'b1',
+            bookTitle: 'B1',
+            startTime: now,
+            endTime: now + 60000,
+            startWordIndex: 10,
+            endWordIndex: 100,
+            wordsRead: 90,
+            durationSeconds: 60,
+            type: 'reading'
+        }];
+        const data = getBookProgressTrendData(sessions);
+        expect(data).toHaveLength(2);
+        expect(data[0].index).toBe(10);
+        expect(data[1].index).toBe(100);
+    });
+
+    it('should fill gaps between sessions and extend to today', () => {
+        const now = new Date();
+        now.setHours(12, 0, 0, 0);
+        const threeDaysAgo = now.getTime() - 3 * 24 * 60 * 60 * 1000;
+
+        const sessions: ReadingSession[] = [{
+            id: 's1',
+            bookId: 'b1',
+            bookTitle: 'B1',
+            startTime: threeDaysAgo,
+            endTime: threeDaysAgo + 60000,
+            startWordIndex: 0,
+            endWordIndex: 100,
+            wordsRead: 100,
+            durationSeconds: 60,
+            type: 'reading'
+        }];
+
+        const data = getBookProgressTrendData(sessions);
+        // Points for: 3 days ago (active), 2 days ago (gap), 1 day ago (gap), Today (gap)
+        expect(data.length).toBe(4);
+        expect(data[0].hasActivity).toBe(true);
+        expect(data[0].index).toBe(100);
+        expect(data[1].hasActivity).toBe(false);
+        expect(data[1].index).toBe(100);
+        expect(data[3].hasActivity).toBe(false);
+        expect(data[3].index).toBe(100);
     });
 });
