@@ -65,4 +65,13 @@ describe('calculateRsvpInterval', () => {
     const interval = calculateRsvpInterval('hello', fastWpm, DEFAULT_RSVP_SETTINGS);
     expect(interval).toBe(fastInterval);
   });
+
+  it('should apply period multiplier to standalone em-dashes and ellipses', () => {
+    expect(calculateRsvpInterval('—', wpm, DEFAULT_RSVP_SETTINGS))
+      .toBe(baseInterval * DEFAULT_RSVP_SETTINGS.periodMultiplier);
+    expect(calculateRsvpInterval('–', wpm, DEFAULT_RSVP_SETTINGS))
+      .toBe(baseInterval * DEFAULT_RSVP_SETTINGS.periodMultiplier);
+    expect(calculateRsvpInterval('...', wpm, DEFAULT_RSVP_SETTINGS))
+      .toBe(baseInterval * DEFAULT_RSVP_SETTINGS.periodMultiplier);
+  });
 });
