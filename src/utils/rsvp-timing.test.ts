@@ -51,12 +51,30 @@ describe('calculateRsvpInterval', () => {
     expect(interval).toBe(baseInterval * DEFAULT_RSVP_SETTINGS.tooWideMultiplier);
   });
 
+  it('should treat numbers with more than two digits as long words', () => {
+    // "100" has 3 digits
+    expect(calculateRsvpInterval('100', wpm, DEFAULT_RSVP_SETTINGS))
+      .toBe(baseInterval * DEFAULT_RSVP_SETTINGS.longWordMultiplier);
+
+    // "12.34" has 4 digits
+    expect(calculateRsvpInterval('12.34', wpm, DEFAULT_RSVP_SETTINGS))
+      .toBe(baseInterval * DEFAULT_RSVP_SETTINGS.longWordMultiplier);
+
+    // "10" has 2 digits (not a long word)
+    expect(calculateRsvpInterval('10', wpm, DEFAULT_RSVP_SETTINGS))
+      .toBe(baseInterval);
+  });
+
   it('should combine multipliers correctly (prioritizing punctuation)', () => {
     // Word ends with period AND is long. 
     // Currently the logic does `multiplier = settings.periodMultiplier` 
     // and then later `multiplier *= settings.longWordMultiplier` if applicable.
     const interval = calculateRsvpInterval('unconventional.', wpm, DEFAULT_RSVP_SETTINGS);
     expect(interval).toBe(baseInterval * DEFAULT_RSVP_SETTINGS.periodMultiplier * DEFAULT_RSVP_SETTINGS.longWordMultiplier);
+
+    // Number with punctuation should also combine
+    const numberInterval = calculateRsvpInterval('100.', wpm, DEFAULT_RSVP_SETTINGS);
+    expect(numberInterval).toBe(baseInterval * DEFAULT_RSVP_SETTINGS.periodMultiplier * DEFAULT_RSVP_SETTINGS.longWordMultiplier);
   });
 
   it('should handle different WPM values', () => {
