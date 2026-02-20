@@ -60,6 +60,10 @@ describe('calculateRsvpInterval', () => {
     expect(calculateRsvpInterval('12.34', wpm, DEFAULT_RSVP_SETTINGS))
       .toBe(baseInterval * DEFAULT_RSVP_SETTINGS.longWordMultiplier);
 
+    // "10,000" has 5 digits
+    expect(calculateRsvpInterval('10,000', wpm, DEFAULT_RSVP_SETTINGS))
+      .toBe(baseInterval * DEFAULT_RSVP_SETTINGS.longWordMultiplier);
+
     // "10" has 2 digits (not a long word)
     expect(calculateRsvpInterval('10', wpm, DEFAULT_RSVP_SETTINGS))
       .toBe(baseInterval);
