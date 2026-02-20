@@ -34,9 +34,11 @@ export function calculateRsvpInterval(
   // Benchmark "transportation" for stable sizing (matches ReaderView)
   const benchMaxDensity = 15.83; 
 
+  const isLongWord = word.length > 8 || (word.match(/\d/g) || []).length > 2;
+
   if (currentMaxDensity > benchMaxDensity * 1.15) {
     multiplier *= settings.tooWideMultiplier;
-  } else if (word.length > 8) {
+  } else if (isLongWord) {
     multiplier *= settings.longWordMultiplier;
   }
 

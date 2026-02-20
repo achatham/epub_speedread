@@ -257,7 +257,7 @@ export function SettingsModal({
                   />
                   <RsvpControl
                     label="Long Word Multiplier"
-                    description="Delay for words > 8 chars"
+                    description="Delay for words > 8 chars or numbers > 2 digits"
                     value={rsvpSettings.longWordMultiplier}
                     min={1} max={5} step={0.1}
                     unit="x"
