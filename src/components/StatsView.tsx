@@ -325,10 +325,10 @@ export function StatsView({
         const startOfRange = new Date(threshold);
         if (timeRange === 'pastYear') {
             // For past year, we want 12 increments ending today.
-            // Let's start from 12 months ago to be safe and cover the full range.
-            startOfRange.setMonth(now.getMonth() - 12);
+            // Let's start from 11 months ago, 1st of that month.
+            startOfRange.setMonth(now.getMonth() - 11);
             startOfRange.setDate(1);
-            numSteps = 13; // 12 months ago to current month
+            numSteps = 12;
         } else {
             startOfRange.setDate(1);
         }
