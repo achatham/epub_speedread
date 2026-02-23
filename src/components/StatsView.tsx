@@ -27,7 +27,7 @@ export function StatsView({
 
   useEffect(() => {
     if (activeTab === 'books') {
-      if (!['ytd', 'lastYear', 'fiveYears'].includes(timeRange)) {
+      if (!['ytd', 'pastYear', 'fiveYears'].includes(timeRange)) {
         setTimeRange('ytd');
       }
     } else if (activeTab === 'history') {
@@ -116,9 +116,9 @@ export function StatsView({
 
     if (timeRange === 'ytd') {
       threshold = new Date(now.getFullYear(), 0, 1).getTime();
-    } else if (timeRange === 'lastYear') {
-      threshold = new Date(now.getFullYear() - 1, 0, 1).getTime();
-      endThreshold = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999).getTime();
+    } else if (timeRange === 'pastYear') {
+      threshold = now.getTime() - 365 * 24 * 60 * 60 * 1000;
+      endThreshold = now.getTime();
     } else if (timeRange === 'fiveYears') {
       threshold = now.getTime() - 5 * 365 * 24 * 60 * 60 * 1000;
     } else {
@@ -269,9 +269,9 @@ export function StatsView({
       threshold = startOfYear.getTime();
       numSteps = Math.ceil((now.getTime() - threshold) / (24 * 60 * 60 * 1000)) + 1;
       stepType = 'day';
-    } else if (timeRange === 'lastYear') {
-      threshold = new Date(now.getFullYear() - 1, 0, 1).getTime();
-      endThreshold = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999).getTime();
+    } else if (timeRange === 'pastYear') {
+      threshold = now.getTime() - 365 * 24 * 60 * 60 * 1000;
+      endThreshold = now.getTime();
       numSteps = 12;
       stepType = 'month';
     } else if (timeRange === 'fiveYears') {
@@ -306,7 +306,7 @@ export function StatsView({
         for (let i = 0; i < numSteps; i++) {
             const d = new Date(startOfRange);
             d.setDate(d.getDate() + i);
-            if (d.getTime() > endThreshold && timeRange !== 'lastYear') break;
+            if (d.getTime() > endThreshold && timeRange !== 'pastYear') break;
 
             const dayFinishCount = allFinished.filter(b => {
                 const bd = new Date(b.date);
@@ -323,12 +323,20 @@ export function StatsView({
         }
     } else {
         const startOfRange = new Date(threshold);
-        startOfRange.setDate(1);
+        if (timeRange === 'pastYear') {
+            // For past year, we want 12 increments ending today.
+            // Let's start from 12 months ago to be safe and cover the full range.
+            startOfRange.setMonth(now.getMonth() - 12);
+            startOfRange.setDate(1);
+            numSteps = 13; // 12 months ago to current month
+        } else {
+            startOfRange.setDate(1);
+        }
         startOfRange.setHours(0, 0, 0, 0);
         for (let i = 0; i < numSteps; i++) {
             const d = new Date(startOfRange);
             d.setMonth(d.getMonth() + i);
-            if (d.getTime() > endThreshold && timeRange !== 'lastYear') break;
+            if (d.getTime() > endThreshold && timeRange !== 'pastYear') break;
 
             const nextMonth = new Date(d);
             nextMonth.setMonth(nextMonth.getMonth() + 1);
@@ -572,7 +580,7 @@ export function StatsView({
                     ) : (
                       ([
                         { id: 'ytd', label: 'YTD' },
-                        { id: 'lastYear', label: 'Last Year' },
+                        { id: 'pastYear', label: 'Past Year' },
                         { id: 'fiveYears', label: '5 Years' }
                       ]).map(range => (
                           <button
@@ -619,8 +627,8 @@ export function StatsView({
                   {activeTab === 'book'
                     ? (activeBookId ? 'Book Progress Trend' : (bookToView ? `Recent Progress: ${bookToView.meta.title}` : 'No Book Data'))
                     : activeTab === 'history'
-                      ? `Reading Activity: Past ${timeRange.charAt(0).toUpperCase() + timeRange.slice(1)}`
-                      : `Books Finished: Past ${timeRange.charAt(0).toUpperCase() + timeRange.slice(1)}`
+                  ? `Reading Activity: Past ${timeRange === 'week' ? 'Week' : timeRange === 'month' ? 'Month' : 'Year'}`
+                  : `Books Finished: ${timeRange === 'ytd' ? 'Year to Date' : timeRange === 'pastYear' ? 'Past Year' : 'Past 5 Years'}`
                   }
               </h3>
               <div className={`p-6 rounded-xl ${cardBgClass}`}>
