@@ -344,8 +344,11 @@ export class FirestoreStorage {
     }
   }
 
-  async updateBookWpm(id: string, wpm: number): Promise<void> {
-    await updateDoc(doc(this.booksCollection, id), { 'settings.wpm': wpm });
+  async updateBookWpm(id: string, wpm: number, vanityWpmRatio: number): Promise<void> {
+    await updateDoc(doc(this.booksCollection, id), {
+      'settings.wpm': wpm,
+      'settings.vanityWpmRatio': vanityWpmRatio
+    });
   }
 
   async updateBookStats(id: string, stats: Partial<BookRecord['progress'] & { vanityWpmRatio?: number; wpm?: number }>): Promise<void> {

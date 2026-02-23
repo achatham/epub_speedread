@@ -114,7 +114,9 @@ export function extractWordsFromDoc(doc: Document): WordData[] {
         markNextAsParagraphStart = true; 
       }
 
-      node.childNodes.forEach(child => traverse(child));
+      for (const child of Array.from(node.childNodes)) {
+        traverse(child);
+      }
       
       if (isBlock) {
         // Closing a block also flushes content inside it
@@ -211,8 +213,7 @@ export function chunkWordsByCharLimit(words: WordData[], maxChars: number = 1900
   let currentChars = 0;
   let chunkStartIndex = 0;
 
-  for (let i = 0; i < words.length; i++) {
-    const word = words[i];
+  for (const word of words) {
     const wordWithSpace = (currentChunkWords.length > 0 ? " " : "") + word.text;
     
     if (currentChars + wordWithSpace.length > maxChars) {

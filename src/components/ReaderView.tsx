@@ -70,6 +70,9 @@ export function ReaderView({
   vanityWpmRatio,
   rsvpSettings
 }: ReaderViewProps) {
+  const pressStartTimeRef = useRef<number | null>(null);
+  const lastPauseTimeRef = useRef<number>(0);
+
   if (words.length === 0) {
     return (
       <div className={`flex flex-col items-center justify-center h-dvh ${theme === 'bedtime' ? 'bg-black text-stone-400' : 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100'}`}>
@@ -123,9 +126,6 @@ export function ReaderView({
   const rsvpFocusColor = theme === 'bedtime' ? 'text-amber-600' : (theme === 'dark' ? 'text-red-500' : 'text-red-600');
   const rsvpContextClass = theme === 'bedtime' ? 'text-stone-600' : 'opacity-90';
   const guidelinesClass = theme === 'bedtime' ? 'bg-amber-900/30' : 'bg-red-600 dark:bg-red-500 opacity-30';
-
-  const pressStartTimeRef = useRef<number | null>(null);
-  const lastPauseTimeRef = useRef<number>(0);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     e.stopPropagation();

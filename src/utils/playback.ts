@@ -19,7 +19,7 @@ export function findRewindTarget(
   const chapterStart = currentChapter.startIndex;
 
   // Back up 10 words, but not before chapter start
-  let target = Math.max(chapterStart, currentIndex - 10);
+  const target = Math.max(chapterStart, currentIndex - 10);
 
   // Find sentence start from there, but don't go before chapter start
   for (let i = target; i >= chapterStart; i--) {

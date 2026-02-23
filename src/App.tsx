@@ -8,7 +8,7 @@ import {
 import { auth, storage } from './utils/firebase';
 import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, getRedirectResult, signOut, type User } from 'firebase/auth';
 import { ref, getBytes } from 'firebase/storage';
-import { type WordData, calculateRsvpInterval, calculateRsvpMultiplier } from './utils/text-processing';
+import { type WordData, calculateRsvpInterval } from './utils/text-processing';
 import { calculateNavigationTarget, type NavigationType } from './utils/navigation';
 import { getResumeIndex } from './utils/playback';
 import { getGeminiApiKey, setGeminiApiKey as saveGeminiApiKey, askAboutBook, summarizeRecent, summarizeWhatJustHappened } from './utils/gemini';
@@ -294,7 +294,6 @@ function App() {
   const timerRef = useRef<number | null>(null);
   const sessionStartTimeRef = useRef<number | null>(null);
   const wordsReadInSessionRef = useRef<number>(0);
-  const multipliersSumInSessionRef = useRef<number>(0);
   const sessionStartIndexRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
@@ -565,7 +564,13 @@ function App() {
       setWords(result.words);
       setSections(result.sections);
       setCurrentIndex(result.wordIndex);
-      setWpm(result.wpm);
+
+      // Calculate active boosted WPM based on global vanity ratio
+      const storedRatio = bookRecord.settings.vanityWpmRatio || 1.25;
+      const targetWpm = result.wpm / storedRatio;
+      const activeBoostedWpm = targetWpm * rsvpSettings.vanityWpmRatio;
+      setWpm(activeBoostedWpm);
+
       setRealEndIndex(result.realEndIndex);
       setFurthestIndex(bookRecord.progress.furthestWordIndex ?? bookRecord.progress.wordIndex);
 
@@ -671,7 +676,6 @@ function App() {
       if (sessionStartTimeRef.current === null) {
         sessionStartTimeRef.current = Date.now();
         wordsReadInSessionRef.current = 0;
-        multipliersSumInSessionRef.current = 0;
         sessionStartIndexRef.current = currentIndex;
       }
     } else if (sessionStartTimeRef.current !== null && currentBookId && storageProvider) {
@@ -687,11 +691,9 @@ function App() {
       const wordsRead = wordsReadInSessionRef.current;
       const avgWpm = durationMins > 0 ? Math.round(wordsRead / durationMins) : 0;
 
-      const multipliersSum = multipliersSumInSessionRef.current;
       console.log(`Session Summary:
 - Duration: ${(durationMs / 1000).toFixed(1)}s
 - Words Read: ${wordsRead}
-- Multiplier Sum: ${multipliersSum.toFixed(2)}
 - Set WPM (Boosted): ${savedWpm}
 - Effective Avg WPM: ${avgWpm}`);
 
@@ -712,30 +714,15 @@ function App() {
             await storageProvider.aggregateSessions();
             setSessions(await storageProvider.getAggregatedSessions());
 
-            // Update book statistics and vanity ratio
+            // Update book statistics
             const bookRecord = library.find(b => b.id === savedBookId);
             if (bookRecord) {
-              const expectedWordsThisSession = multipliersSum;
               const cumulativeWords = (bookRecord.progress.cumulativeWordsRead || 0) + wordsRead;
-              const cumulativeExpected = (bookRecord.progress.cumulativeExpectedWords || 0) + expectedWordsThisSession;
               const cumulativeDuration = (bookRecord.progress.cumulativeDurationSeconds || 0) + Math.round(durationMs / 1000);
-
-              let newVanityRatio = cumulativeWords > 0 ? cumulativeExpected / cumulativeWords : (bookRecord.settings.vanityWpmRatio || rsvpSettings.vanityWpmRatio);
-              const oldVanityRatio = bookRecord.settings.vanityWpmRatio || rsvpSettings.vanityWpmRatio;
-
-              // Sanity cap for the ratio to prevent runaway WPM from outlier sessions
-              newVanityRatio = Math.max(0.5, Math.min(5.0, newVanityRatio));
-
-              // Maintain same targetWpm
-              const targetWpm = savedWpm / oldVanityRatio;
-              const newBoostedWpm = targetWpm * newVanityRatio;
 
               await storageProvider.updateBookStats(savedBookId, {
                 cumulativeWordsRead: cumulativeWords,
-                cumulativeExpectedWords: cumulativeExpected,
                 cumulativeDurationSeconds: cumulativeDuration,
-                vanityWpmRatio: newVanityRatio,
-                wpm: newBoostedWpm
               });
 
               // Update local state
@@ -745,19 +732,9 @@ function App() {
                   ...b.progress,
                   wordIndex: savedIndex,
                   cumulativeWordsRead: cumulativeWords,
-                  cumulativeExpectedWords: cumulativeExpected,
                   cumulativeDurationSeconds: cumulativeDuration
-                },
-                settings: {
-                  ...b.settings,
-                  vanityWpmRatio: newVanityRatio,
-                  wpm: newBoostedWpm
                 }
               } : b));
-
-              if (currentBookIdRef.current === savedBookId) {
-                setWpm(newBoostedWpm);
-              }
             }
         }).catch(e => console.error("Failed to log session", e));
       } else {
@@ -770,15 +747,12 @@ function App() {
     }
   }, [isPlaying, wpm, currentBookId, storageProvider, currentIndex, bookTitle]);
 
-  // Track words read and multipliers
+  // Track words read
   useEffect(() => {
     if (isPlaying && !isHoldPaused && !isChapterBreak) {
       wordsReadInSessionRef.current += 1;
-      const currentWord = words[currentIndex]?.text || '';
-      const multiplier = calculateRsvpMultiplier(currentWord, rsvpSettings);
-      multipliersSumInSessionRef.current += multiplier;
     }
-  }, [currentIndex, isPlaying, isHoldPaused, isChapterBreak, words, rsvpSettings]);
+  }, [currentIndex, isPlaying, isHoldPaused, isChapterBreak]);
 
   const navigate = (type: NavigationType) => {
     setIsChapterBreak(false);
@@ -1003,14 +977,13 @@ function App() {
           isPlaying={isPlaying}
           setIsPlaying={handleSetIsPlaying}
           setIsHoldPaused={setIsHoldPaused}
-          wpm={Math.round(wpm / (library.find(b => b.id === currentBookId)?.settings.vanityWpmRatio || rsvpSettings.vanityWpmRatio))}
+          wpm={Math.round(wpm / rsvpSettings.vanityWpmRatio)}
           onWpmChange={(targetWpm) => { 
-              const currentRatio = library.find(b => b.id === currentBookId)?.settings.vanityWpmRatio || rsvpSettings.vanityWpmRatio;
-              const boosted = targetWpm * currentRatio;
+              const boosted = targetWpm * rsvpSettings.vanityWpmRatio;
               setWpm(boosted); 
-              storageProvider.updateBookWpm(currentBookId!, boosted); 
+              storageProvider.updateBookWpm(currentBookId!, boosted, rsvpSettings.vanityWpmRatio);
           }}
-          vanityWpmRatio={library.find(b => b.id === currentBookId)?.settings.vanityWpmRatio || rsvpSettings.vanityWpmRatio}
+          vanityWpmRatio={rsvpSettings.vanityWpmRatio}
           theme={theme} fontFamily={fontFamily} bookTitle={bookTitle}
           onCloseBook={handleCloseBook} onSettingsClick={() => setIsSettingsOpen(true)}
           onBookSettingsClick={() => setIsBookSettingsOpen(true)}
