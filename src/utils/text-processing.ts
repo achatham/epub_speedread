@@ -13,9 +13,8 @@ const BLOCK_TAGS = new Set([
   'TR', 'TD', 'TH' // Tables also break text
 ]);
 
-export function calculateRsvpInterval(
-  word: string, 
-  wpm: number, 
+export function calculateRsvpMultiplier(
+  word: string,
   settings: RsvpSettings
 ): number {
   let multiplier = 1;
@@ -42,6 +41,15 @@ export function calculateRsvpInterval(
     multiplier *= settings.longWordMultiplier;
   }
 
+  return multiplier;
+}
+
+export function calculateRsvpInterval(
+  word: string,
+  wpm: number,
+  settings: RsvpSettings
+): number {
+  const multiplier = calculateRsvpMultiplier(word, settings);
   return (60000 / wpm) * multiplier;
 }
 
