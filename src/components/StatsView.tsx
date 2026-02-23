@@ -23,7 +23,19 @@ export function StatsView({
   onUpdateBookFinishedDate
 }: StatsViewProps) {
   const [activeTab, setActiveTab] = useState<'book' | 'history' | 'books'>('book');
-  const [timeRange, setTimeRange] = useState<'week' | 'month' | 'year'>('week');
+  const [timeRange, setTimeRange] = useState<string>('week');
+
+  useEffect(() => {
+    if (activeTab === 'books') {
+      if (!['ytd', 'lastYear', 'fiveYears'].includes(timeRange)) {
+        setTimeRange('ytd');
+      }
+    } else if (activeTab === 'history') {
+      if (!['week', 'month', 'year'].includes(timeRange)) {
+        setTimeRange('week');
+      }
+    }
+  }, [activeTab, timeRange]);
 
   // Perform a final in-memory aggregation to ensure UI never shows individual/duplicate records
   const sessions = useMemo(() => {
@@ -98,12 +110,27 @@ export function StatsView({
 
   // Finished books for the new tab
   const displayFinishedBooks = useMemo(() => {
-    const now = Date.now();
+    const now = new Date();
     let threshold = 0;
-    if (timeRange === 'week') threshold = now - 7 * 24 * 60 * 60 * 1000;
-    else if (timeRange === 'month') threshold = now - 30 * 24 * 60 * 60 * 1000;
-    else if (timeRange === 'year') threshold = now - 365 * 24 * 60 * 60 * 1000;
-    return finishedBooks.results.filter(b => b.date >= threshold).sort((a, b) => b.date - a.date);
+    let endThreshold = Infinity;
+
+    if (timeRange === 'ytd') {
+      threshold = new Date(now.getFullYear(), 0, 1).getTime();
+    } else if (timeRange === 'lastYear') {
+      threshold = new Date(now.getFullYear() - 1, 0, 1).getTime();
+      endThreshold = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999).getTime();
+    } else if (timeRange === 'fiveYears') {
+      threshold = now.getTime() - 5 * 365 * 24 * 60 * 60 * 1000;
+    } else {
+      // Fallback for history ranges if somehow active
+      if (timeRange === 'week') threshold = now.getTime() - 7 * 24 * 60 * 60 * 1000;
+      else if (timeRange === 'month') threshold = now.getTime() - 30 * 24 * 60 * 60 * 1000;
+      else if (timeRange === 'year') threshold = now.getTime() - 365 * 24 * 60 * 60 * 1000;
+    }
+
+    return finishedBooks.results
+      .filter(b => b.date >= threshold && b.date <= endThreshold)
+      .sort((a, b) => b.date - a.date);
   }, [finishedBooks.results, timeRange]);
 
   if (!isOpen) return null;
@@ -231,12 +258,36 @@ export function StatsView({
   };
 
   const renderBooksChart = () => {
-    const now = Date.now();
+    const now = new Date();
     let threshold = 0;
-    let numDays = 0;
-    if (timeRange === 'week') { threshold = now - 7 * 24 * 60 * 60 * 1000; numDays = 7; }
-    else if (timeRange === 'month') { threshold = now - 30 * 24 * 60 * 60 * 1000; numDays = 30; }
-    else if (timeRange === 'year') { threshold = now - 365 * 24 * 60 * 60 * 1000; numDays = 365; }
+    let endThreshold = now.getTime();
+    let numSteps = 0;
+    let stepType: 'day' | 'month' = 'day';
+
+    if (timeRange === 'ytd') {
+      const startOfYear = new Date(now.getFullYear(), 0, 1);
+      threshold = startOfYear.getTime();
+      numSteps = Math.ceil((now.getTime() - threshold) / (24 * 60 * 60 * 1000)) + 1;
+      stepType = 'day';
+    } else if (timeRange === 'lastYear') {
+      threshold = new Date(now.getFullYear() - 1, 0, 1).getTime();
+      endThreshold = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999).getTime();
+      numSteps = 12;
+      stepType = 'month';
+    } else if (timeRange === 'fiveYears') {
+      const fiveYearsAgo = new Date();
+      fiveYearsAgo.setFullYear(now.getFullYear() - 5);
+      fiveYearsAgo.setMonth(now.getMonth() + 1); // Start from next month 5 years ago to end on this month
+      fiveYearsAgo.setDate(1);
+      threshold = fiveYearsAgo.getTime();
+      numSteps = 60;
+      stepType = 'month';
+    } else {
+      // Fallback for history ranges
+      threshold = now.getTime() - 7 * 24 * 60 * 60 * 1000;
+      numSteps = 7;
+      stepType = 'day';
+    }
 
     const allFinished = [...finishedBooks.results].sort((a, b) => a.date - b.date);
     if (allFinished.length === 0) return (
@@ -246,29 +297,51 @@ export function StatsView({
     );
 
     const countBefore = allFinished.filter(b => b.date < threshold).length;
-
     const data: { key: string; count: number; timestamp: number; hasActivity: boolean }[] = [];
-    const startOfRange = new Date(now);
-    startOfRange.setDate(startOfRange.getDate() - numDays + 1);
-    startOfRange.setHours(0, 0, 0, 0);
-
     let runningCount = countBefore;
-    for (let i = 0; i < numDays; i++) {
-        const d = new Date(startOfRange);
-        d.setDate(d.getDate() + i);
 
-        const dayFinishCount = allFinished.filter(b => {
-            const bd = new Date(b.date);
-            return bd.getFullYear() === d.getFullYear() && bd.getMonth() === d.getMonth() && bd.getDate() === d.getDate();
-        }).length;
+    if (stepType === 'day') {
+        const startOfRange = new Date(threshold);
+        startOfRange.setHours(0, 0, 0, 0);
+        for (let i = 0; i < numSteps; i++) {
+            const d = new Date(startOfRange);
+            d.setDate(d.getDate() + i);
+            if (d.getTime() > endThreshold && timeRange !== 'lastYear') break;
 
-        runningCount += dayFinishCount;
-        data.push({
-            key: d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
-            count: runningCount,
-            timestamp: d.getTime(),
-            hasActivity: dayFinishCount > 0
-        });
+            const dayFinishCount = allFinished.filter(b => {
+                const bd = new Date(b.date);
+                return bd.getFullYear() === d.getFullYear() && bd.getMonth() === d.getMonth() && bd.getDate() === d.getDate();
+            }).length;
+
+            runningCount += dayFinishCount;
+            data.push({
+                key: d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+                count: runningCount,
+                timestamp: d.getTime(),
+                hasActivity: dayFinishCount > 0
+            });
+        }
+    } else {
+        const startOfRange = new Date(threshold);
+        startOfRange.setDate(1);
+        startOfRange.setHours(0, 0, 0, 0);
+        for (let i = 0; i < numSteps; i++) {
+            const d = new Date(startOfRange);
+            d.setMonth(d.getMonth() + i);
+            if (d.getTime() > endThreshold && timeRange !== 'lastYear') break;
+
+            const nextMonth = new Date(d);
+            nextMonth.setMonth(nextMonth.getMonth() + 1);
+
+            const monthFinishCount = allFinished.filter(b => b.date >= d.getTime() && b.date < nextMonth.getTime()).length;
+            runningCount += monthFinishCount;
+            data.push({
+                key: d.toLocaleDateString(undefined, { month: 'short', year: '2-digit' }),
+                count: runningCount,
+                timestamp: d.getTime(),
+                hasActivity: monthFinishCount > 0
+            });
+        }
     }
 
     const width = 400;
@@ -359,7 +432,7 @@ export function StatsView({
   };
 
   const renderHistoryChart = () => {
-    const sortedData = getHistoryRangeData(timeRange, historySessions);
+    const sortedData = getHistoryRangeData(timeRange as 'week' | 'month' | 'year', historySessions);
 
     if (sortedData.length === 0) return (
         <div className="h-32 flex items-center justify-center opacity-40 italic text-sm">
@@ -486,15 +559,31 @@ export function StatsView({
           {(activeTab === 'history' || activeTab === 'books') && (
             <div className="flex justify-center -mb-2">
                 <div className="bg-zinc-100 dark:bg-zinc-800 p-1 rounded-xl flex gap-1">
-                    {(['week', 'month', 'year'] as const).map(range => (
-                        <button
-                            key={range}
-                            onClick={() => setTimeRange(range)}
-                            className={`px-6 py-2 text-xs font-semibold rounded-lg transition-all ${timeRange === range ? 'bg-white dark:bg-zinc-700 shadow-sm text-red-500' : 'opacity-50 hover:opacity-100'}`}
-                        >
-                            {range.charAt(0).toUpperCase() + range.slice(1)}
-                        </button>
-                    ))}
+                    {activeTab === 'history' ? (
+                      (['week', 'month', 'year'] as const).map(range => (
+                          <button
+                              key={range}
+                              onClick={() => setTimeRange(range)}
+                              className={`px-6 py-2 text-xs font-semibold rounded-lg transition-all ${timeRange === range ? 'bg-white dark:bg-zinc-700 shadow-sm text-red-500' : 'opacity-50 hover:opacity-100'}`}
+                          >
+                              {range.charAt(0).toUpperCase() + range.slice(1)}
+                          </button>
+                      ))
+                    ) : (
+                      ([
+                        { id: 'ytd', label: 'YTD' },
+                        { id: 'lastYear', label: 'Last Year' },
+                        { id: 'fiveYears', label: '5 Years' }
+                      ]).map(range => (
+                          <button
+                              key={range.id}
+                              onClick={() => setTimeRange(range.id)}
+                              className={`px-6 py-2 text-xs font-semibold rounded-lg transition-all ${timeRange === range.id ? 'bg-white dark:bg-zinc-700 shadow-sm text-red-500' : 'opacity-50 hover:opacity-100'}`}
+                          >
+                              {range.label}
+                          </button>
+                      ))
+                    )}
                 </div>
             </div>
           )}
