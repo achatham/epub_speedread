@@ -140,6 +140,18 @@ function App() {
     }
   };
 
+  const handleUpdateBookFinishedDate = async (updates: { id: string, date: number }[]) => {
+    if (!storageProvider) return;
+    try {
+      for (const update of updates) {
+        await storageProvider.updateBookFinishedDate(update.id, update.date);
+      }
+      setLibrary(await storageProvider.getAllBooks());
+    } catch (err) {
+      console.error("Failed to update book finished date:", err);
+    }
+  };
+
   const handleRecomputeRealEnd = async () => {
     if (!currentBookId || !storageProvider || !geminiApiKey) return;
     setIsRecomputingEnd(true);
@@ -946,6 +958,7 @@ function App() {
         books={library}
         activeBookId={currentBookId}
         theme={theme}
+        onUpdateBookFinishedDate={handleUpdateBookFinishedDate}
       />
 
       <BookSettingsModal

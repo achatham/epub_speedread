@@ -38,6 +38,7 @@ export interface BookRecord {
     addedAt: number;
     totalWords?: number;
     extension?: string;
+    dateFinished?: number;
   };
   progress: {
     wordIndex: number;
@@ -370,6 +371,10 @@ export class FirestoreStorage {
 
   async updateBookTotalWords(id: string, totalWords: number): Promise<void> {
     await updateDoc(doc(this.booksCollection, id), { 'meta.totalWords': totalWords });
+  }
+
+  async updateBookFinishedDate(id: string, date: number): Promise<void> {
+    await updateDoc(doc(this.booksCollection, id), { 'meta.dateFinished': date });
   }
 
   async updateBookArchived(id: string, archived: boolean): Promise<void> {
