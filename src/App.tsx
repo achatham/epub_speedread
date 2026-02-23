@@ -8,7 +8,7 @@ import {
 import { auth, storage } from './utils/firebase';
 import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, getRedirectResult, signOut, type User } from 'firebase/auth';
 import { ref, getBytes } from 'firebase/storage';
-import { type WordData, calculateRsvpInterval } from './utils/text-processing';
+import { type WordData, calculateRsvpInterval, calculateRsvpMultiplier } from './utils/text-processing';
 import { calculateNavigationTarget, type NavigationType } from './utils/navigation';
 import { getResumeIndex } from './utils/playback';
 import { getGeminiApiKey, setGeminiApiKey as saveGeminiApiKey, askAboutBook, summarizeRecent, summarizeWhatJustHappened } from './utils/gemini';
@@ -294,6 +294,7 @@ function App() {
   const timerRef = useRef<number | null>(null);
   const sessionStartTimeRef = useRef<number | null>(null);
   const wordsReadInSessionRef = useRef<number>(0);
+  const multipliersSumInSessionRef = useRef<number>(0);
   const sessionStartIndexRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
@@ -670,6 +671,7 @@ function App() {
       if (sessionStartTimeRef.current === null) {
         sessionStartTimeRef.current = Date.now();
         wordsReadInSessionRef.current = 0;
+        multipliersSumInSessionRef.current = 0;
         sessionStartIndexRef.current = currentIndex;
       }
     } else if (sessionStartTimeRef.current !== null && currentBookId && storageProvider) {
@@ -685,14 +687,16 @@ function App() {
       const wordsRead = wordsReadInSessionRef.current;
       const avgWpm = durationMins > 0 ? Math.round(wordsRead / durationMins) : 0;
 
+      const multipliersSum = multipliersSumInSessionRef.current;
       console.log(`Session Summary:
 - Duration: ${(durationMs / 1000).toFixed(1)}s
 - Words Read: ${wordsRead}
-- Set WPM: ${savedWpm}
+- Multiplier Sum: ${multipliersSum.toFixed(2)}
+- Set WPM (Boosted): ${savedWpm}
 - Effective Avg WPM: ${avgWpm}`);
 
-      // Log Session to Storage (only if longer than 10 seconds)
-      if (durationMs >= 10000) {
+      // Log Session to Storage (only if longer than 2 seconds)
+      if (durationMs >= 2000) {
         storageProvider.logReadingSession({
           bookId: savedBookId,
           bookTitle: savedBookTitle,
@@ -711,13 +715,16 @@ function App() {
             // Update book statistics and vanity ratio
             const bookRecord = library.find(b => b.id === savedBookId);
             if (bookRecord) {
-              const expectedWordsThisSession = savedWpm * (durationMs / 60000);
+              const expectedWordsThisSession = multipliersSum;
               const cumulativeWords = (bookRecord.progress.cumulativeWordsRead || 0) + wordsRead;
               const cumulativeExpected = (bookRecord.progress.cumulativeExpectedWords || 0) + expectedWordsThisSession;
               const cumulativeDuration = (bookRecord.progress.cumulativeDurationSeconds || 0) + Math.round(durationMs / 1000);
 
-              const newVanityRatio = cumulativeWords > 0 ? cumulativeExpected / cumulativeWords : (bookRecord.settings.vanityWpmRatio || rsvpSettings.vanityWpmRatio);
+              let newVanityRatio = cumulativeWords > 0 ? cumulativeExpected / cumulativeWords : (bookRecord.settings.vanityWpmRatio || rsvpSettings.vanityWpmRatio);
               const oldVanityRatio = bookRecord.settings.vanityWpmRatio || rsvpSettings.vanityWpmRatio;
+
+              // Sanity cap for the ratio to prevent runaway WPM from outlier sessions
+              newVanityRatio = Math.max(0.5, Math.min(5.0, newVanityRatio));
 
               // Maintain same targetWpm
               const targetWpm = savedWpm / oldVanityRatio;
@@ -754,7 +761,7 @@ function App() {
             }
         }).catch(e => console.error("Failed to log session", e));
       } else {
-        console.log("Session too short to log (< 10s)");
+        console.log("Session too short to log (< 2s)");
       }
       
       sessionStartTimeRef.current = null;
@@ -763,12 +770,15 @@ function App() {
     }
   }, [isPlaying, wpm, currentBookId, storageProvider, currentIndex, bookTitle]);
 
-  // Track words read
+  // Track words read and multipliers
   useEffect(() => {
-    if (isPlaying) {
+    if (isPlaying && !isHoldPaused && !isChapterBreak) {
       wordsReadInSessionRef.current += 1;
+      const currentWord = words[currentIndex]?.text || '';
+      const multiplier = calculateRsvpMultiplier(currentWord, rsvpSettings);
+      multipliersSumInSessionRef.current += multiplier;
     }
-  }, [currentIndex, isPlaying]);
+  }, [currentIndex, isPlaying, isHoldPaused, isChapterBreak, words, rsvpSettings]);
 
   const navigate = (type: NavigationType) => {
     setIsChapterBreak(false);
