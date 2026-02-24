@@ -71,7 +71,7 @@ function App() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isHoldPaused, setIsHoldPaused] = useState(false);
-  const [wpm, setWpm] = useState(300 * WPM_VANITY_RATIO);
+  const [wpm, setWpm] = useState(300);
   const [bookTitle, setBookTitle] = useState('');
   const [sections, setSections] = useState<{ label: string; startIndex: number }[]>([]);
 
@@ -565,11 +565,14 @@ function App() {
       setSections(result.sections);
       setCurrentIndex(result.wordIndex);
 
-      // Calculate active boosted WPM based on global vanity ratio
+      // Calculate active target WPM
       const storedRatio = bookRecord.settings.vanityWpmRatio || 1.25;
-      const targetWpm = result.wpm / storedRatio;
-      const activeBoostedWpm = targetWpm * rsvpSettings.vanityWpmRatio;
-      setWpm(activeBoostedWpm);
+      let targetWpm = result.wpm / storedRatio;
+
+      // Sanity check for corrupted data (if target WPM is crazy high, reset it)
+      if (targetWpm > 1000) targetWpm = 300;
+
+      setWpm(targetWpm);
 
       setRealEndIndex(result.realEndIndex);
       setFurthestIndex(bookRecord.progress.furthestWordIndex ?? bookRecord.progress.wordIndex);
@@ -694,7 +697,8 @@ function App() {
       console.log(`Session Summary:
 - Duration: ${(durationMs / 1000).toFixed(1)}s
 - Words Read: ${wordsRead}
-- Set WPM (Boosted): ${savedWpm}
+- Target WPM: ${Math.round(savedWpm)}
+- Boosted WPM: ${Math.round(savedWpm * rsvpSettings.vanityWpmRatio)}
 - Effective Avg WPM: ${avgWpm}`);
 
       // Log Session to Storage (only if longer than 2 seconds)
@@ -792,13 +796,13 @@ function App() {
       } else {
         const currentWord = words[currentIndex].text || '';
 
-        let effectiveWpm = wpm;
+        let effectiveWpm = wpm * rsvpSettings.vanityWpmRatio;
         if (playbackStartTime && rsvpSettings.wpmRampDuration > 0) {
           const elapsed = Date.now() - playbackStartTime;
           if (elapsed < rsvpSettings.wpmRampDuration) {
             const progress = elapsed / rsvpSettings.wpmRampDuration;
             // Ramp from 0.5 to 1.0
-            effectiveWpm = wpm * (0.5 + 0.5 * progress);
+            effectiveWpm = (wpm * rsvpSettings.vanityWpmRatio) * (0.5 + 0.5 * progress);
           }
         }
 
@@ -977,11 +981,10 @@ function App() {
           isPlaying={isPlaying}
           setIsPlaying={handleSetIsPlaying}
           setIsHoldPaused={setIsHoldPaused}
-          wpm={Math.round(wpm / rsvpSettings.vanityWpmRatio)}
+          wpm={Math.round(wpm)}
           onWpmChange={(targetWpm) => { 
-              const boosted = targetWpm * rsvpSettings.vanityWpmRatio;
-              setWpm(boosted); 
-              storageProvider.updateBookWpm(currentBookId!, boosted, rsvpSettings.vanityWpmRatio);
+              setWpm(targetWpm);
+              storageProvider.updateBookWpm(currentBookId!, targetWpm);
           }}
           vanityWpmRatio={rsvpSettings.vanityWpmRatio}
           theme={theme} fontFamily={fontFamily} bookTitle={bookTitle}

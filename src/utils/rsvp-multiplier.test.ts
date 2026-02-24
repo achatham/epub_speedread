@@ -18,13 +18,14 @@ describe('calculateRsvpMultiplier', () => {
   });
 
   it('should apply long word multiplier', () => {
-    expect(calculateRsvpMultiplier('unconventional', DEFAULT_RSVP_SETTINGS))
+    // "something" is 9 chars (> 8) but not dense enough for tooWide
+    expect(calculateRsvpMultiplier('something', DEFAULT_RSVP_SETTINGS))
       .toBe(DEFAULT_RSVP_SETTINGS.longWordMultiplier);
   });
 
   it('should combine punctuation and long word multipliers', () => {
     const expected = DEFAULT_RSVP_SETTINGS.periodMultiplier * DEFAULT_RSVP_SETTINGS.longWordMultiplier;
-    expect(calculateRsvpMultiplier('unconventional.', DEFAULT_RSVP_SETTINGS))
+    expect(calculateRsvpMultiplier('something.', DEFAULT_RSVP_SETTINGS))
       .toBe(expected);
   });
 

@@ -205,8 +205,7 @@ export class FirestoreStorage {
             meta: { title, addedAt: now, extension },
             progress: { wordIndex: 0, lastReadAt: now },
             settings: {
-              wpm: 300 * (typeof window !== 'undefined' ? (JSON.parse(localStorage.getItem('user_settings') || '{}').rsvp?.vanityWpmRatio || 1.25) : 1.25),
-              vanityWpmRatio: typeof window !== 'undefined' ? (JSON.parse(localStorage.getItem('user_settings') || '{}').rsvp?.vanityWpmRatio || 1.25) : 1.25
+              wpm: 300
             },
             analysis: {},
             storage: { cloudUrl }
@@ -344,10 +343,9 @@ export class FirestoreStorage {
     }
   }
 
-  async updateBookWpm(id: string, wpm: number, vanityWpmRatio: number): Promise<void> {
+  async updateBookWpm(id: string, wpm: number): Promise<void> {
     await updateDoc(doc(this.booksCollection, id), {
-      'settings.wpm': wpm,
-      'settings.vanityWpmRatio': vanityWpmRatio
+      'settings.wpm': wpm
     });
   }
 
