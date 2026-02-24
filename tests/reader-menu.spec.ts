@@ -58,4 +58,23 @@ test('Reader Menu Functionality', async ({ page }) => {
   await page.click('button[title="Increase Speed"]');
   const newWpm = await page.locator('span.text-2xl.font-bold').innerText();
   expect(parseInt(newWpm)).toBeGreaterThan(parseInt(initialWpm));
+
+  // 7. Test float WPM rounding and snapping
+  await page.evaluate(() => {
+    (window as any).__setWpm?.(603.0499099378934);
+  });
+
+  // Display should be rounded to nearest integer
+  let displayedWpm = await page.locator('span.text-2xl.font-bold').innerText();
+  expect(displayedWpm).toBe('603');
+
+  // Decreasing from 603 should snap to nearest 25 below it: Math.round(603/25)*25 - 25 = 600 - 25 = 575
+  await page.click('button[title="Decrease Speed"]');
+  displayedWpm = await page.locator('span.text-2xl.font-bold').innerText();
+  expect(displayedWpm).toBe('575');
+
+  // Increasing from 575 should go to 600
+  await page.click('button[title="Increase Speed"]');
+  displayedWpm = await page.locator('span.text-2xl.font-bold').innerText();
+  expect(displayedWpm).toBe('600');
 });

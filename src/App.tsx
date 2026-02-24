@@ -336,10 +336,12 @@ function App() {
       setSections(result.sections);
       setCurrentIndex(result.wordIndex);
 
-      let targetWpm = result.wpm;
+      let targetWpm = Math.round(result.wpm);
       // Sanity check to recover from corrupted data
-      if (targetWpm > 1000) {
+      if (targetWpm > 1200 || targetWpm < 100) {
         targetWpm = 300;
+      }
+      if (targetWpm !== result.wpm) {
         storageProvider.updateBookWpm(bookRecord.id, targetWpm).catch(e => console.error("Failed to recover WPM:", e));
       }
       setWpm(targetWpm);

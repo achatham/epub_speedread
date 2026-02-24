@@ -126,18 +126,18 @@ export function ReaderMenu({
                 <span className="text-[10px] uppercase font-bold tracking-widest opacity-50">Reading Speed</span>
                 <div className="flex items-center justify-between bg-zinc-50 dark:bg-zinc-950/50 p-3 rounded-xl border border-zinc-100 dark:border-zinc-800">
                   <button
-                    onClick={() => onWpmChange(Math.max(100, wpm - 25))}
+                    onClick={() => onWpmChange(Math.max(100, Math.round(wpm / 25) * 25 - 25))}
                     className={`p-2 rounded-lg border transition-colors ${theme === 'bedtime' ? 'border-zinc-800 hover:bg-zinc-900' : 'border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}
                     title="Decrease Speed"
                   >
                     <Minus size={20} />
                   </button>
                   <div className="flex flex-col items-center">
-                    <span className="text-2xl font-bold">{wpm}</span>
+                    <span className="text-2xl font-bold">{Math.round(wpm)}</span>
                     <span className="text-[10px] opacity-40 font-semibold uppercase">WPM</span>
                   </div>
                   <button
-                    onClick={() => onWpmChange(Math.min(1200, wpm + 25))}
+                    onClick={() => onWpmChange(Math.min(1200, Math.round(wpm / 25) * 25 + 25))}
                     className={`p-2 rounded-lg border transition-colors ${theme === 'bedtime' ? 'border-zinc-800 hover:bg-zinc-900' : 'border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}
                     title="Increase Speed"
                   >
@@ -238,8 +238,8 @@ export function ReaderMenu({
                       key={idx}
                       ref={isCurrent ? activeChapterRef : null}
                       className={`w-full text-left px-3 py-3 text-sm rounded-lg transition-colors flex justify-between items-center ${isCurrent
-                          ? (theme === 'bedtime' ? 'bg-zinc-900 text-amber-600 font-bold' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-bold')
-                          : (theme === 'bedtime' ? 'text-stone-400 hover:bg-zinc-900' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300')
+                        ? (theme === 'bedtime' ? 'bg-zinc-900 text-amber-600 font-bold' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-bold')
+                        : (theme === 'bedtime' ? 'text-stone-400 hover:bg-zinc-900' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300')
                         }`}
                       onClick={() => {
                         setCurrentIndex(section.startIndex);
@@ -289,11 +289,10 @@ export function ReaderMenu({
                   }
                 }}
                 disabled={!(furthestIndex !== null && furthestIndex > currentIndex + 10)}
-                className={`w-full text-left px-3 py-3 text-sm rounded-lg flex justify-between items-center transition-all ${
-                  theme === 'bedtime'
+                className={`w-full text-left px-3 py-3 text-sm rounded-lg flex justify-between items-center transition-all ${theme === 'bedtime'
                     ? 'text-stone-400 hover:enabled:bg-zinc-900 disabled:opacity-20'
                     : 'hover:enabled:bg-zinc-100 dark:hover:enabled:bg-zinc-800 text-zinc-700 dark:text-zinc-300 disabled:opacity-30'
-                }`}
+                  }`}
               >
                 <span>Jump to Furthest</span>
                 <span className="opacity-50 text-xs">
