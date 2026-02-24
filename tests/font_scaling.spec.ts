@@ -7,7 +7,7 @@ test('font size should remain stable for "accessibility;" within tolerance', asy
   // 2. Inject mock words
   // Wait for the function to be defined by React's useEffect
   await page.waitForFunction(() => typeof (window as any).__loadMockWords === 'function');
-  
+
   await page.evaluate(() => {
     (window as any).__loadMockWords([
       { text: "The", paragraphIndex: 0, sentenceIndex: 0 },
@@ -16,13 +16,13 @@ test('font size should remain stable for "accessibility;" within tolerance', asy
     ]);
   });
 
-  // 3. Wait for the reader to load and the Play button to be visible
-  const playButton = page.getByRole('button', { name: 'Play' });
-  await expect(playButton).toBeVisible();
+  // 3. Wait for the reader to load and the menu FAB to be visible
+  const menuFab = page.locator('button[title="Open Menu"]');
+  await expect(menuFab).toBeVisible();
 
   // 4. Measure "The" (first word)
-  await playButton.click();
-  
+  await page.click('body', { position: { x: 100, y: 100 } });
+
   const rsvpContainer = page.locator('.flex.w-full.items-baseline');
   await expect(rsvpContainer).toBeVisible();
 

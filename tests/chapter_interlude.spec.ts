@@ -21,9 +21,9 @@ test('pausing during chapter interlude should advance to next chapter and not ba
     ]);
   });
 
-  const playButton = page.getByRole('button', { name: 'Play' });
-  await expect(playButton).toBeVisible();
-  await playButton.click();
+  const menuFab = page.locator('button[title="Open Menu"]');
+  await expect(menuFab).toBeVisible();
+  await page.click('body', { position: { x: 100, y: 100 } });
 
   // Wait for the "Next Chapter" interlude to appear
   // It appears when currentIndex is 3 and isChapterBreak becomes true
@@ -35,14 +35,15 @@ test('pausing during chapter interlude should advance to next chapter and not ba
   // Click to pause.
   await page.locator('.fixed.inset-0.z-40').click();
 
-  // Verify we are paused (Play button should be visible again)
-  await expect(playButton).toBeVisible();
+  // Verify we are paused
+  await expect(menuFab).toBeVisible();
 
   // Optional: check that interlude is gone
   await expect(interludeLabel).not.toBeVisible();
 
-  // Now click Play again.
-  await playButton.click();
+  // Now click Play again after 500ms to bypass double-tap protection
+  await page.waitForTimeout(500);
+  await page.click('body', { position: { x: 100, y: 100 } });
 
   // Focus word should be "Beginning" (index 4)
   // The RSVP container should show the word (prefix+focus+suffix concatenated)
@@ -65,11 +66,12 @@ test('pausing normally should back up to start of sentence on resume', async ({ 
       { label: "Chapter 1", startIndex: 0 }
     ]);
     // Set a very slow WPM for the test
-    (window as any).__setWpm?.(60); 
+    (window as any).__setWpm?.(60);
   });
 
-  const playButton = page.getByRole('button', { name: 'Play' });
-  await playButton.click();
+  const menuFab = page.locator('button[title="Open Menu"]');
+  await expect(menuFab).toBeVisible();
+  await page.click('body', { position: { x: 100, y: 100 } });
 
   // Wait for "end."
   const rsvpContainer = page.locator('.flex.w-full.items-baseline');
@@ -77,10 +79,11 @@ test('pausing normally should back up to start of sentence on resume', async ({ 
 
   // Pause
   await page.locator('.fixed.inset-0.z-40').click();
-  await expect(playButton).toBeVisible();
+  await expect(menuFab).toBeVisible();
 
-  // Play again
-  await playButton.click();
+  // Play again after 500ms to bypass double-tap protection
+  await page.waitForTimeout(500);
+  await page.click('body', { position: { x: 100, y: 100 } });
 
   // Should have backed up to "This"
   await expect(rsvpContainer).toHaveText(/This/);

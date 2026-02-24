@@ -3,18 +3,22 @@ import { test, expect } from '@playwright/test';
 test('verify onboarding modal appears for new users', async ({ page }) => {
   await page.goto('http://localhost:5173/');
 
+  await page.evaluate(() => {
+    localStorage.setItem('mock_onboarding_completed', 'false');
+  });
+  await page.reload();
+
   // Wait for the mock function to be available
   await page.waitForFunction(() => typeof (window as any).__loadMockWords === 'function');
-  
+
   // Force onboarding to show by clearing the completed flag
   await page.evaluate(() => {
-    (window as any).__setMockSettings({ onboardingCompleted: false });
     (window as any).__loadMockWords(null);
   });
 
   // Verify the modal title
   await expect(page.locator('text=Supercharge Your Reading')).toBeVisible();
-  
+
   // Verify feature list
   await expect(page.locator('text=Ask Questions')).toBeVisible();
   await expect(page.locator('text=Listen to Books')).toBeVisible();
@@ -29,7 +33,7 @@ test('verify onboarding modal appears for new users', async ({ page }) => {
   // Verify step 2 content
   await expect(page.locator('text=Enter API Key')).toBeVisible();
   await expect(page.locator('text=Is it free?')).toBeVisible();
-  
+
   // Take screenshot of step 2
   await page.screenshot({ path: 'tests/screenshots/onboarding-step-2.png' });
 
@@ -43,7 +47,7 @@ test('verify onboarding modal appears for new users', async ({ page }) => {
 
   // Click "Skip for now" (or "I'll do this later" on step 2) to close
   await page.getByRole('button', { name: "I'll do this later" }).click();
-  
+
   // Verify modal is gone
   await expect(page.locator('text=Supercharge Your Reading')).not.toBeVisible();
 });

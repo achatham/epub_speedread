@@ -1,0 +1,155 @@
+import React from 'react';
+import type { Theme, FontFamily } from '../hooks/useSettings';
+import type { RsvpSettings } from '../utils/storage';
+import { SettingsModal } from './SettingsModal';
+import { OnboardingModal } from './OnboardingModal';
+import { AiModal } from './AiModal';
+import { StatsView } from './StatsView';
+import { BookSettingsModal } from './BookSettingsModal';
+
+interface AppModalsProps {
+    isSettingsOpen: boolean;
+    setIsSettingsOpen: (open: boolean) => void;
+    geminiApiKey: string;
+    setGeminiApiKey: (key: string) => void;
+    deepgramApiKey: string;
+    setDeepgramApiKey: (key: string) => void;
+    syncApiKey: boolean;
+    setSyncApiKey: (sync: boolean) => void;
+    ttsSpeed: number;
+    setTtsSpeed: (speed: number) => void;
+    autoLandscape: boolean;
+    setAutoLandscape: (auto: boolean) => void;
+    fontFamily: FontFamily;
+    setFontFamily: React.Dispatch<React.SetStateAction<FontFamily>>;
+    rsvpSettings: RsvpSettings;
+    setRsvpSettings: React.Dispatch<React.SetStateAction<RsvpSettings>>;
+    user: any;
+    handleSignIn: () => void;
+    handleSignOut: () => void;
+
+    isOnboardingOpen: boolean;
+    setIsOnboardingOpen: (open: boolean) => void;
+    storageProvider: any;
+    setOnboardingCompleted: (completed: boolean) => void;
+    saveGeminiApiKey: (key: string) => void;
+
+    isAskAiOpen: boolean;
+    setIsAskAiOpen: (open: boolean) => void;
+    aiResponse: string;
+    aiQuestion: string;
+    setAiQuestion: (question: string) => void;
+    handleAskAi: (qOverride?: string) => void;
+    isAiLoading: boolean;
+
+    isStatsOpen: boolean;
+    setIsStatsOpen: (open: boolean) => void;
+    sessions: any[];
+    library: any[];
+    currentBookId: string | null;
+    theme: Theme;
+    handleUpdateBookFinishedDate: (updates: { id: string, date: number }[]) => Promise<void>;
+
+    isBookSettingsOpen: boolean;
+    setIsBookSettingsOpen: (open: boolean) => void;
+    bookTitle: string;
+    handleUpdateBookTitle: (bookId: string, title: string) => Promise<void>;
+    handleRecomputeRealEnd: () => Promise<void>;
+    isRecomputingEnd: boolean;
+}
+
+export function AppModals({
+    isSettingsOpen, setIsSettingsOpen, geminiApiKey, setGeminiApiKey, deepgramApiKey, setDeepgramApiKey,
+    syncApiKey, setSyncApiKey, ttsSpeed, setTtsSpeed, autoLandscape, setAutoLandscape,
+    fontFamily, setFontFamily, rsvpSettings, setRsvpSettings, user, handleSignIn, handleSignOut,
+
+    isOnboardingOpen, setIsOnboardingOpen, storageProvider, setOnboardingCompleted, saveGeminiApiKey,
+
+    isAskAiOpen, setIsAskAiOpen, aiResponse, aiQuestion, setAiQuestion, handleAskAi, isAiLoading,
+
+    isStatsOpen, setIsStatsOpen, sessions, library, currentBookId, theme, handleUpdateBookFinishedDate,
+
+    isBookSettingsOpen, setIsBookSettingsOpen, bookTitle, handleUpdateBookTitle, handleRecomputeRealEnd, isRecomputingEnd
+}: AppModalsProps) {
+    return (
+        <>
+            <SettingsModal
+                isOpen={isSettingsOpen}
+                onClose={() => setIsSettingsOpen(false)}
+                apiKey={geminiApiKey}
+                setApiKey={setGeminiApiKey}
+                deepgramApiKey={deepgramApiKey}
+                setDeepgramApiKey={setDeepgramApiKey}
+                syncApiKey={syncApiKey}
+                setSyncApiKey={setSyncApiKey}
+                ttsSpeed={ttsSpeed}
+                setTtsSpeed={setTtsSpeed}
+                autoLandscape={autoLandscape}
+                setAutoLandscape={setAutoLandscape}
+                fontFamily={fontFamily}
+                setFontFamily={setFontFamily}
+                rsvpSettings={rsvpSettings}
+                setRsvpSettings={setRsvpSettings}
+                user={user}
+                onSignIn={handleSignIn}
+                onSignOut={handleSignOut}
+                onSave={() => setIsSettingsOpen(false)}
+            />
+
+            <OnboardingModal
+                isOpen={isOnboardingOpen}
+                onClose={() => {
+                    setIsOnboardingOpen(false);
+                    setOnboardingCompleted(true);
+                    storageProvider.updateSettings({ onboardingCompleted: true });
+                }}
+                apiKey={geminiApiKey}
+                setApiKey={(k) => {
+                    setGeminiApiKey(k);
+                    saveGeminiApiKey(k);
+                }}
+                syncApiKey={syncApiKey}
+                setSyncApiKey={setSyncApiKey}
+                onComplete={() => {
+                    setIsOnboardingOpen(false);
+                    setOnboardingCompleted(true);
+                    storageProvider.updateSettings({
+                        onboardingCompleted: true,
+                        syncApiKey: syncApiKey,
+                        geminiApiKey: syncApiKey ? geminiApiKey : ""
+                    });
+                }}
+            />
+
+            <AiModal
+                isOpen={isAskAiOpen}
+                onClose={() => setIsAskAiOpen(false)}
+                aiResponse={aiResponse}
+                aiQuestion={aiQuestion}
+                setAiQuestion={setAiQuestion}
+                handleAskAi={handleAskAi}
+                isAiLoading={isAiLoading}
+                ttsSpeed={ttsSpeed}
+            />
+
+            <StatsView
+                isOpen={isStatsOpen}
+                onClose={() => setIsStatsOpen(false)}
+                sessions={sessions}
+                books={library}
+                activeBookId={currentBookId}
+                theme={theme}
+                onUpdateBookFinishedDate={handleUpdateBookFinishedDate}
+            />
+
+            <BookSettingsModal
+                isOpen={isBookSettingsOpen}
+                onClose={() => setIsBookSettingsOpen(false)}
+                currentTitle={bookTitle}
+                onUpdateTitle={(title) => currentBookId ? handleUpdateBookTitle(currentBookId, title) : Promise.resolve()}
+                onRecomputeRealEnd={handleRecomputeRealEnd}
+                isProcessing={isRecomputingEnd}
+            />
+        </>
+    );
+}

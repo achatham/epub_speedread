@@ -5,7 +5,7 @@ test('verify progress labels are below the progress bars and aligned', async ({ 
 
   // Wait for the mock function to be available
   await page.waitForFunction(() => typeof (window as any).__loadMockWords === 'function', { timeout: 15000 });
-  
+
   // Load some mock words
   await page.evaluate(() => {
     (window as any).__loadMockWords([
@@ -18,8 +18,7 @@ test('verify progress labels are below the progress bars and aligned', async ({ 
   await page.screenshot({ path: 'tests/screenshots/before-play.png' });
 
   // Start playback
-  const playButton = page.getByRole('button', { name: 'Play' });
-  await playButton.click();
+  await page.click('body', { position: { x: 100, y: 100 } });
 
   // Wait for progress labels to be visible
   const chapterLabel = page.locator('text=Chapter Progress');
@@ -43,7 +42,7 @@ test('verify progress labels are below the progress bars and aligned', async ({ 
     expect(chapterLabelBox.y).toBeLessThan(chapterBarBox.y);
     // Book Progress should be BELOW Book Bar
     expect(bookLabelBox.y).toBeGreaterThan(bookBarBox.y);
-    
+
     console.log('Layout verified: Labels are correctly stacked.');
   } else {
     throw new Error('Could not get bounding boxes for layout verification');

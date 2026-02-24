@@ -2,10 +2,8 @@ import { useRef } from 'react';
 import { ReaderMenu } from './ReaderMenu';
 import type { WordData } from '../utils/text-processing';
 import { splitWord } from '../utils/orp';
-import type { FontFamily } from './SettingsModal';
+import { type Theme, type FontFamily } from '../hooks/useSettings';
 import type { RsvpSettings } from '../utils/storage';
-
-type Theme = 'light' | 'dark' | 'bedtime';
 
 interface ReaderViewProps {
   words: WordData[];
@@ -115,12 +113,12 @@ export function ReaderView({
   const mainBg = theme === 'bedtime' ? 'bg-black' : 'bg-white dark:bg-zinc-900';
   const mainText = theme === 'bedtime' ? 'text-stone-400' : 'text-zinc-900 dark:text-zinc-100';
 
-  const fontStyles: Record<FontFamily, string> = {
+  const fontClasses: Record<FontFamily, string> = {
     system: 'ui-sans-serif, system-ui, sans-serif',
-    inter: 'Inter, sans-serif',
-    roboto: 'Roboto, sans-serif',
-    merriweather: 'Merriweather, serif',
-    mono: 'monospace'
+    serif: 'font-serif',
+    mono: 'font-mono',
+    opendyslexic: 'font-opendyslexic',
+    atkinson: 'font-hyperlegible'
   };
 
   const rsvpFocusColor = theme === 'bedtime' ? 'text-amber-600' : (theme === 'dark' ? 'text-red-500' : 'text-red-600');
@@ -224,7 +222,7 @@ export function ReaderView({
   return (
     <div
       className={`flex flex-col items-center justify-center h-dvh transition-colors duration-300 relative ${mainBg} ${mainText} ${!isPlaying ? 'cursor-pointer' : ''}`}
-      style={{ fontFamily: fontStyles[fontFamily] }}
+      style={{ fontFamily: fontClasses[fontFamily] }}
       onClick={() => {
         if (Date.now() - lastPauseTimeRef.current < 400) return;
         if (!isPlaying) setIsPlaying(true);
@@ -279,7 +277,7 @@ export function ReaderView({
             )}
           </>
         ) : (
-          <div className={`text-xl leading-relaxed text-center px-8 landscape:text-base landscape:leading-snug ${theme === 'bedtime' ? 'text-stone-500' : 'text-zinc-500 dark:text-zinc-400'} max-h-full overflow-hidden flex items-center justify-center`}>
+          <div className={`mt-4 sm:mt-12 w-full text-center px-4 ${fontClasses[fontFamily]} landscape:text-base landscape:leading-snug ${theme === 'bedtime' ? 'text-stone-500' : 'text-zinc-500 dark:text-zinc-400'} max-h-full overflow-hidden flex items-center justify-center`}>
             <div>
               {(() => {
                 const half = Math.floor(rsvpSettings.previewWordCount / 2);

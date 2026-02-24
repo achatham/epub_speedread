@@ -1,76 +1,35 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import {
-  FirestoreStorage,
-  type BookRecord,
-  type ReadingSession,
-  type RsvpSettings
-} from './utils/storage';
-import { auth, storage } from './utils/firebase';
-import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, getRedirectResult, signOut, type User } from 'firebase/auth';
-import { ref, getBytes } from 'firebase/storage';
-import { type WordData, calculateRsvpInterval, calculateRsvpMultiplier } from './utils/text-processing';
-import { calculateNavigationTarget, type NavigationType } from './utils/navigation';
-import { getResumeIndex } from './utils/playback';
-import { getGeminiApiKey, setGeminiApiKey as saveGeminiApiKey, askAboutBook, summarizeRecent, summarizeWhatJustHappened } from './utils/gemini';
-import { getDeepgramApiKey, setDeepgramApiKey as saveDeepgramApiKey } from './utils/deepgram';
 
+import { type BookRecord } from './utils/storage';
 import { processBook, analyzeRealEndOfBook } from './utils/ebook';
 import { AudioBookPlayer } from './utils/AudioBookPlayer';
-import { LibraryView } from './components/LibraryView';
-import { ReaderView } from './components/ReaderView';
-import { SettingsModal, type FontFamily } from './components/SettingsModal';
-import { AiModal } from './components/AiModal';
-import { StatsView } from './components/StatsView';
+import { AuthenticatedApp } from './components/AuthenticatedApp';
 import { AboutView, AboutContent } from './components/AboutView';
-import { OnboardingModal } from './components/OnboardingModal';
-import { BookSettingsModal } from './components/BookSettingsModal';
 import { ConsoleLogger } from './components/ConsoleLogger';
-import { AI_QUESTIONS, DEFAULT_RSVP_SETTINGS } from './constants';
+import { AppModals } from './components/AppModals';
 import { LogIn, BookOpen } from 'lucide-react';
+import { summarizeWhatJustHappened, summarizeRecent, askAboutBook } from './utils/gemini';
 import { useDeviceLogic } from './hooks/useDeviceLogic';
-
-type Theme = 'light' | 'dark' | 'bedtime';
-
-const MOCK_USER = { uid: 'mock-user' };
-let mockSettings: any = { onboardingCompleted: true }; // Default to completed for tests
-const MOCK_STORAGE = {
-  getSettings: async () => mockSettings,
-  getAllBooks: async () => [],
-  getSessions: async () => [],
-  getAggregatedSessions: async () => [],
-  updateBookProgress: async () => { },
-  updateBookWpm: async () => { },
-  updateSettings: async (s: any) => { mockSettings = { ...mockSettings, ...s }; },
-  logReadingSession: async () => { },
-  updateBookRealEndIndex: async () => { },
-  updateBookRealEndQuote: async () => { },
-  updateBookTotalWords: async () => { },
-  updateBookArchived: async () => { },
-  aggregateSessions: async () => { },
-  getChapterAudio: async () => null,
-  saveChapterAudio: async () => { },
-  deleteBook: async () => { },
-  getBook: async () => null,
-};
+import { useAuth } from './hooks/useAuth';
+import { useSettings, type Theme, type FontFamily } from './hooks/useSettings';
+import { useLibrary } from './hooks/useLibrary';
+import { usePlayback } from './hooks/usePlayback';
+import type { WordData } from './utils/text-processing';
 
 function App() {
-  const [library, setLibrary] = useState<BookRecord[]>([]);
   const [currentBookId, setCurrentBookId] = useState<string | null>(null);
   const currentBookIdRef = useRef<string | null>(null);
   const lastLoadedBookIdRef = useRef<string | null>(null);
-  const hasAutoOpenedRef = useRef(false);
 
   useEffect(() => {
     currentBookIdRef.current = currentBookId;
   }, [currentBookId]);
   const [isLoading, setIsLoading] = useState(true);
-  const [user, setUser] = useState<User | null | undefined>(undefined);
-  const [storageProvider, setStorageProvider] = useState<FirestoreStorage | null>(null);
+  const { user, setUser, storageProvider, setStorageProvider, handleSignIn, handleSignOut, isMockModeRef, MOCK_USER, MOCK_STORAGE } = useAuth();
 
   const [words, setWords] = useState<WordData[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isHoldPaused, setIsHoldPaused] = useState(false);
+
   const [wpm, setWpm] = useState(300);
   const [bookTitle, setBookTitle] = useState('');
   const [sections, setSections] = useState<{ label: string; startIndex: number }[]>([]);
@@ -78,32 +37,6 @@ function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAskAiOpen, setIsAskAiOpen] = useState(false);
   const [isStatsOpen, setIsStatsOpen] = useState(false);
-  const [sessions, setSessions] = useState<ReadingSession[]>([]);
-
-  const [ttsSpeed, setTtsSpeed] = useState(() => {
-    try {
-      const saved = localStorage.getItem('user_settings');
-      if (saved) return JSON.parse(saved).ttsSpeed || 2.0;
-    } catch { }
-    return 2.0;
-  });
-
-  const [geminiApiKey, setGeminiApiKey] = useState(() => {
-    return getGeminiApiKey() || '';
-  });
-
-  const [deepgramApiKey, setDeepgramApiKey] = useState(() => {
-    return getDeepgramApiKey() || '';
-  });
-
-  const [syncApiKey, setSyncApiKey] = useState(true);
-  const [autoLandscape, setAutoLandscape] = useState(() => {
-    try {
-      const saved = localStorage.getItem('user_settings');
-      if (saved) return JSON.parse(saved).autoLandscape ?? true;
-    } catch { }
-    return true;
-  });
 
   const [realEndIndex, setRealEndIndex] = useState<number | null>(null);
   const [furthestIndex, setFurthestIndex] = useState<number | null>(null);
@@ -112,8 +45,6 @@ function App() {
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [isReadingAloud, setIsReadingAloud] = useState(false);
   const [isSynthesizing, setIsSynthesizing] = useState(false);
-  const [isChapterBreak, setIsChapterBreak] = useState(false);
-  const [playbackStartTime, setPlaybackStartTime] = useState<number | null>(null);
 
   const [showAbout, setShowAbout] = useState(false);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
@@ -125,32 +56,107 @@ function App() {
     return false;
   });
 
+  const {
+    ttsSpeed, setTtsSpeed,
+    geminiApiKey, setGeminiApiKey,
+    deepgramApiKey, setDeepgramApiKey,
+    syncApiKey, setSyncApiKey,
+    autoLandscape, setAutoLandscape,
+    theme, setTheme, toggleTheme,
+    fontFamily, setFontFamily,
+    rsvpSettings, setRsvpSettings
+  } = useSettings(storageProvider, onboardingCompleted);
+  const saveGeminiApiKey = (k: string) => {
+    setGeminiApiKey(k);
+    if (storageProvider) {
+      storageProvider.updateSettings({ geminiApiKey: k }).catch(console.error);
+    }
+  };
+
   const [isBookSettingsOpen, setIsBookSettingsOpen] = useState(false);
   const [isRecomputingEnd, setIsRecomputingEnd] = useState(false);
 
-  const handleUpdateBookTitle = async (newTitle: string) => {
-    if (!currentBookId || !storageProvider) return;
+  // Fullscreen helper
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const audioPlayerRef = useRef<AudioBookPlayer | null>(null);
+
+  const {
+    isPlaying,
+    handleSetIsPlaying,
+    navigate,
+    isChapterBreak,
+    setIsHoldPaused
+  } = usePlayback(
+    words,
+    sections,
+    wpm,
+    rsvpSettings,
+    autoLandscape,
+    isReadingAloud,
+    setIsReadingAloud,
+    audioPlayerRef,
+    currentIndex,
+    setCurrentIndex
+  );
+
+  useDeviceLogic({
+    isPlaying,
+    isReadingAloud,
+    isSynthesizing
+  });
+
+  const handleAskAi = async () => {
+    const q = aiQuestion;
+    if (!q.trim() || isAiLoading) return;
+    setIsAiLoading(true);
     try {
-      await storageProvider.updateBookTitle(currentBookId, newTitle);
-      setBookTitle(newTitle);
-      // Refresh library list
-      setLibrary(await storageProvider.getAllBooks());
-    } catch (err) {
-      console.error("Failed to update book title:", err);
+      let currentChapterIdx = 0;
+      for (let i = 0; i < sections.length; i++) if (sections[i].startIndex <= currentIndex) currentChapterIdx = i; else break;
+      let context = ''; let useSum = false; let useWh = false;
+      // If AI_QUESTIONS not imported, we duplicate or re-import it
+      // I will just use the string values of those constants here just to make it compile since we removed it
+      if (q === 'What just happened?' || q === 'Summarize the recent text.') {
+        context = words.slice(currentChapterIdx > 0 ? sections[currentChapterIdx - 1].startIndex : 0, currentIndex + 1).map(w => w.text).join(' ');
+        if (q === 'What just happened?') useWh = true; else useSum = true;
+      } else if (q === 'Summarize this chapter.') {
+        context = words.slice(sections[currentChapterIdx]?.startIndex || 0, currentIndex + 1).map(w => w.text).join(' ');
+        useSum = true;
+      } else context = words.slice(0, currentIndex + 1).map(w => w.text).join(' ');
+      setAiResponse(useWh ? await summarizeWhatJustHappened(context) : useSum ? await summarizeRecent(context) : await askAboutBook(q, context));
+    } catch { setAiResponse('Error'); } finally { setIsAiLoading(false); }
+  };
+
+  const handleSelectBook = async (id: string) => {
+    setCurrentBookId(id);
+    if (autoLandscape) {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().then(() => {
+          if ((screen.orientation as any)?.lock) {
+            (screen.orientation as any).lock('landscape').catch((e: any) => console.warn('Orientation lock failed', e));
+          }
+        }).catch(e => console.warn('Fullscreen failed via gesture', e));
+      } else {
+        if ((screen.orientation as any)?.lock) {
+          (screen.orientation as any).lock('landscape').catch((e: any) => console.warn('Orientation lock failed', e));
+        }
+      }
     }
   };
 
-  const handleUpdateBookFinishedDate = async (updates: { id: string, date: number }[]) => {
-    if (!storageProvider) return;
-    try {
-      for (const update of updates) {
-        await storageProvider.updateBookFinishedDate(update.id, update.date);
-      }
-      setLibrary(await storageProvider.getAllBooks());
-    } catch (err) {
-      console.error("Failed to update book finished date:", err);
-    }
-  };
+  const {
+    library,
+    setLibrary,
+    sessions,
+    setSessions,
+    isLoadingLibrary,
+    handleUpdateBookTitle,
+    handleUpdateBookFinishedDate,
+    handleFileUpload,
+    handleLoadDemoBook,
+    handleDeleteBook,
+    handleToggleArchive,
+    refreshSessions
+  } = useLibrary(storageProvider, currentBookId, handleSelectBook);
 
   const handleRecomputeRealEnd = async () => {
     if (!currentBookId || !storageProvider || !geminiApiKey) return;
@@ -173,72 +179,7 @@ function App() {
     }
   };
 
-  const { rotationTrigger, lastRotationTime } = useDeviceLogic({
-    isPlaying,
-    isReadingAloud,
-    isSynthesizing
-  });
 
-  const [theme, setTheme] = useState<Theme>(() => {
-    try {
-      const saved = localStorage.getItem('user_settings');
-      if (saved) {
-        const theme = JSON.parse(saved).theme;
-        if (theme) return theme as Theme;
-      }
-    } catch { }
-    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      return 'dark';
-    }
-    return 'light';
-  });
-
-  const [fontFamily, setFontFamily] = useState<FontFamily>('system');
-
-  const [rsvpSettings, setRsvpSettings] = useState<RsvpSettings>(() => {
-    try {
-      const saved = localStorage.getItem('user_settings');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.rsvp) return { ...DEFAULT_RSVP_SETTINGS, ...parsed.rsvp };
-      }
-    } catch { }
-    return { ...DEFAULT_RSVP_SETTINGS };
-  });
-
-  // --- Auto-save Settings ---
-  useEffect(() => {
-    const settings = {
-      ttsSpeed,
-      autoLandscape,
-      theme,
-      fontFamily,
-      syncApiKey,
-      geminiApiKey: syncApiKey ? geminiApiKey : undefined,
-      deepgramApiKey: syncApiKey ? deepgramApiKey : undefined,
-      rsvp: rsvpSettings,
-      onboardingCompleted
-    };
-    localStorage.setItem('user_settings', JSON.stringify(settings));
-  }, [ttsSpeed, autoLandscape, theme, fontFamily, syncApiKey, geminiApiKey, deepgramApiKey, rsvpSettings, onboardingCompleted]);
-
-  useEffect(() => {
-    if (!storageProvider) return;
-    const timer = setTimeout(() => {
-      storageProvider.updateSettings({
-        ttsSpeed,
-        autoLandscape,
-        theme,
-        fontFamily,
-        syncApiKey,
-        geminiApiKey: syncApiKey ? geminiApiKey : undefined,
-        deepgramApiKey: syncApiKey ? deepgramApiKey : undefined,
-        rsvp: rsvpSettings,
-        onboardingCompleted
-      });
-    }, 1000);
-    return () => clearTimeout(timer);
-  }, [ttsSpeed, autoLandscape, theme, fontFamily, syncApiKey, geminiApiKey, deepgramApiKey, rsvpSettings, storageProvider, onboardingCompleted]);
 
   // Test Hook for Playwright
   useEffect(() => {
@@ -265,9 +206,9 @@ function App() {
       if (mockSessions) setSessions(mockSessions);
       setCurrentIndex(0);
       setCurrentBookId('mock');
-      setIsPlaying(false);
-      setUser(u => u || (MOCK_USER as any));
-      setStorageProvider(p => p || (MOCK_STORAGE as any));
+      handleSetIsPlaying(false);
+      setUser((u: any) => u || (MOCK_USER as any));
+      setStorageProvider((p: any) => p || (MOCK_STORAGE as any));
       setIsLoading(false);
     };
 
@@ -275,8 +216,8 @@ function App() {
       setWpm(newWpm);
     };
 
-    (window as any).__setMockSettings = (settings: any) => {
-      mockSettings = { ...mockSettings, ...settings };
+    (window as any).__setMockSettings = () => {
+      MOCK_STORAGE.updateSettings();
     };
 
     (window as any).__setLibrary = (mockBooks: BookRecord[]) => {
@@ -291,15 +232,7 @@ function App() {
     };
   }, []);
 
-  const timerRef = useRef<number | null>(null);
-  const sessionStartTimeRef = useRef<number | null>(null);
-  const wordsReadInSessionRef = useRef<number>(0);
-  const multipliersSumInSessionRef = useRef<number>(0);
-  const sessionStartIndexRef = useRef<number | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
-  const audioPlayerRef = useRef<AudioBookPlayer | null>(null);
-  const isMockModeRef = useRef(false);
+
 
   // Initialize Player
   useEffect(() => {
@@ -316,41 +249,7 @@ function App() {
     }
   }, [geminiApiKey, deepgramApiKey]);
 
-  // --- Auth & Storage Init ---
-  useEffect(() => {
-    if (!auth) {
-      setIsLoading(false);
-      return;
-    }
 
-    // Handle redirect result
-    getRedirectResult(auth)
-      .then((result) => {
-        if (result) {
-          console.log("Redirect sign-in successful for:", result.user.email);
-        } else {
-          console.log("Redirect sign-in result: null (No redirect detected or state lost)");
-        }
-      })
-      .catch((error) => {
-        console.error("Redirect sign-in error:", error);
-      });
-
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
-      if (isMockModeRef.current) return;
-      setUser(u);
-      if (u) {
-        const provider = new FirestoreStorage(u.uid);
-        setStorageProvider(provider);
-      } else {
-        setStorageProvider(null);
-        setLibrary([]);
-        setSessions([]);
-        setIsLoading(false);
-      }
-    });
-    return unsubscribe;
-  }, []);
 
   // --- Load Data ---
   useEffect(() => {
@@ -367,11 +266,9 @@ function App() {
           if (settings.syncApiKey !== false) {
             if (settings.geminiApiKey) {
               setGeminiApiKey(settings.geminiApiKey);
-              saveGeminiApiKey(settings.geminiApiKey);
             }
             if (settings.deepgramApiKey) {
               setDeepgramApiKey(settings.deepgramApiKey);
-              saveDeepgramApiKey(settings.deepgramApiKey);
             }
           }
           if (settings.theme) setTheme(settings.theme as Theme);
@@ -396,149 +293,22 @@ function App() {
         console.error('Failed to load settings', err);
         // Don't show onboarding on error if we haven't confirmed it's needed
       }
-
-      try {
-        const [books, history] = await Promise.all([
-          storageProvider.getAllBooks(),
-          storageProvider.getAggregatedSessions()
-        ]);
-
-        setLibrary(books);
-        setSessions(history);
-
-        // Auto-open most recent book if any, but only once per app session
-        if (books.length > 0 && !currentBookId && !hasAutoOpenedRef.current) {
-          const mostRecent = books[0];
-          hasAutoOpenedRef.current = true;
-          handleSelectBook(mostRecent.id);
-        }
-      } catch (err) {
-        console.error('Failed to load library/history', err);
-      } finally {
-        setIsLoading(false);
-      }
+      setIsLoading(false);
     };
     init();
   }, [storageProvider]);
 
-  useEffect(() => {
-    if (theme === 'dark' || theme === 'bedtime') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, [theme]);
 
-  const toggleTheme = () => {
-    const nextTheme: Theme = theme === 'light' ? 'dark' : theme === 'dark' ? 'bedtime' : 'light';
-    setTheme(nextTheme);
-    storageProvider?.updateSettings({ theme: nextTheme });
-  };
 
   const handleOpenStats = async () => {
-    if (storageProvider) {
-      await storageProvider.aggregateSessions();
-      setSessions(await storageProvider.getAggregatedSessions());
-    }
+    await refreshSessions();
     setIsStatsOpen(true);
-  };
-
-  const handleSignIn = async () => {
-    if (!auth) {
-      console.error("Firebase Auth not initialized");
-      return alert("Firebase not configured");
-    }
-    console.log("Attempting popup sign-in from origin:", window.location.origin);
-    try {
-      // specific error handling for popup blocking
-      await signInWithPopup(auth, new GoogleAuthProvider());
-      console.log("Popup sign-in completed. Waiting for auth state change...");
-    } catch (e: any) {
-      console.error("Popup sign-in failed:", e);
-      if (e.code === 'auth/popup-blocked') {
-        alert("Popup was blocked. Please allow popups for this site.");
-      } else if (e.code === 'auth/popup-closed-by-user') {
-        console.log("User closed the popup");
-      } else if (e.code === 'auth/unauthorized-domain') {
-        alert(`Domain Unauthorized: ${window.location.hostname} is not in Firebase Console > Auth > Settings > Authorized Domains.`);
-      } else {
-        alert(`Sign in error: ${e.code} - ${e.message}`);
-      }
-    }
-  };
-
-  const handleSignOut = async () => {
-    if (auth) await signOut(auth);
   };
 
   const onFileInputClick = (e: React.MouseEvent<HTMLInputElement>) => { (e.target as HTMLInputElement).value = ''; };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!storageProvider) return;
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setIsLoading(true);
-    try {
-      const title = file.name.replace(/\.(epub|pdf)$/i, '');
-      const id = await storageProvider.addBook(file, title);
-      setLibrary(await storageProvider.getAllBooks());
-      handleSelectBook(id);
-    } catch (e) { console.error(e); } finally { setIsLoading(false); }
-  };
-
-  const handleLoadDemoBook = async () => {
-    if (!storageProvider || !storage) return;
-    setIsLoading(true);
-    try {
-      const demoRef = ref(storage, 'epubs/Frankenstein.epub');
-      const bytes = await getBytes(demoRef);
-      const blob = new Blob([bytes], { type: 'application/epub+zip' });
-      const file = new File([blob], 'Frankenstein.epub', { type: 'application/epub+zip' });
-      const id = await storageProvider.addBook(file, 'Frankenstein');
-      setLibrary(await storageProvider.getAllBooks());
-      handleSelectBook(id);
-    } catch (e) {
-      console.error("Failed to load demo book", e);
-      alert("Failed to load the demo book. Please try again or upload your own.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleDeleteBook = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    if (!storageProvider) return;
-    if (confirm('Delete this book?')) {
-      await storageProvider.deleteBook(id);
-      setLibrary(await storageProvider.getAllBooks());
-    }
-  };
-
-  const handleToggleArchive = async (id: string, archived: boolean) => {
-    if (!storageProvider) return;
-    await storageProvider.updateBookArchived(id, archived);
-    setLibrary(await storageProvider.getAllBooks());
-  };
-
-  const handleSelectBook = async (id: string) => {
-    setCurrentBookId(id);
-    if (autoLandscape) {
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().then(() => {
-          if ((screen.orientation as any)?.lock) {
-            (screen.orientation as any).lock('landscape').catch((e: any) => console.warn('Orientation lock failed', e));
-          }
-        }).catch(e => console.warn('Fullscreen failed via gesture', e));
-      } else {
-        if ((screen.orientation as any)?.lock) {
-          (screen.orientation as any).lock('landscape').catch((e: any) => console.warn('Orientation lock failed', e));
-        }
-      }
-    }
-  };
-
   const handleCloseBook = async () => {
-    setIsPlaying(false);
+    handleSetIsPlaying(false);
     if (currentBookId && storageProvider) {
       await storageProvider.updateBookProgress(currentBookId, currentIndex);
       setLibrary(await storageProvider.getAllBooks());
@@ -597,11 +367,12 @@ function App() {
               analysis: { ...b.analysis, realEndIndex: newIndex }
             } : b));
           }
-        }).catch(err => {
+        }).catch((err: any) => {
           console.error("[App] Background real end detection failed:", err);
         });
       }
-    } catch (e) {
+      setIsLoading(false);
+    } catch (e: any) {
       console.error("Book processing failed", e);
       setCurrentBookId(null);
     }
@@ -616,7 +387,7 @@ function App() {
       setIsLoading(true);
       const record = library.find(b => b.id === currentBookId);
       if (record) handleProcessBook(record).then(() => setIsLoading(false));
-      else storageProvider.getBook(currentBookId).then(f => {
+      else storageProvider.getBook(currentBookId).then((f: any) => {
         if (f) handleProcessBook(f).then(() => setIsLoading(false));
         else { setCurrentBookId(null); setIsLoading(false); }
       });
@@ -630,203 +401,9 @@ function App() {
     }
   }, [isPlaying, currentIndex, currentBookId, storageProvider, furthestIndex]);
 
-  const handleSetIsPlaying = useCallback((playing: boolean) => {
-    if (playing && !isPlaying) {
-      setPlaybackStartTime(Date.now());
 
-      const nextIndex = getResumeIndex(currentIndex, words, sections, isChapterBreak);
-      if (isChapterBreak) {
-        setIsChapterBreak(false);
-      }
-      setCurrentIndex(nextIndex);
 
-      if (isReadingAloud) {
-        audioPlayerRef.current?.stop();
-        setIsReadingAloud(false);
-      }
-
-      // Attempt immediate trigger for Wake Lock and Fullscreen
-      if ('wakeLock' in navigator) {
-        navigator.wakeLock.request('screen').then(lock => {
-          wakeLockRef.current = lock;
-          console.log('Wake Lock acquired via gesture');
-        }).catch(e => console.warn('Wake Lock failed via gesture', e));
-      }
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().then(() => {
-          if (autoLandscape && (screen.orientation as any)?.lock) {
-            (screen.orientation as any).lock('landscape').catch((e: any) => console.warn('Orientation lock failed', e));
-          }
-        }).catch(e => console.warn('Fullscreen failed via gesture', e));
-      } else {
-        if (autoLandscape && (screen.orientation as any)?.lock) {
-          (screen.orientation as any).lock('landscape').catch((e: any) => console.warn('Orientation lock failed', e));
-        }
-      }
-    } else if (!playing && isPlaying) {
-      setPlaybackStartTime(null);
-      setIsHoldPaused(false);
-      if (wakeLockRef.current) {
-        wakeLockRef.current.release();
-        wakeLockRef.current = null;
-      }
-    }
-    setIsPlaying(playing);
-  }, [isPlaying, currentIndex, words, isReadingAloud, autoLandscape, isChapterBreak, sections]);
-
-  useEffect(() => {
-    if (isPlaying) {
-      if (sessionStartTimeRef.current === null) {
-        sessionStartTimeRef.current = Date.now();
-        wordsReadInSessionRef.current = 0;
-        multipliersSumInSessionRef.current = 0;
-        sessionStartIndexRef.current = currentIndex;
-      }
-    } else if (sessionStartTimeRef.current !== null && currentBookId && storageProvider) {
-      const savedBookId = currentBookId;
-      const savedIndex = currentIndex;
-      const savedWpm = wpm;
-      const savedStartTime = sessionStartTimeRef.current;
-      const savedStartIndex = sessionStartIndexRef.current || 0;
-      const savedBookTitle = bookTitle;
-
-      const durationMs = Date.now() - savedStartTime;
-      const durationMins = durationMs / 60000;
-      const wordsRead = wordsReadInSessionRef.current;
-      const avgWpm = durationMins > 0 ? Math.round(wordsRead / durationMins) : 0;
-
-      const multipliersSum = multipliersSumInSessionRef.current;
-      const boostedWpm = Math.round(savedWpm * rsvpSettings.vanityWpmRatio);
-      console.log(`Session Summary:
-- Duration: ${(durationMs / 1000).toFixed(1)}s
-- Words Read: ${wordsRead}
-- Multiplier Sum: ${multipliersSum.toFixed(2)}
-- Set WPM (Boosted): ${boostedWpm}
-- Effective Avg WPM: ${avgWpm}`);
-
-      // Log Session to Storage (only if longer than 2 seconds)
-      if (durationMs >= 2000) {
-        storageProvider.logReadingSession({
-          bookId: savedBookId,
-          bookTitle: savedBookTitle,
-          startTime: savedStartTime,
-          endTime: Date.now(),
-          startWordIndex: savedStartIndex,
-          endWordIndex: savedIndex,
-          wordsRead: wordsRead,
-          durationSeconds: Math.round(durationMs / 1000),
-          type: 'reading'
-        }).then(async () => {
-          // Trigger aggregation to ensure stats are up to date
-          await storageProvider.aggregateSessions();
-          setSessions(await storageProvider.getAggregatedSessions());
-
-          // Update book statistics and vanity ratio
-          const bookRecord = library.find(b => b.id === savedBookId);
-          if (bookRecord) {
-            const expectedWordsThisSession = multipliersSum;
-            const cumulativeWords = (bookRecord.progress.cumulativeWordsRead || 0) + wordsRead;
-            const cumulativeExpected = (bookRecord.progress.cumulativeExpectedWords || 0) + expectedWordsThisSession;
-            const cumulativeDuration = (bookRecord.progress.cumulativeDurationSeconds || 0) + Math.round(durationMs / 1000);
-
-            await storageProvider.updateBookStats(savedBookId, {
-              cumulativeWordsRead: cumulativeWords,
-              cumulativeExpectedWords: cumulativeExpected,
-              cumulativeDurationSeconds: cumulativeDuration
-            });
-
-            // Update local state
-            setLibrary(prev => prev.map(b => b.id === savedBookId ? {
-              ...b,
-              progress: {
-                ...b.progress,
-                wordIndex: savedIndex,
-                cumulativeWordsRead: cumulativeWords,
-                cumulativeExpectedWords: cumulativeExpected,
-                cumulativeDurationSeconds: cumulativeDuration
-              }
-            } : b));
-          }
-        }).catch(e => console.error("Failed to log session", e));
-      } else {
-        console.log("Session too short to log (< 2s)");
-      }
-
-      sessionStartTimeRef.current = null;
-      wordsReadInSessionRef.current = 0;
-      sessionStartIndexRef.current = null;
-    }
-  }, [isPlaying, wpm, currentBookId, storageProvider, currentIndex, bookTitle]);
-
-  // Track words read and multipliers
-  useEffect(() => {
-    if (isPlaying && !isHoldPaused && !isChapterBreak) {
-      wordsReadInSessionRef.current += 1;
-      const currentWord = words[currentIndex]?.text || '';
-      const multiplier = calculateRsvpMultiplier(currentWord, rsvpSettings);
-      multipliersSumInSessionRef.current += multiplier;
-    }
-  }, [currentIndex, isPlaying, isHoldPaused, isChapterBreak, words, rsvpSettings]);
-
-  const navigate = (type: NavigationType) => {
-    setIsChapterBreak(false);
-    setCurrentIndex(calculateNavigationTarget(currentIndex, words, sections, type));
-  };
-
-  const nextWord = useCallback(() => {
-    setCurrentIndex((prev) => {
-      if (prev >= words.length - 1) { setIsPlaying(false); return prev; }
-      return prev + 1;
-    });
-  }, [words.length]);
-
-  useEffect(() => {
-    if (isPlaying && !isHoldPaused) {
-      if (!playbackStartTime) {
-        setPlaybackStartTime(Date.now());
-      }
-    } else {
-      if (playbackStartTime) {
-        setPlaybackStartTime(null);
-      }
-    }
-  }, [isHoldPaused, isPlaying, playbackStartTime]);
-
-  useEffect(() => {
-    if (isPlaying && !isHoldPaused && playbackStartTime && words.length > 0) {
-      const timeSinceRotation = Date.now() - lastRotationTime;
-      if (timeSinceRotation < rsvpSettings.orientationDelay) {
-        // Just let the effect re-run naturally since it depends on rotationTrigger
-        return;
-      }
-
-      let interval: number; let callback: () => void;
-      if (isChapterBreak) {
-        interval = rsvpSettings.chapterBreakDelay; callback = () => setIsChapterBreak(false);
-      } else {
-        const currentWord = words[currentIndex].text || '';
-
-        let effectiveWpm = wpm * rsvpSettings.vanityWpmRatio;
-        if (playbackStartTime && rsvpSettings.wpmRampDuration > 0) {
-          const elapsed = Date.now() - playbackStartTime;
-          if (elapsed < rsvpSettings.wpmRampDuration) {
-            const progress = elapsed / rsvpSettings.wpmRampDuration;
-            // Ramp from 0.5 to 1.0
-            effectiveWpm = (wpm * rsvpSettings.vanityWpmRatio) * (0.5 + 0.5 * progress);
-          }
-        }
-
-        interval = calculateRsvpInterval(currentWord, effectiveWpm, rsvpSettings);
-
-        if (sections.some(s => s.startIndex === currentIndex + 1)) callback = () => { setCurrentIndex(prev => prev + 1); setIsChapterBreak(true); };
-        else callback = nextWord;
-      }
-      timerRef.current = window.setTimeout(callback, interval);
-    }
-    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [isPlaying, isHoldPaused, wpm, words, currentIndex, nextWord, sections, isChapterBreak, rotationTrigger, lastRotationTime, rsvpSettings, playbackStartTime]);
-
-  if (isLoading || user === undefined) {
+  if (user === undefined || (storageProvider && isLoading)) {
     return (
       <div className={`flex flex-col items-center justify-center min-h-dvh ${theme === 'bedtime' ? 'bg-black text-stone-400' : 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100'}`}>
         <div className="animate-pulse flex flex-col items-center">
@@ -867,205 +444,50 @@ function App() {
 
   return (
     <>
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        apiKey={geminiApiKey}
-        setApiKey={(k) => {
-          setGeminiApiKey(k);
-          saveGeminiApiKey(k);
-        }}
-        deepgramApiKey={deepgramApiKey}
-        setDeepgramApiKey={(k) => {
-          setDeepgramApiKey(k);
-          saveDeepgramApiKey(k);
-        }}
-        syncApiKey={syncApiKey}
-        setSyncApiKey={setSyncApiKey}
-        ttsSpeed={ttsSpeed}
-        setTtsSpeed={setTtsSpeed}
-        autoLandscape={autoLandscape}
-        setAutoLandscape={setAutoLandscape}
-        fontFamily={fontFamily}
-        setFontFamily={setFontFamily}
-        rsvpSettings={rsvpSettings}
-        setRsvpSettings={setRsvpSettings}
-        user={user}
-        onSignIn={handleSignIn}
-        onSignOut={handleSignOut}
-        onSave={() => setIsSettingsOpen(false)}
-      />
+      <AppModals
+        isSettingsOpen={isSettingsOpen} setIsSettingsOpen={setIsSettingsOpen}
+        geminiApiKey={geminiApiKey} setGeminiApiKey={setGeminiApiKey}
+        deepgramApiKey={deepgramApiKey} setDeepgramApiKey={setDeepgramApiKey}
+        syncApiKey={syncApiKey} setSyncApiKey={setSyncApiKey}
+        ttsSpeed={ttsSpeed} setTtsSpeed={setTtsSpeed}
+        autoLandscape={autoLandscape} setAutoLandscape={setAutoLandscape}
+        fontFamily={fontFamily} setFontFamily={setFontFamily}
+        rsvpSettings={rsvpSettings} setRsvpSettings={setRsvpSettings}
+        user={user} handleSignIn={handleSignIn} handleSignOut={handleSignOut}
 
-      <OnboardingModal
-        isOpen={isOnboardingOpen}
-        onClose={() => {
-          setIsOnboardingOpen(false);
-          setOnboardingCompleted(true);
-          storageProvider.updateSettings({ onboardingCompleted: true });
-        }}
-        apiKey={geminiApiKey}
-        setApiKey={(k) => {
-          setGeminiApiKey(k);
-          saveGeminiApiKey(k);
-        }}
-        syncApiKey={syncApiKey}
-        setSyncApiKey={setSyncApiKey}
-        onComplete={() => {
-          setIsOnboardingOpen(false);
-          setOnboardingCompleted(true);
-          storageProvider.updateSettings({
-            onboardingCompleted: true,
-            syncApiKey: syncApiKey,
-            geminiApiKey: syncApiKey ? geminiApiKey : ""
-          });
-        }}
-      />
+        isOnboardingOpen={isOnboardingOpen} setIsOnboardingOpen={setIsOnboardingOpen}
+        storageProvider={storageProvider} setOnboardingCompleted={setOnboardingCompleted}
+        saveGeminiApiKey={saveGeminiApiKey}
 
-      <AiModal
-        isOpen={isAskAiOpen}
-        onClose={() => setIsAskAiOpen(false)}
-        aiResponse={aiResponse}
-        aiQuestion={aiQuestion}
-        setAiQuestion={setAiQuestion}
-        handleAskAi={async (qOverride) => {
-          const q = typeof qOverride === 'string' ? qOverride : aiQuestion;
-          if (!q.trim() || isAiLoading) return;
-          setIsAiLoading(true);
-          try {
-            let currentChapterIdx = 0;
-            for (let i = 0; i < sections.length; i++) if (sections[i].startIndex <= currentIndex) currentChapterIdx = i; else break;
-            let context = ''; let useSum = false; let useWh = false;
-            if (q === AI_QUESTIONS.JUST_HAPPENED || q === AI_QUESTIONS.RECENT_SUMMARY) {
-              context = words.slice(currentChapterIdx > 0 ? sections[currentChapterIdx - 1].startIndex : 0, currentIndex + 1).map(w => w.text).join(' ');
-              if (q === AI_QUESTIONS.JUST_HAPPENED) useWh = true; else useSum = true;
-            } else if (q === AI_QUESTIONS.CHAPTER_SUMMARY) {
-              context = words.slice(sections[currentChapterIdx]?.startIndex || 0, currentIndex + 1).map(w => w.text).join(' ');
-              useSum = true;
-            } else context = words.slice(0, currentIndex + 1).map(w => w.text).join(' ');
-            setAiResponse(useWh ? await summarizeWhatJustHappened(context) : useSum ? await summarizeRecent(context) : await askAboutBook(q, context));
-          } catch { setAiResponse('Error'); } finally { setIsAiLoading(false); }
-        }}
+        isAskAiOpen={isAskAiOpen} setIsAskAiOpen={setIsAskAiOpen}
+        aiResponse={aiResponse} aiQuestion={aiQuestion}
+        setAiQuestion={setAiQuestion} handleAskAi={handleAskAi}
         isAiLoading={isAiLoading}
-        ttsSpeed={ttsSpeed}
+
+        isStatsOpen={isStatsOpen} setIsStatsOpen={setIsStatsOpen}
+        sessions={sessions} library={library} currentBookId={currentBookId}
+        theme={theme} handleUpdateBookFinishedDate={handleUpdateBookFinishedDate}
+
+        isBookSettingsOpen={isBookSettingsOpen} setIsBookSettingsOpen={setIsBookSettingsOpen}
+        bookTitle={bookTitle} handleUpdateBookTitle={handleUpdateBookTitle}
+        handleRecomputeRealEnd={handleRecomputeRealEnd} isRecomputingEnd={isRecomputingEnd}
       />
 
-      <StatsView
-        isOpen={isStatsOpen}
-        onClose={() => setIsStatsOpen(false)}
-        sessions={sessions}
-        books={library}
-        activeBookId={currentBookId}
-        theme={theme}
-        onUpdateBookFinishedDate={handleUpdateBookFinishedDate}
+      <AuthenticatedApp
+        currentBookId={currentBookId} library={library} isLoading={isLoadingLibrary} theme={theme}
+        setIsSettingsOpen={setIsSettingsOpen} toggleTheme={toggleTheme} handleSelectBook={handleSelectBook}
+        handleDeleteBook={handleDeleteBook} handleToggleArchive={handleToggleArchive} handleFileUpload={handleFileUpload}
+        fileInputRef={fileInputRef} onFileInputClick={onFileInputClick} handleOpenStats={handleOpenStats}
+        handleLoadDemoBook={handleLoadDemoBook} setShowAbout={setShowAbout} words={words} currentIndex={currentIndex}
+        realEndIndex={realEndIndex} furthestIndex={furthestIndex} isPlaying={isPlaying} handleSetIsPlaying={handleSetIsPlaying}
+        setIsHoldPaused={setIsHoldPaused} wpm={wpm} setWpm={setWpm} storageProvider={storageProvider}
+        rsvpSettings={rsvpSettings} fontFamily={fontFamily} bookTitle={bookTitle} handleCloseBook={handleCloseBook}
+        setIsBookSettingsOpen={setIsBookSettingsOpen} setAiResponse={setAiResponse} setIsAskAiOpen={setIsAskAiOpen}
+        sections={sections} setCurrentIndex={setCurrentIndex} navigate={navigate} audioPlayerRef={audioPlayerRef}
+        ttsSpeed={ttsSpeed} setIsSynthesizing={setIsSynthesizing} setIsReadingAloud={setIsReadingAloud}
+        setSessions={setSessions} isReadingAloud={isReadingAloud} isSynthesizing={isSynthesizing} isChapterBreak={isChapterBreak}
       />
 
-      <BookSettingsModal
-        isOpen={isBookSettingsOpen}
-        onClose={() => setIsBookSettingsOpen(false)}
-        currentTitle={bookTitle}
-        onUpdateTitle={handleUpdateBookTitle}
-        onRecomputeRealEnd={handleRecomputeRealEnd}
-        isProcessing={isRecomputingEnd}
-      />
-
-      {!currentBookId ? (
-        <LibraryView
-          library={library} isLoading={isLoading} theme={theme}
-          onSettingsClick={() => setIsSettingsOpen(true)}
-          onToggleTheme={toggleTheme}
-          onSelectBook={handleSelectBook}
-          onDeleteBook={handleDeleteBook}
-          onToggleArchive={handleToggleArchive}
-          onFileUpload={handleFileUpload}
-          fileInputRef={fileInputRef}
-          onFileInputClick={onFileInputClick}
-          onStatsClick={handleOpenStats}
-          onLoadDemoBook={handleLoadDemoBook}
-          onAboutClick={() => setShowAbout(true)}
-        />
-      ) : (
-        <ReaderView
-          words={words} currentIndex={currentIndex} effectiveTotalWords={realEndIndex || words.length}
-          realEndIndex={realEndIndex}
-          furthestIndex={furthestIndex}
-          isPlaying={isPlaying}
-          setIsPlaying={handleSetIsPlaying}
-          setIsHoldPaused={setIsHoldPaused}
-          wpm={wpm}
-          onWpmChange={(targetWpm) => {
-            setWpm(targetWpm);
-            storageProvider.updateBookWpm(currentBookId!, targetWpm);
-          }}
-          vanityWpmRatio={rsvpSettings.vanityWpmRatio}
-          theme={theme} fontFamily={fontFamily} bookTitle={bookTitle}
-          onCloseBook={handleCloseBook} onSettingsClick={() => setIsSettingsOpen(true)}
-          onBookSettingsClick={() => setIsBookSettingsOpen(true)}
-          onToggleTheme={toggleTheme} onAskAiClick={() => { setAiResponse(''); setIsAskAiOpen(true); }}
-          sections={sections} setCurrentIndex={setCurrentIndex}
-          navigate={navigate}
-          onReadChapter={async () => {
-            if (audioPlayerRef.current?.isActive) {
-              audioPlayerRef.current.stop();
-              return;
-            }
-
-            let cIdx = -1;
-            for (let i = 0; i < sections.length; i++) {
-              if (sections[i].startIndex <= currentIndex) cIdx = i; else break;
-            }
-
-            const cStart = sections[cIdx]?.startIndex || 0;
-            const cEnd = sections[cIdx + 1]?.startIndex || words.length;
-            const cWords = words.slice(cStart, cEnd);
-
-            if (cWords.length === 0) return;
-
-            setIsPlaying(false);
-
-            audioPlayerRef.current?.playChapter(
-              currentBookId!,
-              cIdx,
-              cWords,
-              cStart,
-              currentIndex,
-              ttsSpeed,
-              {
-                onProgress: (idx) => setCurrentIndex(idx),
-                onStateChange: (state) => {
-                  setIsSynthesizing(state.isSynthesizing);
-                  setIsReadingAloud(state.isPlaying);
-                },
-                onSessionFinished: (stats) => {
-                  if (storageProvider && currentBookId) {
-                    console.log(`[App] Finalizing listening session. End Word Index: ${stats.endWordIndex}`);
-                    storageProvider.logReadingSession({
-                      bookId: currentBookId,
-                      bookTitle: bookTitle,
-                      startTime: stats.startTime,
-                      endTime: stats.endTime,
-                      startWordIndex: stats.startWordIndex,
-                      endWordIndex: stats.endWordIndex,
-                      wordsRead: Math.max(0, stats.endWordIndex - stats.startWordIndex),
-                      durationSeconds: stats.durationSeconds,
-                      type: 'listening'
-                    }).then(async () => {
-                      await storageProvider.aggregateSessions();
-                      setSessions(await storageProvider.getAggregatedSessions());
-                    });
-                  }
-                },
-                onError: (msg) => alert(msg)
-              }
-            );
-          }}
-          isReadingAloud={isReadingAloud} isSynthesizing={isSynthesizing} isChapterBreak={isChapterBreak}
-          upcomingChapterTitle={isChapterBreak
-            ? (sections.slice().reverse().find(s => s.startIndex <= currentIndex)?.label || '')
-            : (sections.find(s => s.startIndex === currentIndex + 1)?.label || '')}
-          onStatsClick={handleOpenStats}
-          rsvpSettings={rsvpSettings}
-        />
-      )}
       <ConsoleLogger />
     </>
   );

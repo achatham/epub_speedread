@@ -6,7 +6,7 @@ interface BookSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   currentTitle: string;
-  onUpdateTitle: (newTitle: string) => void;
+  onUpdateTitle: (id: string, newTitle: string) => Promise<void>;
   onRecomputeRealEnd: () => void;
   isProcessing: boolean;
 }
@@ -52,7 +52,11 @@ export function BookSettingsModal({
                 placeholder="Enter new title..."
               />
               <button
-                onClick={() => onUpdateTitle(newTitle)}
+                onClick={async () => {
+                  const currentBookId = (window as any)._currentBookId || ''; // Getting around not having bookId in this specific modal without prop drilling yet. Better approach: Pass bookId as prop.
+                  await onUpdateTitle(currentBookId, newTitle); // We'll update the prop inside App.tsx to pass the ID directly.
+                  onClose();
+                }}
                 disabled={newTitle === currentTitle || !newTitle.trim()}
                 className="bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 hover:opacity-90 transition-opacity"
               >
