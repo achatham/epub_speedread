@@ -14,6 +14,7 @@ import { useAuth } from './hooks/useAuth';
 import { useSettings, type Theme, type FontFamily } from './hooks/useSettings';
 import { useLibrary } from './hooks/useLibrary';
 import { usePlayback } from './hooks/usePlayback';
+import { useReadingSession } from './hooks/useReadingSession';
 import type { WordData } from './utils/text-processing';
 
 function App() {
@@ -85,6 +86,7 @@ function App() {
     handleSetIsPlaying,
     navigate,
     isChapterBreak,
+    isHoldPaused,
     setIsHoldPaused
   } = usePlayback(
     words,
@@ -157,6 +159,22 @@ function App() {
     handleToggleArchive,
     refreshSessions
   } = useLibrary(storageProvider, currentBookId, handleSelectBook);
+
+  useReadingSession(
+    storageProvider,
+    isPlaying,
+    isHoldPaused,
+    isChapterBreak,
+    currentBookId,
+    currentIndex,
+    words,
+    bookTitle,
+    rsvpSettings,
+    library,
+    setLibrary,
+    setSessions,
+    wpm
+  );
 
   const handleRecomputeRealEnd = async () => {
     if (!currentBookId || !storageProvider || !geminiApiKey) return;

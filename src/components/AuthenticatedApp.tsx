@@ -135,7 +135,15 @@ export function AuthenticatedApp({
                         },
                         onSessionFinished: (stats) => {
                             if (storageProvider && currentBookId) {
-                                console.log(`[App] Finalizing listening session.End Word Index: ${stats.endWordIndex} `);
+                                const wordsRead = Math.max(0, stats.endWordIndex - stats.startWordIndex);
+                                const effectiveWpm = stats.durationSeconds > 0 ? Math.round((wordsRead / stats.durationSeconds) * 60) : 0;
+
+                                console.log(`[Listening Session] Finished:
+- Duration: ${stats.durationSeconds}s
+- Words: ${wordsRead}
+- Desired WPM: ${wpm}
+- Effective WPM: ${effectiveWpm}`);
+
                                 storageProvider.logReadingSession({
                                     bookId: currentBookId,
                                     bookTitle: bookTitle,
@@ -143,7 +151,7 @@ export function AuthenticatedApp({
                                     endTime: stats.endTime,
                                     startWordIndex: stats.startWordIndex,
                                     endWordIndex: stats.endWordIndex,
-                                    wordsRead: Math.max(0, stats.endWordIndex - stats.startWordIndex),
+                                    wordsRead: wordsRead,
                                     durationSeconds: stats.durationSeconds,
                                     type: 'listening'
                                 }).then(async () => {
