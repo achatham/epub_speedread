@@ -205,8 +205,7 @@ export class FirestoreStorage {
             meta: { title, addedAt: now, extension },
             progress: { wordIndex: 0, lastReadAt: now },
             settings: {
-              wpm: 300 * (typeof window !== 'undefined' ? (JSON.parse(localStorage.getItem('user_settings') || '{}').rsvp?.vanityWpmRatio || 1.25) : 1.25),
-              vanityWpmRatio: typeof window !== 'undefined' ? (JSON.parse(localStorage.getItem('user_settings') || '{}').rsvp?.vanityWpmRatio || 1.25) : 1.25
+              wpm: 300
             },
             analysis: {},
             storage: { cloudUrl }

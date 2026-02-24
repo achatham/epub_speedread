@@ -8,7 +8,7 @@ export interface WordData {
 }
 
 const BLOCK_TAGS = new Set([
-  'P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 
+  'P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6',
   'BLOCKQUOTE', 'LI', 'SECTION', 'ARTICLE', 'HEADER', 'FOOTER',
   'TR', 'TD', 'TH' // Tables also break text
 ]);
@@ -18,7 +18,7 @@ export function calculateRsvpMultiplier(
   settings: RsvpSettings
 ): number {
   let multiplier = 1;
-  
+
   if (/[.!?]['")\]]*$/.test(word) || word === '—' || word === '–') {
     multiplier = settings.periodMultiplier;
   } else if (/[,;:]['")\]]*$/.test(word)) {
@@ -31,7 +31,7 @@ export function calculateRsvpMultiplier(
   const currentMaxDensity = Math.max(currentLeftDensity, currentRightDensity);
 
   // Benchmark "transportation" for stable sizing (matches ReaderView)
-  const benchMaxDensity = 15.83; 
+  const benchMaxDensity = 15.83;
 
   const isLongWord = word.length > 8 || (word.match(/\d/g) || []).length > 2;
 
@@ -55,7 +55,7 @@ export function calculateRsvpInterval(
 
 export function extractWordsFromDoc(doc: Document): WordData[] {
   const words: WordData[] = [];
-  
+
   let currentTextBuffer = '';
   // The state of whether the NEXT flushed word should be a paragraph start.
   // Initially true.
@@ -63,38 +63,38 @@ export function extractWordsFromDoc(doc: Document): WordData[] {
 
   function flush() {
     if (!currentTextBuffer.trim()) {
-        currentTextBuffer = '';
-        return;
+      currentTextBuffer = '';
+      return;
     }
-    
+
     // Replace em-dashes and en-dashes with padded versions to ensure they split into separate words
     // "word—word" -> "word — word"
     // Also split hyphenated words, keeping the hyphen on the preceding word
     // Standardize ellipses (...) and single-char ellipses (…) as distinct padded tokens
     const processedBuffer = currentTextBuffer
-        .replace(/—/g, ' — ')
-        .replace(/–/g, ' – ')
-        .replace(/(\w)-(\w)/g, '$1- $2')
-        .replace(/…/g, ' ... ')
-        .replace(/(?:\. ?){3,}/g, ' ... ');
+      .replace(/—/g, ' — ')
+      .replace(/–/g, ' – ')
+      .replace(/(\w)-(\w)/g, '$1- $2')
+      .replace(/…/g, ' ... ')
+      .replace(/(?:\. ?){3,}/g, ' ... ');
 
     const rawWords = processedBuffer
-        .replace(/\s+/g, ' ')
-        .split(' ')
-        .filter(w => w.length > 0);
-    
+      .replace(/\s+/g, ' ')
+      .split(' ')
+      .filter(w => w.length > 0);
+
     rawWords.forEach((w, index) => {
-        words.push({
-            text: w,
-            isParagraphStart: markNextAsParagraphStart && index === 0,
-            isSentenceStart: false // Post-process
-        });
+      words.push({
+        text: w,
+        isParagraphStart: markNextAsParagraphStart && index === 0,
+        isSentenceStart: false // Post-process
+      });
     });
 
     if (rawWords.length > 0) {
-        markNextAsParagraphStart = false; 
+      markNextAsParagraphStart = false;
     }
-    
+
     currentTextBuffer = '';
   }
 
@@ -111,11 +111,11 @@ export function extractWordsFromDoc(doc: Document): WordData[] {
         // E.g. "Some text <div>...</div>" -> flush "Some text"
         flush();
         // Since we are hitting a block boundary, the next thing IS a paragraph start
-        markNextAsParagraphStart = true; 
+        markNextAsParagraphStart = true;
       }
 
       node.childNodes.forEach(child => traverse(child));
-      
+
       if (isBlock) {
         // Closing a block also flushes content inside it
         flush();
@@ -136,17 +136,17 @@ export function extractWordsFromDoc(doc: Document): WordData[] {
       words[i].isSentenceStart = true;
       continue;
     }
-    
+
     // Check previous word for punctuation
     const prevWord = words[i - 1].text;
     // Simple regex for sentence ending punctuation. 
     // Ends with . ! ? followed by optional quotes/parens
     // e.g. "end." "end!)"
     if (/[.!?]['")\]]*$/.test(prevWord)) {
-        words[i].isSentenceStart = true;
+      words[i].isSentenceStart = true;
     } else if (words[i].isParagraphStart) {
-        // Paragraph start is implicitly a sentence start
-        words[i].isSentenceStart = true;
+      // Paragraph start is implicitly a sentence start
+      words[i].isSentenceStart = true;
     }
   }
 
@@ -188,7 +188,7 @@ export function extractWordsFromText(text: string): WordData[] {
 
     const prevWord = allWords[i - 1].text;
     if (/[.!?]['")\]]*$/.test(prevWord)) {
-        allWords[i].isSentenceStart = true;
+      allWords[i].isSentenceStart = true;
     }
   }
 
@@ -211,10 +211,9 @@ export function chunkWordsByCharLimit(words: WordData[], maxChars: number = 1900
   let currentChars = 0;
   let chunkStartIndex = 0;
 
-  for (let i = 0; i < words.length; i++) {
-    const word = words[i];
+  for (const word of words) {
     const wordWithSpace = (currentChunkWords.length > 0 ? " " : "") + word.text;
-    
+
     if (currentChars + wordWithSpace.length > maxChars) {
       // Need to flush. Find the last sentence end.
       let splitPoint = -1;
@@ -229,7 +228,7 @@ export function chunkWordsByCharLimit(words: WordData[], maxChars: number = 1900
         // We found a sentence end. Flush up to there.
         const flushWords = currentChunkWords.slice(0, splitPoint + 1);
         const remainingWords = currentChunkWords.slice(splitPoint + 1);
-        
+
         chunks.push({
           text: flushWords.map(w => w.text).join(' '),
           startIndex: chunkStartIndex,
@@ -246,7 +245,7 @@ export function chunkWordsByCharLimit(words: WordData[], maxChars: number = 1900
           startIndex: chunkStartIndex,
           wordCount: currentChunkWords.length
         });
-        
+
         chunkStartIndex += currentChunkWords.length;
         currentChunkWords = [word];
         currentChars = word.text.length;
@@ -310,7 +309,7 @@ export function chunkWordsByParagraph(words: WordData[], minWords: number = 300)
 export function chunkTextByCharLimit(text: string, maxChars: number = 1900): TextChunk[] {
   // Use regex to find sentence boundaries while keeping the delimiter
   const sentences = text.match(/[^.!?]+[.!?]['")\]]*\s*|[^.!?]+$/g) || [text];
-  
+
   const chunks: TextChunk[] = [];
   let currentText = "";
   let currentWordCount = 0;
@@ -319,7 +318,7 @@ export function chunkTextByCharLimit(text: string, maxChars: number = 1900): Tex
 
   for (const sentence of sentences) {
     const sentenceWordCount = sentence.trim().split(/\s+/).length;
-    
+
     if (currentText.length + sentence.length > maxChars && currentText.length > 0) {
       chunks.push({
         text: currentText.trim(),
@@ -359,9 +358,9 @@ export function chunkTextByParagraph(text: string, minWords: number = 300): Text
   for (const para of paragraphs) {
     const trimmedPara = para.trim();
     if (!trimmedPara) {
-        // Still need to account for the split result in some way? 
-        // For simple text split, words are what matter.
-        continue;
+      // Still need to account for the split result in some way? 
+      // For simple text split, words are what matter.
+      continue;
     }
 
     const wordsInPara = trimmedPara.split(/\s+/).filter(w => w.length > 0);

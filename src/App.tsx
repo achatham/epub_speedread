@@ -25,7 +25,7 @@ import { AboutView, AboutContent } from './components/AboutView';
 import { OnboardingModal } from './components/OnboardingModal';
 import { BookSettingsModal } from './components/BookSettingsModal';
 import { ConsoleLogger } from './components/ConsoleLogger';
-import { AI_QUESTIONS, WPM_VANITY_RATIO, DEFAULT_RSVP_SETTINGS } from './constants';
+import { AI_QUESTIONS, DEFAULT_RSVP_SETTINGS } from './constants';
 import { LogIn, BookOpen } from 'lucide-react';
 import { useDeviceLogic } from './hooks/useDeviceLogic';
 
@@ -38,18 +38,18 @@ const MOCK_STORAGE = {
   getAllBooks: async () => [],
   getSessions: async () => [],
   getAggregatedSessions: async () => [],
-  updateBookProgress: async () => {},
-  updateBookWpm: async () => {},
+  updateBookProgress: async () => { },
+  updateBookWpm: async () => { },
   updateSettings: async (s: any) => { mockSettings = { ...mockSettings, ...s }; },
-  logReadingSession: async () => {},
-  updateBookRealEndIndex: async () => {},
-  updateBookRealEndQuote: async () => {},
-  updateBookTotalWords: async () => {},
-  updateBookArchived: async () => {},
-  aggregateSessions: async () => {},
+  logReadingSession: async () => { },
+  updateBookRealEndIndex: async () => { },
+  updateBookRealEndQuote: async () => { },
+  updateBookTotalWords: async () => { },
+  updateBookArchived: async () => { },
+  aggregateSessions: async () => { },
   getChapterAudio: async () => null,
-  saveChapterAudio: async () => {},
-  deleteBook: async () => {},
+  saveChapterAudio: async () => { },
+  deleteBook: async () => { },
   getBook: async () => null,
 };
 
@@ -71,7 +71,7 @@ function App() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isHoldPaused, setIsHoldPaused] = useState(false);
-  const [wpm, setWpm] = useState(300 * WPM_VANITY_RATIO);
+  const [wpm, setWpm] = useState(300);
   const [bookTitle, setBookTitle] = useState('');
   const [sections, setSections] = useState<{ label: string; startIndex: number }[]>([]);
 
@@ -173,10 +173,10 @@ function App() {
     }
   };
 
-  const { rotationTrigger, lastRotationTime } = useDeviceLogic({ 
-    isPlaying, 
-    isReadingAloud, 
-    isSynthesizing 
+  const { rotationTrigger, lastRotationTime } = useDeviceLogic({
+    isPlaying,
+    isReadingAloud,
+    isSynthesizing
   });
 
   const [theme, setTheme] = useState<Theme>(() => {
@@ -272,7 +272,7 @@ function App() {
     };
 
     (window as any).__setWpm = (newWpm: number) => {
-      setWpm(newWpm * WPM_VANITY_RATIO);
+      setWpm(newWpm);
     };
 
     (window as any).__setMockSettings = (settings: any) => {
@@ -355,14 +355,14 @@ function App() {
   // --- Load Data ---
   useEffect(() => {
     if (!storageProvider) return;
-    
+
     const init = async () => {
       // Keep loading true while fetching initial data
       try {
         const settings = await storageProvider.getSettings();
         if (settings) {
           if (settings.syncApiKey !== undefined) setSyncApiKey(settings.syncApiKey);
-          
+
           // Only load API key from Firestore if syncing is enabled
           if (settings.syncApiKey !== false) {
             if (settings.geminiApiKey) {
@@ -379,7 +379,7 @@ function App() {
           if (settings.ttsSpeed) setTtsSpeed(settings.ttsSpeed);
           if (settings.autoLandscape !== undefined) setAutoLandscape(settings.autoLandscape);
           if (settings.rsvp) setRsvpSettings(prev => ({ ...prev, ...settings.rsvp }));
-          
+
           if (settings.onboardingCompleted) {
             setOnboardingCompleted(true);
           } else if (!onboardingCompleted) {
@@ -399,10 +399,10 @@ function App() {
 
       try {
         const [books, history] = await Promise.all([
-            storageProvider.getAllBooks(),
-            storageProvider.getAggregatedSessions()
+          storageProvider.getAllBooks(),
+          storageProvider.getAggregatedSessions()
         ]);
-        
+
         setLibrary(books);
         setSessions(history);
 
@@ -449,11 +449,11 @@ function App() {
       return alert("Firebase not configured");
     }
     console.log("Attempting popup sign-in from origin:", window.location.origin);
-    try { 
+    try {
       // specific error handling for popup blocking
-      await signInWithPopup(auth, new GoogleAuthProvider()); 
+      await signInWithPopup(auth, new GoogleAuthProvider());
       console.log("Popup sign-in completed. Waiting for auth state change...");
-    } catch (e: any) { 
+    } catch (e: any) {
       console.error("Popup sign-in failed:", e);
       if (e.code === 'auth/popup-blocked') {
         alert("Popup was blocked. Please allow popups for this site.");
@@ -559,13 +559,21 @@ function App() {
     if (!storageProvider) return;
     try {
       const result = await processBook(bookRecord, storageProvider);
-      
+
       lastLoadedBookIdRef.current = bookRecord.id;
       setBookTitle(result.title);
       setWords(result.words);
       setSections(result.sections);
       setCurrentIndex(result.wordIndex);
-      setWpm(result.wpm);
+
+      let targetWpm = result.wpm;
+      // Sanity check to recover from corrupted data
+      if (targetWpm > 1000) {
+        targetWpm = 300;
+        storageProvider.updateBookWpm(bookRecord.id, targetWpm).catch(e => console.error("Failed to recover WPM:", e));
+      }
+      setWpm(targetWpm);
+
       setRealEndIndex(result.realEndIndex);
       setFurthestIndex(bookRecord.progress.furthestWordIndex ?? bookRecord.progress.wordIndex);
 
@@ -688,11 +696,12 @@ function App() {
       const avgWpm = durationMins > 0 ? Math.round(wordsRead / durationMins) : 0;
 
       const multipliersSum = multipliersSumInSessionRef.current;
+      const boostedWpm = Math.round(savedWpm * rsvpSettings.vanityWpmRatio);
       console.log(`Session Summary:
 - Duration: ${(durationMs / 1000).toFixed(1)}s
 - Words Read: ${wordsRead}
 - Multiplier Sum: ${multipliersSum.toFixed(2)}
-- Set WPM (Boosted): ${savedWpm}
+- Set WPM (Boosted): ${boostedWpm}
 - Effective Avg WPM: ${avgWpm}`);
 
       // Log Session to Storage (only if longer than 2 seconds)
@@ -708,62 +717,41 @@ function App() {
           durationSeconds: Math.round(durationMs / 1000),
           type: 'reading'
         }).then(async () => {
-            // Trigger aggregation to ensure stats are up to date
-            await storageProvider.aggregateSessions();
-            setSessions(await storageProvider.getAggregatedSessions());
+          // Trigger aggregation to ensure stats are up to date
+          await storageProvider.aggregateSessions();
+          setSessions(await storageProvider.getAggregatedSessions());
 
-            // Update book statistics and vanity ratio
-            const bookRecord = library.find(b => b.id === savedBookId);
-            if (bookRecord) {
-              const expectedWordsThisSession = multipliersSum;
-              const cumulativeWords = (bookRecord.progress.cumulativeWordsRead || 0) + wordsRead;
-              const cumulativeExpected = (bookRecord.progress.cumulativeExpectedWords || 0) + expectedWordsThisSession;
-              const cumulativeDuration = (bookRecord.progress.cumulativeDurationSeconds || 0) + Math.round(durationMs / 1000);
+          // Update book statistics and vanity ratio
+          const bookRecord = library.find(b => b.id === savedBookId);
+          if (bookRecord) {
+            const expectedWordsThisSession = multipliersSum;
+            const cumulativeWords = (bookRecord.progress.cumulativeWordsRead || 0) + wordsRead;
+            const cumulativeExpected = (bookRecord.progress.cumulativeExpectedWords || 0) + expectedWordsThisSession;
+            const cumulativeDuration = (bookRecord.progress.cumulativeDurationSeconds || 0) + Math.round(durationMs / 1000);
 
-              let newVanityRatio = cumulativeWords > 0 ? cumulativeExpected / cumulativeWords : (bookRecord.settings.vanityWpmRatio || rsvpSettings.vanityWpmRatio);
-              const oldVanityRatio = bookRecord.settings.vanityWpmRatio || rsvpSettings.vanityWpmRatio;
+            await storageProvider.updateBookStats(savedBookId, {
+              cumulativeWordsRead: cumulativeWords,
+              cumulativeExpectedWords: cumulativeExpected,
+              cumulativeDurationSeconds: cumulativeDuration
+            });
 
-              // Sanity cap for the ratio to prevent runaway WPM from outlier sessions
-              newVanityRatio = Math.max(0.5, Math.min(5.0, newVanityRatio));
-
-              // Maintain same targetWpm
-              const targetWpm = savedWpm / oldVanityRatio;
-              const newBoostedWpm = targetWpm * newVanityRatio;
-
-              await storageProvider.updateBookStats(savedBookId, {
+            // Update local state
+            setLibrary(prev => prev.map(b => b.id === savedBookId ? {
+              ...b,
+              progress: {
+                ...b.progress,
+                wordIndex: savedIndex,
                 cumulativeWordsRead: cumulativeWords,
                 cumulativeExpectedWords: cumulativeExpected,
-                cumulativeDurationSeconds: cumulativeDuration,
-                vanityWpmRatio: newVanityRatio,
-                wpm: newBoostedWpm
-              });
-
-              // Update local state
-              setLibrary(prev => prev.map(b => b.id === savedBookId ? {
-                ...b,
-                progress: {
-                  ...b.progress,
-                  wordIndex: savedIndex,
-                  cumulativeWordsRead: cumulativeWords,
-                  cumulativeExpectedWords: cumulativeExpected,
-                  cumulativeDurationSeconds: cumulativeDuration
-                },
-                settings: {
-                  ...b.settings,
-                  vanityWpmRatio: newVanityRatio,
-                  wpm: newBoostedWpm
-                }
-              } : b));
-
-              if (currentBookIdRef.current === savedBookId) {
-                setWpm(newBoostedWpm);
+                cumulativeDurationSeconds: cumulativeDuration
               }
-            }
+            } : b));
+          }
         }).catch(e => console.error("Failed to log session", e));
       } else {
         console.log("Session too short to log (< 2s)");
       }
-      
+
       sessionStartTimeRef.current = null;
       wordsReadInSessionRef.current = 0;
       sessionStartIndexRef.current = null;
@@ -818,13 +806,13 @@ function App() {
       } else {
         const currentWord = words[currentIndex].text || '';
 
-        let effectiveWpm = wpm;
+        let effectiveWpm = wpm * rsvpSettings.vanityWpmRatio;
         if (playbackStartTime && rsvpSettings.wpmRampDuration > 0) {
           const elapsed = Date.now() - playbackStartTime;
           if (elapsed < rsvpSettings.wpmRampDuration) {
             const progress = elapsed / rsvpSettings.wpmRampDuration;
             // Ramp from 0.5 to 1.0
-            effectiveWpm = wpm * (0.5 + 0.5 * progress);
+            effectiveWpm = (wpm * rsvpSettings.vanityWpmRatio) * (0.5 + 0.5 * progress);
           }
         }
 
@@ -856,7 +844,7 @@ function App() {
           <h1 className="text-5xl font-light mb-8">Speed Reader</h1>
           <p className="mb-12 opacity-70 text-lg">Please sign in to access your library.</p>
           <div className="flex flex-col gap-4 w-full max-w-sm">
-            <button 
+            <button
               onClick={handleSignIn}
               className="flex items-center justify-center gap-3 px-8 py-4 text-base font-medium bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-xl hover:opacity-90 transition-opacity shadow-lg"
             >
@@ -865,7 +853,7 @@ function App() {
             </button>
           </div>
         </div>
-        
+
         <div className="border-t border-zinc-100 dark:border-zinc-800 pt-24">
           <AboutContent onSignIn={handleSignIn} />
         </div>
@@ -883,9 +871,9 @@ function App() {
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         apiKey={geminiApiKey}
-        setApiKey={(k) => { 
-          setGeminiApiKey(k); 
-          saveGeminiApiKey(k); 
+        setApiKey={(k) => {
+          setGeminiApiKey(k);
+          saveGeminiApiKey(k);
         }}
         deepgramApiKey={deepgramApiKey}
         setDeepgramApiKey={(k) => {
@@ -916,8 +904,8 @@ function App() {
           storageProvider.updateSettings({ onboardingCompleted: true });
         }}
         apiKey={geminiApiKey}
-        setApiKey={(k) => { 
-          setGeminiApiKey(k); 
+        setApiKey={(k) => {
+          setGeminiApiKey(k);
           saveGeminiApiKey(k);
         }}
         syncApiKey={syncApiKey}
@@ -925,10 +913,10 @@ function App() {
         onComplete={() => {
           setIsOnboardingOpen(false);
           setOnboardingCompleted(true);
-          storageProvider.updateSettings({ 
+          storageProvider.updateSettings({
             onboardingCompleted: true,
             syncApiKey: syncApiKey,
-            geminiApiKey: syncApiKey ? geminiApiKey : "" 
+            geminiApiKey: syncApiKey ? geminiApiKey : ""
           });
         }}
       />
@@ -961,7 +949,7 @@ function App() {
         ttsSpeed={ttsSpeed}
       />
 
-      <StatsView 
+      <StatsView
         isOpen={isStatsOpen}
         onClose={() => setIsStatsOpen(false)}
         sessions={sessions}
@@ -998,19 +986,17 @@ function App() {
       ) : (
         <ReaderView
           words={words} currentIndex={currentIndex} effectiveTotalWords={realEndIndex || words.length}
-          realEndIndex={realEndIndex} 
+          realEndIndex={realEndIndex}
           furthestIndex={furthestIndex}
           isPlaying={isPlaying}
           setIsPlaying={handleSetIsPlaying}
           setIsHoldPaused={setIsHoldPaused}
-          wpm={Math.round(wpm / (library.find(b => b.id === currentBookId)?.settings.vanityWpmRatio || rsvpSettings.vanityWpmRatio))}
-          onWpmChange={(targetWpm) => { 
-              const currentRatio = library.find(b => b.id === currentBookId)?.settings.vanityWpmRatio || rsvpSettings.vanityWpmRatio;
-              const boosted = targetWpm * currentRatio;
-              setWpm(boosted); 
-              storageProvider.updateBookWpm(currentBookId!, boosted); 
+          wpm={wpm}
+          onWpmChange={(targetWpm) => {
+            setWpm(targetWpm);
+            storageProvider.updateBookWpm(currentBookId!, targetWpm);
           }}
-          vanityWpmRatio={library.find(b => b.id === currentBookId)?.settings.vanityWpmRatio || rsvpSettings.vanityWpmRatio}
+          vanityWpmRatio={rsvpSettings.vanityWpmRatio}
           theme={theme} fontFamily={fontFamily} bookTitle={bookTitle}
           onCloseBook={handleCloseBook} onSettingsClick={() => setIsSettingsOpen(true)}
           onBookSettingsClick={() => setIsBookSettingsOpen(true)}
@@ -1023,19 +1009,19 @@ function App() {
               return;
             }
 
-            let cIdx = -1; 
+            let cIdx = -1;
             for (let i = 0; i < sections.length; i++) {
               if (sections[i].startIndex <= currentIndex) cIdx = i; else break;
             }
-            
-            const cStart = sections[cIdx]?.startIndex || 0; 
+
+            const cStart = sections[cIdx]?.startIndex || 0;
             const cEnd = sections[cIdx + 1]?.startIndex || words.length;
-            const cWords = words.slice(cStart, cEnd); 
-            
+            const cWords = words.slice(cStart, cEnd);
+
             if (cWords.length === 0) return;
-            
+
             setIsPlaying(false);
-            
+
             audioPlayerRef.current?.playChapter(
               currentBookId!,
               cIdx,
@@ -1058,13 +1044,13 @@ function App() {
                       startTime: stats.startTime,
                       endTime: stats.endTime,
                       startWordIndex: stats.startWordIndex,
-                      endWordIndex: stats.endWordIndex, 
+                      endWordIndex: stats.endWordIndex,
                       wordsRead: Math.max(0, stats.endWordIndex - stats.startWordIndex),
                       durationSeconds: stats.durationSeconds,
                       type: 'listening'
                     }).then(async () => {
-                        await storageProvider.aggregateSessions();
-                        setSessions(await storageProvider.getAggregatedSessions());
+                      await storageProvider.aggregateSessions();
+                      setSessions(await storageProvider.getAggregatedSessions());
                     });
                   }
                 },
