@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { getIncrementalAggregationPlan, getHistoryRangeData, getBookProgressTrendData } from './stats';
-import type { ReadingSession } from './storage';
+import { getIncrementalAggregationPlan, getHistoryRangeData, getBookProgressTrendData, calculateFinishedBooks } from './stats';
+import type { ReadingSession, BookRecord } from './storage';
 
 // Mock crypto.randomUUID
 if (!global.crypto) {
@@ -245,5 +245,78 @@ describe('getBookProgressTrendData', () => {
         expect(data[1].index).toBe(100);
         expect(data[3].hasActivity).toBe(false);
         expect(data[3].index).toBe(100);
+    });
+});
+
+describe('calculateFinishedBooks', () => {
+    const bookId = 'book-1';
+
+    // Helper to create a minimal book record
+    const createBook = (totalWords: number, dateFinished?: number): BookRecord => ({
+        id: bookId,
+        archived: false,
+        meta: { title: 'Test Book', totalWords, dateFinished } as any,
+        analysis: { realEndIndex: totalWords } as any,
+        storage: { path: '' } as any,
+        progress: { wordIndex: 0, lastReadAt: Date.now() }
+    } as BookRecord);
+
+    const createSession = (endWordIndex: number, startTime: number): ReadingSession => ({
+        id: 's1',
+        bookId,
+        bookTitle: 'Test Book',
+        startTime,
+        endTime: startTime + 60000,
+        startWordIndex: 0,
+        endWordIndex,
+        wordsRead: endWordIndex,
+        durationSeconds: 60,
+        type: 'reading'
+    });
+
+    it('should return already finished books without updating', () => {
+        const book = createBook(1000, 1600000000000);
+        const { results, booksToUpdate } = calculateFinishedBooks([book], []);
+
+        expect(results).toHaveLength(1);
+        expect(results[0].date).toBe(1600000000000);
+        expect(booksToUpdate).toHaveLength(0);
+    });
+
+    it('should mark book as finished when exact 100% is reached', () => {
+        const book = createBook(1000);
+        const session = createSession(1000, Date.now());
+        const { results, booksToUpdate } = calculateFinishedBooks([book], [session]);
+
+        expect(results).toHaveLength(1);
+        expect(booksToUpdate).toHaveLength(1);
+        expect(booksToUpdate[0].id).toBe(bookId);
+    });
+
+    it('should mark book as finished when >= 99.5% is reached', () => {
+        const book = createBook(1000);
+        const session = createSession(996, Date.now()); // 99.6% > 99.5%
+        const { results, booksToUpdate } = calculateFinishedBooks([book], [session]);
+
+        expect(results).toHaveLength(1);
+        expect(booksToUpdate).toHaveLength(1);
+        expect(booksToUpdate[0].id).toBe(bookId);
+    });
+
+    it('should NOT mark book as finished when < 99.5% is reached', () => {
+        const book = createBook(1000);
+        const session = createSession(994, Date.now()); // 99.4% < 99.5%
+        const { results, booksToUpdate } = calculateFinishedBooks([book], [session]);
+
+        expect(results).toHaveLength(0);
+        expect(booksToUpdate).toHaveLength(0);
+    });
+
+    it('should return nothing when there are no sessions and book is not finished', () => {
+        const book = createBook(1000);
+        const { results, booksToUpdate } = calculateFinishedBooks([book], []);
+
+        expect(results).toHaveLength(0);
+        expect(booksToUpdate).toHaveLength(0);
     });
 });

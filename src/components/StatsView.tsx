@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { X, Clock, BookOpen, BarChart2, TrendingUp, Volume2, Library } from 'lucide-react';
 import type { ReadingSession, BookRecord } from '../utils/storage';
-import { getSessionKey } from '../utils/stats';
+import { getSessionKey, calculateFinishedBooks } from '../utils/stats';
 import { BookProgressChart } from './stats/BookProgressChart';
 import { BooksReadChart } from './stats/BooksReadChart';
 import { ReadingHistoryChart } from './stats/ReadingHistoryChart';
@@ -71,29 +71,7 @@ export function StatsView({
   const bookSessions = bookToViewId ? sessions.filter(s => s.bookId === bookToViewId) : [];
 
   // 2. Lazy identification of finished books
-  const finishedBooks = useMemo(() => {
-    const results: { id: string; date: number; title: string }[] = [];
-    const booksToUpdate: { id: string; date: number }[] = [];
-
-    for (const book of books) {
-      let date = book.meta.dateFinished;
-      if (!date) {
-        const realEnd = book.analysis.realEndIndex || (book.meta.totalWords ? book.meta.totalWords - 1 : 0);
-        if (realEnd > 0) {
-          const bookSessions = sessions.filter(s => s.bookId === book.id).sort((a, b) => a.startTime - b.startTime);
-          const finishingSession = bookSessions.find(s => s.endWordIndex >= realEnd);
-          if (finishingSession) {
-            date = finishingSession.endTime;
-            booksToUpdate.push({ id: book.id, date });
-          }
-        }
-      }
-      if (date) {
-        results.push({ id: book.id, date, title: book.meta.title });
-      }
-    }
-    return { results, booksToUpdate };
-  }, [books, sessions]);
+  const finishedBooks = useMemo(() => calculateFinishedBooks(books, sessions), [books, sessions]);
 
   useEffect(() => {
     if (finishedBooks.booksToUpdate.length > 0 && onUpdateBookFinishedDate) {
@@ -115,7 +93,13 @@ export function StatsView({
     let threshold = 0;
     if (timeRange === 'week') threshold = now - 7 * 24 * 60 * 60 * 1000;
     else if (timeRange === 'month') threshold = now - 30 * 24 * 60 * 60 * 1000;
-    else if (timeRange === 'year') threshold = now - 365 * 24 * 60 * 60 * 1000;
+    else if (timeRange === 'year') {
+      const d = new Date(now);
+      d.setDate(1);
+      d.setMonth(d.getMonth() - 11);
+      d.setHours(0, 0, 0, 0);
+      threshold = d.getTime();
+    }
     return sessions.filter(s => s.startTime >= threshold);
   }, [sessions, timeRange, now]);
 
@@ -130,7 +114,11 @@ export function StatsView({
     if (timeRange === 'ytd') {
       threshold = new Date(nowDateObj.getFullYear(), 0, 1).getTime();
     } else if (timeRange === 'pastYear') {
-      threshold = nowDateObj.getTime() - 365 * 24 * 60 * 60 * 1000;
+      const d = new Date(nowDateObj);
+      d.setDate(1);
+      d.setMonth(d.getMonth() - 11);
+      d.setHours(0, 0, 0, 0);
+      threshold = d.getTime();
       endThreshold = nowDateObj.getTime();
     } else if (timeRange === 'fiveYears') {
       threshold = nowDateObj.getTime() - 5 * 365 * 24 * 60 * 60 * 1000;
@@ -138,7 +126,13 @@ export function StatsView({
       // Fallback for history ranges if somehow active
       if (timeRange === 'week') threshold = nowDateObj.getTime() - 7 * 24 * 60 * 60 * 1000;
       else if (timeRange === 'month') threshold = nowDateObj.getTime() - 30 * 24 * 60 * 60 * 1000;
-      else if (timeRange === 'year') threshold = nowDateObj.getTime() - 365 * 24 * 60 * 60 * 1000;
+      else if (timeRange === 'year') {
+        const d = new Date(nowDateObj);
+        d.setDate(1);
+        d.setMonth(d.getMonth() - 11);
+        d.setHours(0, 0, 0, 0);
+        threshold = d.getTime();
+      }
     }
 
     return finishedBooks.results
@@ -222,7 +216,7 @@ export function StatsView({
                       onClick={() => setTimeRange(range)}
                       className={`px-6 py-2 text-xs font-semibold rounded-lg transition-all ${timeRange === range ? 'bg-white dark:bg-zinc-700 shadow-sm text-red-500' : 'opacity-50 hover:opacity-100'}`}
                     >
-                      {range.charAt(0).toUpperCase() + range.slice(1)}
+                      {range === 'year' ? 'Past Year' : range.charAt(0).toUpperCase() + range.slice(1)}
                     </button>
                   ))
                 ) : (

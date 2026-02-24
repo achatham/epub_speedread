@@ -1,4 +1,36 @@
-import type { ReadingSession } from './storage';
+import type { ReadingSession, BookRecord } from './storage';
+
+export interface FinishedBook {
+  id: string;
+  date: number;
+  title: string;
+}
+
+export function calculateFinishedBooks(books: BookRecord[], sessions: ReadingSession[]): { results: FinishedBook[]; booksToUpdate: { id: string; date: number }[] } {
+  const results: FinishedBook[] = [];
+  const booksToUpdate: { id: string; date: number }[] = [];
+
+  for (const book of books) {
+    let date = book.meta.dateFinished;
+    if (!date) {
+      const realEnd = book.analysis?.realEndIndex || (book.meta.totalWords ? book.meta.totalWords - 1 : 0);
+      if (realEnd > 0) {
+        // A book is considered finished if progress rounds to 100% (>= 99.5%)
+        const finishThreshold = realEnd * 0.995;
+        const bookSessions = sessions.filter(s => s.bookId === book.id).sort((a, b) => a.startTime - b.startTime);
+        const finishingSession = bookSessions.find(s => s.endWordIndex >= finishThreshold);
+        if (finishingSession) {
+          date = finishingSession.endTime;
+          booksToUpdate.push({ id: book.id, date });
+        }
+      }
+    }
+    if (date) {
+      results.push({ id: book.id, date, title: book.meta.title });
+    }
+  }
+  return { results, booksToUpdate };
+}
 
 export function getDayKey(startTime: number): string {
   const d = new Date(startTime);
@@ -105,13 +137,13 @@ export function getBookProgressTrendData(
   // Special case: If only one day of activity total, show the progress within that day
   const uniqueDays = new Set(Array.from(dailyMax.keys())).size;
   if (uniqueDays === 1 && firstDay.getTime() === lastDay.getTime()) {
-      const s = chrono[0];
-      const lastS = chrono[chrono.length - 1];
-      // If the session is very short, ensure we have two points for the line
-      return [
-          { index: s.startWordIndex, time: s.startTime, hasActivity: true, type: s.type },
-          { index: lastS.endWordIndex, time: lastS.endTime, hasActivity: true, type: lastS.type }
-      ];
+    const s = chrono[0];
+    const lastS = chrono[chrono.length - 1];
+    // If the session is very short, ensure we have two points for the line
+    return [
+      { index: s.startWordIndex, time: s.startTime, hasActivity: true, type: s.type },
+      { index: lastS.endWordIndex, time: lastS.endTime, hasActivity: true, type: lastS.type }
+    ];
   }
 
   const result: ProgressTrendPoint[] = [];
@@ -124,18 +156,18 @@ export function getBookProgressTrendData(
     if (session) {
       currentMaxIndex = Math.max(currentMaxIndex, session.endWordIndex);
       result.push({
-          index: currentMaxIndex,
-          time: session.endTime,
-          hasActivity: true,
-          type: session.type
+        index: currentMaxIndex,
+        time: session.endTime,
+        hasActivity: true,
+        type: session.type
       });
     } else {
       const endOfDay = new Date(d);
       endOfDay.setHours(23, 59, 59, 999);
       result.push({
-          index: currentMaxIndex,
-          time: endOfDay.getTime(),
-          hasActivity: false
+        index: currentMaxIndex,
+        time: endOfDay.getTime(),
+        hasActivity: false
       });
     }
   }

@@ -20,10 +20,13 @@ export function BooksReadChart({ now, timeRange, finishedBooks, theme }: BooksRe
         numSteps = Math.ceil((nowDateObj.getTime() - threshold) / (24 * 60 * 60 * 1000)) + 1;
         stepType = 'day';
     } else if (timeRange === 'pastYear') {
-        threshold = nowDateObj.getTime() - 365 * 24 * 60 * 60 * 1000;
+        const d = new Date(nowDateObj);
+        d.setFullYear(d.getFullYear() - 1);
+        d.setHours(0, 0, 0, 0);
+        threshold = d.getTime();
         endThreshold = nowDateObj.getTime();
-        numSteps = 12;
-        stepType = 'month';
+        numSteps = Math.ceil((nowDateObj.getTime() - threshold) / (24 * 60 * 60 * 1000)) + 1;
+        stepType = 'day';
     } else if (timeRange === 'fiveYears') {
         const fiveYearsAgo = new Date(nowDateObj);
         fiveYearsAgo.setFullYear(nowDateObj.getFullYear() - 5);
@@ -73,15 +76,7 @@ export function BooksReadChart({ now, timeRange, finishedBooks, theme }: BooksRe
         }
     } else {
         const startOfRange = new Date(threshold);
-        if (timeRange === 'pastYear') {
-            // For past year, we want 12 increments ending today.
-            // Let's start from 11 months ago, 1st of that month.
-            startOfRange.setMonth(nowDateObj.getMonth() - 11);
-            startOfRange.setDate(1);
-            numSteps = 12;
-        } else {
-            startOfRange.setDate(1);
-        }
+        startOfRange.setDate(1);
         startOfRange.setHours(0, 0, 0, 0);
         for (let i = 0; i < numSteps; i++) {
             const d = new Date(startOfRange);
