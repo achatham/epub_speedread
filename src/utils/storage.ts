@@ -429,6 +429,71 @@ export class FirestoreStorage {
     return this.getAggregatedSessions(bookId);
   }
 
+  async clearFutureSessions(bookId: string, currentIndex: number): Promise<void> {
+    if (!firestore) return;
+
+    // 1. Find ALL raw sessions for this book
+    const allSessionsQ = query(
+      this.sessionsCollection,
+      where('bookId', '==', bookId)
+    );
+    const allSessionsSnap = await getDocs(allSessionsQ);
+    const allRawSessions = allSessionsSnap.docs.map(d => d.data() as ReadingSession);
+
+    const remainingRawSessions = allRawSessions.filter(s => s.endWordIndex <= currentIndex);
+    const sessionsToDeleteRefs = allSessionsSnap.docs
+      .filter(d => (d.data() as ReadingSession).endWordIndex > currentIndex)
+      .map(d => d.ref);
+
+    // 2. Find ALL aggregated sessions for this book
+    const aggQ = query(
+      this.aggregatedSessionsCollection,
+      where('bookId', '==', bookId)
+    );
+    const aggSnap = await getDocs(aggQ);
+
+    // 3. Calculate new cumulative stats from remaining raw sessions
+    let newCumulativeWords = 0;
+    let newCumulativeDuration = 0;
+    for (const s of remainingRawSessions) {
+      newCumulativeWords += (s.wordsRead || Math.max(0, s.endWordIndex - s.startWordIndex));
+      newCumulativeDuration += s.durationSeconds;
+    }
+    // Reset calibration by setting expected equal to actual words
+    const newCumulativeExpected = newCumulativeWords;
+
+    // 4. Aggregate remaining sessions locally
+    const { createSessions } = getIncrementalAggregationPlan([], remainingRawSessions);
+
+    // 5. Run transaction to apply all changes atomically
+    await runTransaction(firestore, async (transaction) => {
+      // Delete raw sessions
+      for (const ref of sessionsToDeleteRefs) {
+        transaction.delete(ref);
+      }
+      // Delete OLD aggregated sessions
+      for (const d of aggSnap.docs) {
+        transaction.delete(d.ref);
+      }
+      // Set NEW aggregated sessions
+      for (const s of createSessions) {
+        transaction.set(doc(this.aggregatedSessionsCollection, s.id), s);
+      }
+
+      // Update book's furthestWordIndex and reset cumulative stats
+      const bookRef = doc(this.booksCollection, bookId);
+      transaction.update(bookRef, {
+        'progress.furthestWordIndex': currentIndex,
+        'progress.cumulativeWordsRead': newCumulativeWords,
+        'progress.cumulativeExpectedWords': newCumulativeExpected,
+        'progress.cumulativeDurationSeconds': newCumulativeDuration
+      });
+
+      // Note: We do NOT reset the global lastAggregationTime here.
+      // The targeted re-aggregation above handles the consistency for this book.
+    });
+  }
+
   async saveChapterAudio(bookId: string, chapterIndex: number, speed: number, chunks: AudioChunk[]): Promise<void> {
     const id = `${bookId}-${chapterIndex}-${speed}`;
     await this.fileCache.saveAudio(id, chunks);

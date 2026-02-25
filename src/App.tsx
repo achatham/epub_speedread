@@ -14,6 +14,7 @@ import { useAuth } from './hooks/useAuth';
 import { useSettings, type Theme, type FontFamily } from './hooks/useSettings';
 import { useLibrary } from './hooks/useLibrary';
 import { usePlayback } from './hooks/usePlayback';
+import { useReadingSession } from './hooks/useReadingSession';
 import type { WordData } from './utils/text-processing';
 
 function App() {
@@ -85,6 +86,7 @@ function App() {
     handleSetIsPlaying,
     navigate,
     isChapterBreak,
+    isHoldPaused,
     setIsHoldPaused
   } = usePlayback(
     words,
@@ -158,6 +160,22 @@ function App() {
     refreshSessions
   } = useLibrary(storageProvider, currentBookId, handleSelectBook);
 
+  useReadingSession(
+    storageProvider,
+    isPlaying,
+    isHoldPaused,
+    isChapterBreak,
+    currentBookId,
+    currentIndex,
+    words,
+    bookTitle,
+    rsvpSettings,
+    library,
+    setLibrary,
+    setSessions,
+    wpm
+  );
+
   const handleRecomputeRealEnd = async () => {
     if (!currentBookId || !storageProvider || !geminiApiKey) return;
     setIsRecomputingEnd(true);
@@ -176,6 +194,18 @@ function App() {
       console.error("Failed to recompute real end:", err);
     } finally {
       setIsRecomputingEnd(false);
+    }
+  };
+
+  const handleClearFutureSessions = async () => {
+    if (!currentBookId || !storageProvider) return;
+    try {
+      await storageProvider.clearFutureSessions(currentBookId, currentIndex);
+      setFurthestIndex(currentIndex);
+      await refreshSessions();
+      setLibrary(await storageProvider.getAllBooks());
+    } catch (err) {
+      console.error("Failed to clear future sessions:", err);
     }
   };
 
@@ -473,6 +503,7 @@ function App() {
         isBookSettingsOpen={isBookSettingsOpen} setIsBookSettingsOpen={setIsBookSettingsOpen}
         bookTitle={bookTitle} handleUpdateBookTitle={handleUpdateBookTitle}
         handleRecomputeRealEnd={handleRecomputeRealEnd} isRecomputingEnd={isRecomputingEnd}
+        currentIndex={currentIndex} onClearFutureSessions={handleClearFutureSessions}
       />
 
       <AuthenticatedApp

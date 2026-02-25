@@ -56,6 +56,8 @@ interface AppModalsProps {
     handleUpdateBookTitle: (bookId: string, title: string) => Promise<void>;
     handleRecomputeRealEnd: () => Promise<void>;
     isRecomputingEnd: boolean;
+    currentIndex: number;
+    onClearFutureSessions: () => Promise<void>;
 }
 
 export function AppModals({
@@ -69,7 +71,8 @@ export function AppModals({
 
     isStatsOpen, setIsStatsOpen, sessions, library, currentBookId, theme, handleUpdateBookFinishedDate,
 
-    isBookSettingsOpen, setIsBookSettingsOpen, bookTitle, handleUpdateBookTitle, handleRecomputeRealEnd, isRecomputingEnd
+    isBookSettingsOpen, setIsBookSettingsOpen, bookTitle, handleUpdateBookTitle, handleRecomputeRealEnd, isRecomputingEnd,
+    currentIndex, onClearFutureSessions
 }: AppModalsProps) {
     return (
         <>
@@ -149,6 +152,8 @@ export function AppModals({
                 onUpdateTitle={(title) => currentBookId ? handleUpdateBookTitle(currentBookId, title) : Promise.resolve()}
                 onRecomputeRealEnd={handleRecomputeRealEnd}
                 isProcessing={isRecomputingEnd}
+                currentIndex={currentIndex}
+                onClearFutureSessions={onClearFutureSessions}
             />
         </>
     );
