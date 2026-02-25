@@ -2,14 +2,16 @@
 # https://github.com/firebase/firebase-tools
 
 name: Deploy to Firebase Hosting on PR
-on: pull_request
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
 permissions:
   checks: write
   contents: read
   pull-requests: write
 jobs:
   build_and_preview:
-    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.action != 'closed' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,3 +21,20 @@ jobs:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_EPUB_SPEED_READER_82342 }}
           projectId: epub-speed-reader-82342
+
+  delete_preview:
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.action == 'closed' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_EPUB_SPEED_READER_82342 }}
+          projectId: epub-speed-reader-82342
+          channelId: pr-${{ github.event.number }}
+        continue-on-error: true # Might already be deleted or never created
+
+      - name: Delete Hosting Channel
+        run: npx firebase-tools hosting:channel:delete pr-${{ github.event.number }} --force --project epub-speed-reader-82342
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_EPUB_SPEED_READER_82342 }}
