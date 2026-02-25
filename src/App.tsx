@@ -197,6 +197,18 @@ function App() {
     }
   };
 
+  const handleClearFutureSessions = async () => {
+    if (!currentBookId || !storageProvider) return;
+    try {
+      await storageProvider.clearFutureSessions(currentBookId, currentIndex);
+      setFurthestIndex(currentIndex);
+      await refreshSessions();
+      setLibrary(await storageProvider.getAllBooks());
+    } catch (err) {
+      console.error("Failed to clear future sessions:", err);
+    }
+  };
+
 
 
   // Test Hook for Playwright
@@ -489,6 +501,7 @@ function App() {
         isBookSettingsOpen={isBookSettingsOpen} setIsBookSettingsOpen={setIsBookSettingsOpen}
         bookTitle={bookTitle} handleUpdateBookTitle={handleUpdateBookTitle}
         handleRecomputeRealEnd={handleRecomputeRealEnd} isRecomputingEnd={isRecomputingEnd}
+        currentIndex={currentIndex} onClearFutureSessions={handleClearFutureSessions}
       />
 
       <AuthenticatedApp

@@ -429,6 +429,50 @@ export class FirestoreStorage {
     return this.getAggregatedSessions(bookId);
   }
 
+  async clearFutureSessions(bookId: string, currentIndex: number): Promise<void> {
+    if (!firestore) return;
+
+    // 1. Find raw sessions to delete
+    const sessionsQ = query(
+      this.sessionsCollection,
+      where('bookId', '==', bookId),
+      where('endWordIndex', '>', currentIndex)
+    );
+    const sessionsSnap = await getDocs(sessionsQ);
+
+    // 2. Find ALL aggregated sessions for this book
+    const aggQ = query(
+      this.aggregatedSessionsCollection,
+      where('bookId', '==', bookId)
+    );
+    const aggSnap = await getDocs(aggQ);
+
+    // 3. Run transaction to delete and update
+    await runTransaction(firestore, async (transaction) => {
+      for (const d of sessionsSnap.docs) {
+        transaction.delete(d.ref);
+      }
+      for (const d of aggSnap.docs) {
+        transaction.delete(d.ref);
+      }
+
+      // Update book's furthestWordIndex and reset cumulative stats
+      const bookRef = doc(this.booksCollection, bookId);
+      transaction.update(bookRef, {
+        'progress.furthestWordIndex': currentIndex,
+        'progress.cumulativeWordsRead': 0,
+        'progress.cumulativeExpectedWords': 0,
+        'progress.cumulativeDurationSeconds': 0
+      });
+
+      // Reset lastAggregationTime to trigger full re-aggregation
+      transaction.update(this.userDocRef, { lastAggregationTime: 0 });
+    });
+
+    // 4. Trigger re-aggregation
+    await this.aggregateSessions();
+  }
+
   async saveChapterAudio(bookId: string, chapterIndex: number, speed: number, chunks: AudioChunk[]): Promise<void> {
     const id = `${bookId}-${chapterIndex}-${speed}`;
     await this.fileCache.saveAudio(id, chunks);
