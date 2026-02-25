@@ -51,6 +51,7 @@ interface AuthenticatedAppProps {
     isReadingAloud: boolean;
     isSynthesizing: boolean;
     isChapterBreak: boolean;
+    onTtsDebugClick: () => void;
 }
 
 export function AuthenticatedApp({
@@ -60,7 +61,8 @@ export function AuthenticatedApp({
     furthestIndex, isPlaying, handleSetIsPlaying, setIsHoldPaused, wpm, setWpm, storageProvider,
     rsvpSettings, fontFamily, bookTitle, handleCloseBook, setIsBookSettingsOpen, setAiResponse,
     setIsAskAiOpen, sections, setCurrentIndex, navigate, audioPlayerRef, ttsSpeed, setIsSynthesizing,
-    setIsReadingAloud, setSessions, isReadingAloud, isSynthesizing, isChapterBreak
+    setIsReadingAloud, setSessions, isReadingAloud, isSynthesizing, isChapterBreak,
+    onTtsDebugClick
 }: AuthenticatedAppProps) {
     if (!currentBookId) {
         return (
@@ -77,6 +79,7 @@ export function AuthenticatedApp({
                 onStatsClick={handleOpenStats}
                 onLoadDemoBook={handleLoadDemoBook}
                 onAboutClick={() => setShowAbout(true)}
+                onTtsDebugClick={onTtsDebugClick}
             />
         );
     }

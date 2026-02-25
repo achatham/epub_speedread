@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import type { RefObject } from 'react';
-import { BookOpen, Moon, Settings, Sun, Sunset, Trash2, Upload, DownloadCloud, BarChart2, Info, Github, Search, Archive, Inbox, X, Clock } from 'lucide-react';
+import { BookOpen, Moon, Settings, Sun, Sunset, Trash2, Upload, DownloadCloud, BarChart2, Info, Github, Search, Archive, Inbox, X, Clock, Bug } from 'lucide-react';
 import type { BookRecord } from '../utils/storage';
 
 type Theme = 'light' | 'dark' | 'bedtime';
@@ -20,6 +20,7 @@ interface LibraryViewProps {
   onStatsClick?: () => void;
   onLoadDemoBook?: () => void;
   onAboutClick?: () => void;
+  onTtsDebugClick: () => void;
 }
 
 export function LibraryView({
@@ -36,7 +37,8 @@ export function LibraryView({
   onFileInputClick,
   onStatsClick,
   onLoadDemoBook,
-  onAboutClick
+  onAboutClick,
+  onTtsDebugClick
 }: LibraryViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'active' | 'archived'>('active');
@@ -59,6 +61,15 @@ export function LibraryView({
         <header className="flex justify-between items-center mb-8">
           <h1 className="text-2xl font-light">Library</h1>
           <div className="flex gap-1 sm:gap-2">
+            {import.meta.env.DEV && (
+              <button
+                onClick={onTtsDebugClick}
+                className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors text-amber-500"
+                title="TTS Debug (Dev Mode Only)"
+              >
+                <Bug size={22} />
+              </button>
+            )}
             <button
               onClick={onAboutClick}
               className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"

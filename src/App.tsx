@@ -6,6 +6,7 @@ import { AudioBookPlayer } from './utils/AudioBookPlayer';
 import { AuthenticatedApp } from './components/AuthenticatedApp';
 import { AboutView, AboutContent } from './components/AboutView';
 import { ConsoleLogger } from './components/ConsoleLogger';
+import { TtsDebug } from './components/TtsDebug';
 import { AppModals } from './components/AppModals';
 import { LogIn, BookOpen } from 'lucide-react';
 import { summarizeWhatJustHappened, summarizeRecent, askAboutBook } from './utils/gemini';
@@ -38,6 +39,7 @@ function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAskAiOpen, setIsAskAiOpen] = useState(false);
   const [isStatsOpen, setIsStatsOpen] = useState(false);
+  const [isTtsDebugOpen, setIsTtsDebugOpen] = useState(false);
 
   const [realEndIndex, setRealEndIndex] = useState<number | null>(null);
   const [furthestIndex, setFurthestIndex] = useState<number | null>(null);
@@ -519,6 +521,13 @@ function App() {
         sections={sections} setCurrentIndex={setCurrentIndex} navigate={navigate} audioPlayerRef={audioPlayerRef}
         ttsSpeed={ttsSpeed} setIsSynthesizing={setIsSynthesizing} setIsReadingAloud={setIsReadingAloud}
         setSessions={setSessions} isReadingAloud={isReadingAloud} isSynthesizing={isSynthesizing} isChapterBreak={isChapterBreak}
+        onTtsDebugClick={() => setIsTtsDebugOpen(true)}
+      />
+
+      <TtsDebug
+        isOpen={isTtsDebugOpen}
+        onClose={() => setIsTtsDebugOpen(false)}
+        defaultSpeed={ttsSpeed}
       />
 
       <ConsoleLogger />

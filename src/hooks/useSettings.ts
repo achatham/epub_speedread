@@ -11,9 +11,9 @@ export function useSettings(storageProvider: FirestoreStorage | null, onboarding
     const [ttsSpeed, setTtsSpeed] = useState(() => {
         try {
             const saved = localStorage.getItem('user_settings');
-            if (saved) return JSON.parse(saved).ttsSpeed || 2.0;
+            if (saved) return JSON.parse(saved).ttsSpeed || 1.0;
         } catch { }
-        return 2.0;
+        return 1.0;
     });
 
     const [geminiApiKey, setGeminiApiKey] = useState(() => {

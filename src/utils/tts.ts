@@ -43,7 +43,7 @@ export async function synthesizeChapterAudio(wordsOrText: WordData[] | string, _
     for (let i = 0; i < chunks.length; i++) {
         if (controller.state.isStopped) break;
         const chunk = chunks[i];
-        const audio = await fetchDeepgramAudio(apiKey, chunk.text, i, controller);
+        const audio = await fetchDeepgramAudio(apiKey, chunk.text, i, controller, _speed);
         if (audio) {
             results.push({
                 audio,
@@ -62,7 +62,7 @@ async function getAudioContext(): Promise<AudioContext | null> {
         console.error("Web Audio API not supported");
         return null;
     }
-    const ctx = new AudioContextClass({ sampleRate: 48000 }); // Deepgram Aura uses 48kHz by default
+    const ctx = new AudioContextClass(); // Let browser choose natural sample rate
     if (ctx.state === 'suspended') {
         await ctx.resume();
     }
@@ -86,7 +86,7 @@ function createAudioController(audioCtx: AudioContext): AudioController & { stat
     };
 }
 
-async function fetchDeepgramAudio(apiKey: string, text: string, index: number, controller: any): Promise<ArrayBuffer | null> {
+async function fetchDeepgramAudio(apiKey: string, text: string, index: number, controller: any, speed: number = 1.0): Promise<ArrayBuffer | null> {
     if (controller.state.isStopped) return null;
 
     let cleanText = text
@@ -102,9 +102,11 @@ async function fetchDeepgramAudio(apiKey: string, text: string, index: number, c
         cleanText = cleanText.substring(0, 2000);
     }
 
-    const startTime = performance.now();
+    const deepgramSpeed = Math.min(speed, 1.5);
+    const url = `https://api.deepgram.com/v1/speak?model=aura-2-asteria-en&speed=${deepgramSpeed}`;
+
     try {
-        const response = await fetch("https://api.deepgram.com/v1/speak?model=aura-asteria-en", {
+        const response = await fetch(url, {
             method: "POST",
             headers: {
                 "Authorization": `Token ${apiKey}`,
@@ -121,7 +123,6 @@ async function fetchDeepgramAudio(apiKey: string, text: string, index: number, c
         if (controller.state.isStopped) return null;
 
         const buffer = await response.arrayBuffer();
-        console.log(`Chunk ${index} fetched from Deepgram in ${(performance.now() - startTime).toFixed(0)}ms, size: ${buffer.byteLength}`);
         return buffer;
     } catch (e) {
         console.error(`Error fetching Deepgram audio for chunk ${index}`, e);
@@ -141,11 +142,16 @@ async function processChunks(fullText: string, apiKey: string, audioCtx: AudioCo
 
         try {
             const chunk = chunks[i];
-            const audioData = await fetchDeepgramAudio(apiKey, chunk.text, i, controller);
+            const audioData = await fetchDeepgramAudio(apiKey, chunk.text, i, controller, speed);
 
             if (controller.state.isStopped) break;
             if (audioData) {
                 if (audioCtx.state === 'suspended') await audioCtx.resume();
+
+                // Decode
+                const audioBuffer = await decodeAudioData(audioCtx, audioData);
+
+                if (controller.state.isStopped) break;
 
                 if (controller.state.nextStartTime < audioCtx.currentTime) {
                     controller.state.nextStartTime = audioCtx.currentTime;
@@ -155,17 +161,20 @@ async function processChunks(fullText: string, apiKey: string, audioCtx: AudioCo
                     const delay = (controller.state.nextStartTime - audioCtx.currentTime) * 1000;
                     setTimeout(() => {
                         if (!controller.state.isStopped) {
-                            controller.onChunkStarted!({ 
-                                startIndex: chunk.startIndex, 
-                                wordCount: chunk.wordCount 
+                            controller.onChunkStarted!({
+                                startIndex: chunk.startIndex,
+                                wordCount: chunk.wordCount
                             });
                         }
                     }, Math.max(0, delay));
                 }
 
-                const duration = await playEncodedChunk(audioCtx, audioData, controller.state.nextStartTime, speed);
+                const duration = playDecodedChunk(audioCtx, audioBuffer, controller.state.nextStartTime, speed);
                 controller.state.nextStartTime += duration;
                 controller.state.hasStarted = true;
+
+                // Thread break
+                if (i % 2 === 0) await new Promise(resolve => setTimeout(resolve, 0));
             }
         } catch (e) {
             console.error(`Error processing chunk ${i}`, e);
@@ -191,12 +200,25 @@ async function processChunks(fullText: string, apiKey: string, audioCtx: AudioCo
     }, 200);
 }
 
-export async function playEncodedChunk(audioCtx: AudioContext, audioData: ArrayBuffer, startTime: number, speed: number = 1.0): Promise<number> {
-    const audioBuffer = await audioCtx.decodeAudioData(audioData);
+export async function decodeAudioData(audioCtx: AudioContext, audioData: ArrayBuffer): Promise<AudioBuffer> {
+    return await audioCtx.decodeAudioData(audioData);
+}
+
+export function playDecodedChunk(audioCtx: AudioContext, audioBuffer: AudioBuffer, startTime: number, speed: number = 1.0): number {
     const source = audioCtx.createBufferSource();
     source.buffer = audioBuffer;
-    source.playbackRate.value = speed;
+
+    // If speed > 1.5, we use local resampling for the remaining speedup
+    // Deepgram handled up to 1.5x
+    const localResamplingRate = speed > 1.5 ? speed / 1.5 : 1.0;
+    source.playbackRate.value = localResamplingRate;
+
     source.connect(audioCtx.destination);
     source.start(startTime);
-    return audioBuffer.duration / speed;
+    return audioBuffer.duration / localResamplingRate;
+}
+
+export async function playEncodedChunk(audioCtx: AudioContext, audioData: ArrayBuffer, startTime: number, speed: number = 1.0): Promise<number> {
+    const audioBuffer = await decodeAudioData(audioCtx, audioData);
+    return playDecodedChunk(audioCtx, audioBuffer, startTime, speed);
 }
