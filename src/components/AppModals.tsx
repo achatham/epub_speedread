@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Theme, FontFamily } from '../hooks/useSettings';
-import type { RsvpSettings } from '../utils/storage';
+import type { RsvpSettings, IllustrationRecord } from '../utils/storage';
 import { SettingsModal } from './SettingsModal';
 import { OnboardingModal } from './OnboardingModal';
 import { AiModal } from './AiModal';
@@ -44,9 +44,12 @@ interface AppModalsProps {
     handleAskAi: (qOverride?: string) => void;
     isAiLoading: boolean;
     illustrationPrompt: string;
+    setIllustrationPrompt: (prompt: string) => void;
     illustrationImage: string | null;
+    setIllustrationImage: (image: string | null) => void;
     isIllustrationLoading: boolean;
     handleGenerateIllustration: (description: string) => void;
+    illustrations: IllustrationRecord[];
 
     isStatsOpen: boolean;
     setIsStatsOpen: (open: boolean) => void;
@@ -74,7 +77,8 @@ export function AppModals({
     isOnboardingOpen, setIsOnboardingOpen, storageProvider, setOnboardingCompleted, saveGeminiApiKey,
 
     isAskAiOpen, setIsAskAiOpen, aiTab, setAiTab, aiResponse, aiQuestion, setAiQuestion, handleAskAi, isAiLoading,
-    illustrationPrompt, illustrationImage, isIllustrationLoading, handleGenerateIllustration,
+    illustrationPrompt, setIllustrationPrompt, illustrationImage, setIllustrationImage,
+    isIllustrationLoading, handleGenerateIllustration, illustrations,
 
     isStatsOpen, setIsStatsOpen, sessions, library, currentBookId, theme, handleUpdateBookFinishedDate,
 
@@ -142,9 +146,12 @@ export function AppModals({
                 handleAskAi={handleAskAi}
                 isAiLoading={isAiLoading}
                 illustrationPrompt={illustrationPrompt}
+                setIllustrationPrompt={setIllustrationPrompt}
                 illustrationImage={illustrationImage}
+                setIllustrationImage={setIllustrationImage}
                 isIllustrationLoading={isIllustrationLoading}
                 handleGenerateIllustration={handleGenerateIllustration}
+                illustrations={illustrations}
                 ttsSpeed={ttsSpeed}
             />
 

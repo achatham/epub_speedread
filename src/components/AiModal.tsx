@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import { useState, useRef, useEffect } from 'react';
 import { synthesizeSpeech, type AudioController } from '../utils/tts';
 import { AI_QUESTIONS } from '../constants';
+import type { IllustrationRecord } from '../utils/storage';
 
 interface AiModalProps {
   isOpen: boolean;
@@ -15,9 +16,12 @@ interface AiModalProps {
   handleAskAi: (q?: string) => void;
   isAiLoading: boolean;
   illustrationPrompt: string;
+  setIllustrationPrompt: (prompt: string) => void;
   illustrationImage: string | null;
+  setIllustrationImage: (image: string | null) => void;
   isIllustrationLoading: boolean;
   handleGenerateIllustration: (description: string) => void;
+  illustrations: IllustrationRecord[];
   ttsSpeed: number;
 }
 
@@ -46,9 +50,12 @@ export function AiModal({
   handleAskAi,
   isAiLoading,
   illustrationPrompt,
+  setIllustrationPrompt,
   illustrationImage,
+  setIllustrationImage,
   isIllustrationLoading,
   handleGenerateIllustration,
+  illustrations,
   ttsSpeed
 }: AiModalProps) {
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
@@ -96,7 +103,7 @@ export function AiModal({
   const handleDownloadImage = () => {
     if (!illustrationImage) return;
     const link = document.createElement('a');
-    link.href = `data:image/png;base64,${illustrationImage}`;
+    link.href = illustrationImage.startsWith('http') ? illustrationImage : `data:image/png;base64,${illustrationImage}`;
     link.download = `illustration-${Date.now()}.png`;
     link.click();
   };
@@ -175,7 +182,7 @@ export function AiModal({
                     <div className="flex flex-col items-center gap-4 w-full h-full justify-center">
                         <div className="relative group max-w-full">
                             <img
-                                src={`data:image/png;base64,${illustrationImage}`}
+                                src={illustrationImage.startsWith('http') ? illustrationImage : `data:image/png;base64,${illustrationImage}`}
                                 alt="Generated illustration"
                                 className="rounded-lg shadow-lg max-h-[400px] object-contain border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900"
                             />
@@ -193,10 +200,10 @@ export function AiModal({
                             </p>
                         )}
                         <button
-                            onClick={() => handleGenerateIllustration(aiQuestion)}
+                            onClick={() => setIllustrationImage(null)}
                             className="text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 underline"
                         >
-                            Regenerate
+                            Back to Gallery
                         </button>
                     </div>
                 ) : isIllustrationLoading ? (
@@ -221,27 +228,56 @@ export function AiModal({
                         </div>
                     </div>
                 ) : (
-                    <>
-                        <ImageIcon size={48} className="mb-4 opacity-30" />
-                        <p className="mb-6 opacity-50">Generate an illustration based on the story so far.</p>
+                    <div className="w-full space-y-6">
+                        {illustrations.length > 0 && (
+                            <div className="space-y-3">
+                                <h3 className="text-xs font-semibold uppercase tracking-wider opacity-40 text-left px-1">Gallery</h3>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 w-full">
+                                {illustrations.map(ill => (
+                                    <button
+                                        key={ill.id}
+                                        onClick={() => {
+                                            setIllustrationImage(ill.url);
+                                            setIllustrationPrompt(ill.prompt);
+                                        }}
+                                        className="relative aspect-square rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-700 hover:scale-[1.02] transition-transform group shadow-sm"
+                                    >
+                                        <img src={ill.url} alt={ill.prompt} className="w-full h-full object-cover" />
+                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2">
+                                            <p className="text-[10px] text-white line-clamp-2 text-left italic">
+                                                {ill.prompt}
+                                            </p>
+                                        </div>
+                                    </button>
+                                ))}
+                                </div>
+                            </div>
+                        )}
 
-                        <div className="flex flex-wrap gap-2 justify-center max-w-lg mb-4">
-                        {CANNED_ILLUSTRATIONS.map(q => (
-                            <button
-                                key={q}
-                                onClick={() => {
-                                    setAiQuestion(q);
-                                    handleGenerateIllustration(q);
-                                }}
-                                className="text-xs bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 px-3 py-1.5 rounded-full transition-colors border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400"
-                            >
-                                {q}
-                            </button>
-                        ))}
+                        <div className="flex flex-col items-center">
+                            {illustrations.length === 0 && <ImageIcon size={48} className="mb-4 opacity-30" />}
+                            <p className="mb-4 text-sm opacity-50">
+                                {illustrations.length === 0 ? 'Generate an illustration based on the story so far.' : 'Need inspiration? Try one of these:'}
+                            </p>
+
+                            <div className="flex flex-wrap gap-2 justify-center max-w-lg mb-4">
+                            {CANNED_ILLUSTRATIONS.map(q => (
+                                <button
+                                    key={q}
+                                    onClick={() => {
+                                        setAiQuestion(q);
+                                        handleGenerateIllustration(q);
+                                    }}
+                                    className="text-xs bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 px-3 py-1.5 rounded-full transition-colors border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400"
+                                >
+                                    {q}
+                                </button>
+                            ))}
+                            </div>
+
+                            {illustrations.length === 0 && <p className="text-xs opacity-30">Gemini will generate an image using your context.</p>}
                         </div>
-
-                        <p className="text-xs opacity-30">Gemini will generate an image using your context.</p>
-                    </>
+                    </div>
                 )}
             </div>
           )}

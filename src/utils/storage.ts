@@ -62,6 +62,14 @@ export interface BookRecord {
   };
 }
 
+export interface IllustrationRecord {
+  id: string;
+  prompt: string;
+  url: string;
+  createdAt: number;
+  wordIndex: number;
+}
+
 export interface ReadingSession {
   id: string;
   bookId: string;
@@ -382,6 +390,40 @@ export class FirestoreStorage {
 
   async updateBookTitle(id: string, title: string): Promise<void> {
     await updateDoc(doc(this.booksCollection, id), { 'meta.title': title });
+  }
+
+  async addIllustration(bookId: string, prompt: string, base64: string, wordIndex: number): Promise<IllustrationRecord> {
+    const id = crypto.randomUUID();
+    const now = Date.now();
+
+    let url = "";
+    if (firebaseStorage) {
+        const storageRef = ref(firebaseStorage, `users/${this.userId}/books/${bookId}/illustrations/${id}.png`);
+        const response = await fetch(`data:image/png;base64,${base64}`);
+        const blob = await response.blob();
+        await uploadBytes(storageRef, blob);
+        url = await getDownloadURL(storageRef);
+    }
+
+    const illustration: IllustrationRecord = {
+        id,
+        prompt,
+        url,
+        createdAt: now,
+        wordIndex
+    };
+
+    const illustrationsColl = collection(this.booksCollection, bookId, 'illustrations');
+    await setDoc(doc(illustrationsColl, id), illustration);
+
+    return illustration;
+  }
+
+  async getIllustrations(bookId: string): Promise<IllustrationRecord[]> {
+    const illustrationsColl = collection(this.booksCollection, bookId, 'illustrations');
+    const q = query(illustrationsColl, orderBy('createdAt', 'desc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(d => d.data() as IllustrationRecord);
   }
 
   async logReadingSession(sessionData: Omit<ReadingSession, 'id'>): Promise<void> {
