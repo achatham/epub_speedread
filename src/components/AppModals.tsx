@@ -50,6 +50,13 @@ interface AppModalsProps {
     isIllustrationLoading: boolean;
     handleGenerateIllustration: (description: string) => void;
     illustrations: IllustrationRecord[];
+    illustrationSuggestions: string[];
+    setIllustrationSuggestions: React.Dispatch<React.SetStateAction<string[]>>;
+    selectedSuggestions: string[];
+    setSelectedSuggestions: React.Dispatch<React.SetStateAction<string[]>>;
+    isSuggesting: boolean;
+    handleSuggestIllustrations: () => void;
+    handleGenerateMultipleIllustrations: () => void;
 
     isStatsOpen: boolean;
     setIsStatsOpen: (open: boolean) => void;
@@ -79,6 +86,8 @@ export function AppModals({
     isAskAiOpen, setIsAskAiOpen, aiTab, setAiTab, aiResponse, aiQuestion, setAiQuestion, handleAskAi, isAiLoading,
     illustrationPrompt, setIllustrationPrompt, illustrationImage, setIllustrationImage,
     isIllustrationLoading, handleGenerateIllustration, illustrations,
+    illustrationSuggestions, setIllustrationSuggestions, selectedSuggestions, setSelectedSuggestions, isSuggesting,
+    handleSuggestIllustrations, handleGenerateMultipleIllustrations,
 
     isStatsOpen, setIsStatsOpen, sessions, library, currentBookId, theme, handleUpdateBookFinishedDate,
 
@@ -152,6 +161,13 @@ export function AppModals({
                 isIllustrationLoading={isIllustrationLoading}
                 handleGenerateIllustration={handleGenerateIllustration}
                 illustrations={illustrations}
+                illustrationSuggestions={illustrationSuggestions}
+                setIllustrationSuggestions={setIllustrationSuggestions}
+                selectedSuggestions={selectedSuggestions}
+                setSelectedSuggestions={setSelectedSuggestions}
+                isSuggesting={isSuggesting}
+                handleSuggestIllustrations={handleSuggestIllustrations}
+                handleGenerateMultipleIllustrations={handleGenerateMultipleIllustrations}
                 ttsSpeed={ttsSpeed}
             />
 

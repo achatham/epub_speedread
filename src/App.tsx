@@ -9,7 +9,7 @@ import { ConsoleLogger } from './components/ConsoleLogger';
 import { TtsDebug } from './components/TtsDebug';
 import { AppModals } from './components/AppModals';
 import { LogIn, BookOpen } from 'lucide-react';
-import { summarizeWhatJustHappened, summarizeRecent, askAboutBook, generateIllustrationPrompt, generateIllustration } from './utils/gemini';
+import { summarizeWhatJustHappened, summarizeRecent, askAboutBook, generateIllustrationPrompt, generateIllustration, suggestIllustrations } from './utils/gemini';
 import { useDeviceLogic } from './hooks/useDeviceLogic';
 import { useAuth } from './hooks/useAuth';
 import { useSettings, type Theme, type FontFamily } from './hooks/useSettings';
@@ -51,6 +51,9 @@ function App() {
   const [illustrationPrompt, setIllustrationPrompt] = useState('');
   const [illustrationImage, setIllustrationImage] = useState<string | null>(null);
   const [isIllustrationLoading, setIsIllustrationLoading] = useState(false);
+  const [illustrationSuggestions, setIllustrationSuggestions] = useState<string[]>([]);
+  const [selectedSuggestions, setSelectedSuggestions] = useState<string[]>([]);
+  const [isSuggesting, setIsSuggesting] = useState(false);
   const [isReadingAloud, setIsReadingAloud] = useState(false);
   const [isSynthesizing, setIsSynthesizing] = useState(false);
 
@@ -135,6 +138,20 @@ function App() {
     } catch { setAiResponse('Error'); } finally { setIsAiLoading(false); }
   };
 
+  const performIllustrationGeneration = async (description: string) => {
+    const context = words.slice(0, currentIndex + 1).map(w => w.text).join(' ');
+    const prompt = await generateIllustrationPrompt(description, context);
+    setIllustrationPrompt(prompt);
+
+    const base64Image = await generateIllustration(prompt);
+    setIllustrationImage(base64Image);
+
+    if (currentBookId && storageProvider) {
+      const record = await storageProvider.addIllustration(currentBookId, prompt, base64Image, currentIndex);
+      setIllustrations(prev => [record, ...prev]);
+    }
+  };
+
   const handleGenerateIllustration = async (description: string) => {
     if (!description.trim() || isIllustrationLoading) return;
     setIsIllustrationLoading(true);
@@ -142,21 +159,47 @@ function App() {
     setIllustrationImage(null);
 
     try {
-      const context = words.slice(0, currentIndex + 1).map(w => w.text).join(' ');
-
-      const prompt = await generateIllustrationPrompt(description, context);
-      setIllustrationPrompt(prompt);
-
-      const base64Image = await generateIllustration(prompt);
-      setIllustrationImage(base64Image);
-
-      if (currentBookId && storageProvider) {
-          const record = await storageProvider.addIllustration(currentBookId, prompt, base64Image, currentIndex);
-          setIllustrations(prev => [record, ...prev]);
-      }
+      await performIllustrationGeneration(description);
     } catch (err) {
       console.error("Illustration generation failed:", err);
       setIllustrationPrompt("Error generating illustration.");
+    } finally {
+      setIsIllustrationLoading(false);
+    }
+  };
+
+  const handleSuggestIllustrations = async () => {
+    if (isSuggesting) return;
+    setIsSuggesting(true);
+    setIllustrationSuggestions([]);
+    setSelectedSuggestions([]);
+    try {
+      const context = words.slice(0, currentIndex + 1).map(w => w.text).join(' ');
+      const suggestions = await suggestIllustrations(context, illustrations.map(i => i.prompt));
+      setIllustrationSuggestions(suggestions);
+      setSelectedSuggestions(suggestions);
+    } catch (err) {
+      console.error("Failed to suggest illustrations:", err);
+    } finally {
+      setIsSuggesting(false);
+    }
+  };
+
+  const handleGenerateMultipleIllustrations = async () => {
+    if (selectedSuggestions.length === 0 || isIllustrationLoading) return;
+    const toGenerate = [...selectedSuggestions];
+    setIllustrationSuggestions([]);
+    setSelectedSuggestions([]);
+
+    setIsIllustrationLoading(true);
+    try {
+      for (const suggestion of toGenerate) {
+        setIllustrationPrompt('');
+        setIllustrationImage(null);
+        await performIllustrationGeneration(suggestion);
+      }
+    } catch (err) {
+      console.error("Multiple illustration generation failed:", err);
     } finally {
       setIsIllustrationLoading(false);
     }
@@ -540,6 +583,13 @@ function App() {
         isIllustrationLoading={isIllustrationLoading}
         handleGenerateIllustration={handleGenerateIllustration}
         illustrations={illustrations}
+        illustrationSuggestions={illustrationSuggestions}
+        setIllustrationSuggestions={setIllustrationSuggestions}
+        selectedSuggestions={selectedSuggestions}
+        setSelectedSuggestions={setSelectedSuggestions}
+        isSuggesting={isSuggesting}
+        handleSuggestIllustrations={handleSuggestIllustrations}
+        handleGenerateMultipleIllustrations={handleGenerateMultipleIllustrations}
 
         isStatsOpen={isStatsOpen} setIsStatsOpen={setIsStatsOpen}
         sessions={sessions} library={library} currentBookId={currentBookId}
