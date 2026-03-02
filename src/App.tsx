@@ -175,7 +175,7 @@ function App() {
     setSelectedSuggestions([]);
     try {
       const context = words.slice(0, currentIndex + 1).map(w => w.text).join(' ');
-      const suggestions = await suggestIllustrations(context);
+      const suggestions = await suggestIllustrations(context, illustrations.map(i => i.prompt));
       setIllustrationSuggestions(suggestions);
       setSelectedSuggestions(suggestions);
     } catch (err) {

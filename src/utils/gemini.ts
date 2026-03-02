@@ -160,7 +160,7 @@ ${context}`;
   }
 }
 
-export async function suggestIllustrations(context: string): Promise<string[]> {
+export async function suggestIllustrations(context: string, existingPrompts: string[] = []): Promise<string[]> {
   const apiKey = getGeminiApiKey();
   if (!apiKey) throw new Error("API Key not found.");
 
@@ -172,6 +172,9 @@ export async function suggestIllustrations(context: string): Promise<string[]> {
 
   const prompt = `Based on the following book excerpt, suggest 3-5 distinct and visually interesting scenes, characters, or objects that would be worth illustrating.
 Focus on things that have been described in detail or are important to the current atmosphere.
+Do NOT suggest things that are already covered by these existing illustration descriptions:
+${existingPrompts.map(p => `- ${p}`).join('\n')}
+
 Return the suggestions as a JSON array of strings, where each string is a brief description (1 sentence) of the suggestion.
 
 Context:
