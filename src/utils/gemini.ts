@@ -160,6 +160,44 @@ ${context}`;
   }
 }
 
+export async function suggestIllustrations(context: string): Promise<string[]> {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) throw new Error("API Key not found.");
+
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({
+    model: "gemini-3-flash-preview",
+    generationConfig: { responseMimeType: "application/json" }
+  });
+
+  const prompt = `Based on the following book excerpt, suggest 3-5 distinct and visually interesting scenes, characters, or objects that would be worth illustrating.
+Focus on things that have been described in detail or are important to the current atmosphere.
+Return the suggestions as a JSON array of strings, where each string is a brief description (1 sentence) of the suggestion.
+
+Context:
+${context}
+
+JSON response (array of strings):`;
+
+  try {
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+
+    if (response.usageMetadata) {
+      const cost = calculateCost("gemini-3-flash-preview",
+        response.usageMetadata.promptTokenCount,
+        response.usageMetadata.candidatesTokenCount);
+      console.log(`Gemini Cost (Suggest Illustrations): $${cost.toFixed(6)}`);
+    }
+
+    const suggestions = JSON.parse(response.text());
+    return Array.isArray(suggestions) ? suggestions : [];
+  } catch (error: unknown) {
+    console.error("Error suggesting illustrations:", error);
+    throw error;
+  }
+}
+
 export async function generateIllustration(prompt: string): Promise<string> {
   const apiKey = getGeminiApiKey();
   if (!apiKey) throw new Error("API Key not found.");

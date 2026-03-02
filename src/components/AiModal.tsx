@@ -1,4 +1,4 @@
-import { Bot, Sparkles, X, Volume2, Square, Image as ImageIcon, MessageSquare, Download, Loader2 } from 'lucide-react';
+import { Bot, Sparkles, X, Volume2, Square, Image as ImageIcon, MessageSquare, Download, Loader2, ListChecks, CheckSquare } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { useState, useRef, useEffect } from 'react';
 import { synthesizeSpeech, type AudioController } from '../utils/tts';
@@ -22,6 +22,13 @@ interface AiModalProps {
   isIllustrationLoading: boolean;
   handleGenerateIllustration: (description: string) => void;
   illustrations: IllustrationRecord[];
+  illustrationSuggestions: string[];
+  setIllustrationSuggestions: React.Dispatch<React.SetStateAction<string[]>>;
+  selectedSuggestions: string[];
+  setSelectedSuggestions: React.Dispatch<React.SetStateAction<string[]>>;
+  isSuggesting: boolean;
+  handleSuggestIllustrations: () => void;
+  handleGenerateMultipleIllustrations: () => void;
   ttsSpeed: number;
 }
 
@@ -56,6 +63,13 @@ export function AiModal({
   isIllustrationLoading,
   handleGenerateIllustration,
   illustrations,
+  illustrationSuggestions,
+  setIllustrationSuggestions,
+  selectedSuggestions,
+  setSelectedSuggestions,
+  isSuggesting,
+  handleSuggestIllustrations,
+  handleGenerateMultipleIllustrations,
   ttsSpeed
 }: AiModalProps) {
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
@@ -254,28 +268,96 @@ export function AiModal({
                             </div>
                         )}
 
-                        <div className="flex flex-col items-center">
-                            {illustrations.length === 0 && <ImageIcon size={48} className="mb-4 opacity-30" />}
-                            <p className="mb-4 text-sm opacity-50">
-                                {illustrations.length === 0 ? 'Generate an illustration based on the story so far.' : 'Need inspiration? Try one of these:'}
-                            </p>
+                        <div className="flex flex-col items-center w-full">
+                            {illustrations.length === 0 && !illustrationSuggestions.length && <ImageIcon size={48} className="mb-4 opacity-30" />}
 
-                            <div className="flex flex-wrap gap-2 justify-center max-w-lg mb-4">
-                            {CANNED_ILLUSTRATIONS.map(q => (
-                                <button
-                                    key={q}
-                                    onClick={() => {
-                                        setAiQuestion(q);
-                                        handleGenerateIllustration(q);
-                                    }}
-                                    className="text-xs bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 px-3 py-1.5 rounded-full transition-colors border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400"
-                                >
-                                    {q}
-                                </button>
-                            ))}
-                            </div>
+                            {illustrationSuggestions.length > 0 ? (
+                                <div className="w-full space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <h3 className="text-xs font-semibold uppercase tracking-wider opacity-40 text-left px-1">Suggested Illustrations</h3>
+                                        <button
+                                            onClick={() => setSelectedSuggestions(selectedSuggestions.length === illustrationSuggestions.length ? [] : [...illustrationSuggestions])}
+                                            className="text-[10px] text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 underline"
+                                        >
+                                            {selectedSuggestions.length === illustrationSuggestions.length ? 'Deselect All' : 'Select All'}
+                                        </button>
+                                    </div>
+                                    <div className="space-y-2 text-left">
+                                        {illustrationSuggestions.map(s => (
+                                            <button
+                                                key={s}
+                                                onClick={() => setSelectedSuggestions(prev => prev.includes(s) ? prev.filter(i => i !== s) : [...prev, s])}
+                                                className="flex items-start gap-3 w-full p-3 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors group"
+                                            >
+                                                <div className="mt-0.5 text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-200">
+                                                    {selectedSuggestions.includes(s) ? <CheckSquare size={16} className="text-zinc-900 dark:text-zinc-100" /> : <Square size={16} />}
+                                                </div>
+                                                <span className="text-sm leading-tight">{s}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <button
+                                        onClick={handleGenerateMultipleIllustrations}
+                                        disabled={selectedSuggestions.length === 0 || isIllustrationLoading}
+                                        className="w-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 py-3 rounded-lg font-medium disabled:opacity-50 hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
+                                    >
+                                        <Sparkles size={18} />
+                                        Generate {selectedSuggestions.length} Illustration{selectedSuggestions.length !== 1 ? 's' : ''}
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setSelectedSuggestions([]);
+                                            setIllustrationSuggestions([]);
+                                        }}
+                                        className="text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            ) : (
+                                <>
+                                    <p className="mb-4 text-sm opacity-50">
+                                        {illustrations.length === 0 ? 'Generate an illustration based on the story so far.' : 'Need inspiration? Try one of these:'}
+                                    </p>
 
-                            {illustrations.length === 0 && <p className="text-xs opacity-30">Gemini will generate an image using your context.</p>}
+                                    <div className="flex flex-wrap gap-2 justify-center max-w-lg mb-6">
+                                        {CANNED_ILLUSTRATIONS.map(q => (
+                                            <button
+                                                key={q}
+                                                onClick={() => {
+                                                    setAiQuestion(q);
+                                                    handleGenerateIllustration(q);
+                                                }}
+                                                className="text-xs bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 px-3 py-1.5 rounded-full transition-colors border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400"
+                                            >
+                                                {q}
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    <button
+                                        onClick={handleSuggestIllustrations}
+                                        disabled={isSuggesting || isIllustrationLoading}
+                                        className="flex items-center gap-2 text-sm bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 px-4 py-2 rounded-lg font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+                                    >
+                                        {isSuggesting ? (
+                                            <>
+                                                <Loader2 size={18} className="animate-spin" />
+                                                Suggesting...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <ListChecks size={18} />
+                                                Suggest Illustrations
+                                            </>
+                                        )}
+                                    </button>
+
+                                    {illustrations.length === 0 && !isSuggesting && (
+                                        <p className="mt-4 text-xs opacity-30">Gemini will generate an image using your context.</p>
+                                    )}
+                                </>
+                            )}
                         </div>
                     </div>
                 )}
