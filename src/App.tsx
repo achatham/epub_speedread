@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 
-import { type BookRecord } from './utils/storage';
+import { type BookRecord, type IllustrationRecord } from './utils/storage';
 import { processBook, analyzeRealEndOfBook } from './utils/ebook';
 import { AudioBookPlayer } from './utils/AudioBookPlayer';
 import { AuthenticatedApp } from './components/AuthenticatedApp';
@@ -43,6 +43,7 @@ function App() {
 
   const [realEndIndex, setRealEndIndex] = useState<number | null>(null);
   const [furthestIndex, setFurthestIndex] = useState<number | null>(null);
+  const [illustrations, setIllustrations] = useState<IllustrationRecord[]>([]);
   const [aiTab, setAiTab] = useState<'ask' | 'illustrate'>('ask');
   const [aiQuestion, setAiQuestion] = useState('');
   const [aiResponse, setAiResponse] = useState('');
@@ -148,6 +149,11 @@ function App() {
 
       const base64Image = await generateIllustration(prompt);
       setIllustrationImage(base64Image);
+
+      if (currentBookId && storageProvider) {
+          const record = await storageProvider.addIllustration(currentBookId, prompt, base64Image, currentIndex);
+          setIllustrations(prev => [record, ...prev]);
+      }
     } catch (err) {
       console.error("Illustration generation failed:", err);
       setIllustrationPrompt("Error generating illustration.");
@@ -388,6 +394,9 @@ function App() {
     try {
       const result = await processBook(bookRecord, storageProvider);
 
+      const illusts = await storageProvider.getIllustrations(bookRecord.id);
+      setIllustrations(illusts);
+
       lastLoadedBookIdRef.current = bookRecord.id;
       setBookTitle(result.title);
       setWords(result.words);
@@ -525,9 +534,12 @@ function App() {
         setAiQuestion={setAiQuestion} handleAskAi={handleAskAi}
         isAiLoading={isAiLoading}
         illustrationPrompt={illustrationPrompt}
+        setIllustrationPrompt={setIllustrationPrompt}
         illustrationImage={illustrationImage}
+        setIllustrationImage={setIllustrationImage}
         isIllustrationLoading={isIllustrationLoading}
         handleGenerateIllustration={handleGenerateIllustration}
+        illustrations={illustrations}
 
         isStatsOpen={isStatsOpen} setIsStatsOpen={setIsStatsOpen}
         sessions={sessions} library={library} currentBookId={currentBookId}
