@@ -123,6 +123,97 @@ User Question: ${question}`;
   }
 }
 
+export async function generateIllustrationPrompt(description: string, context: string): Promise<string> {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) return "API Key not found.";
+
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
+
+  const prompt = `The following is an excerpt from a book read so far.
+The user wants to generate an illustration of: ${description}
+
+Based on the character descriptions, setting details, and atmosphere in the context, please write a highly detailed, descriptive image generation prompt.
+Focus on visual details: appearance, clothing, lighting, art style (appropriate for the book's mood), and composition.
+Do not include any quality buzzwords like "photorealistic" or "4k". Just describe the scene.
+The prompt should be in English and be about 1-2 paragraphs long.
+Return ONLY the prompt text, no other conversation.
+
+Context:
+${context}`;
+
+  try {
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+
+    if (response.usageMetadata) {
+      const cost = calculateCost("gemini-3-flash-preview",
+        response.usageMetadata.promptTokenCount,
+        response.usageMetadata.candidatesTokenCount);
+      console.log(`Gemini Cost (Illustration Prompt): $${cost.toFixed(6)}`);
+    }
+
+    return response.text();
+  } catch (error: unknown) {
+    console.error("Error generating illustration prompt:", error);
+    throw error;
+  }
+}
+
+export async function generateIllustration(prompt: string): Promise<string> {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) throw new Error("API Key not found.");
+
+  // Using fetch directly as the current SDK might not fully support the preview image model's response structure in all environments
+  // or it might be easier to handle the base64 output this way based on the documentation.
+  // Actually, let's try to use the SDK if possible, or fallback to fetch.
+  // The documentation showed:
+  // const response = await ai.models.generateContent({
+  //   model: "gemini-3.1-flash-image-preview",
+  //   contents: prompt,
+  // });
+  // But our SDK is @google/generative-ai which might be slightly different.
+
+  // Let's use fetch to be safe and follow the REST example if the SDK doesn't behave.
+  // Wait, I see GoogleGenerativeAI is being used.
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent?key=${apiKey}`;
+
+  const body = {
+    contents: [{
+      parts: [{ text: prompt }]
+    }],
+    generationConfig: {
+      responseModalities: ["IMAGE"]
+    }
+  };
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error?.message || `HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const part = data.candidates?.[0]?.content?.parts?.[0];
+
+    if (part?.inlineData?.data) {
+      return part.inlineData.data; // This is the base64 string
+    } else {
+      throw new Error("No image data returned from Gemini.");
+    }
+  } catch (error: unknown) {
+    console.error("Error generating illustration:", error);
+    throw error;
+  }
+}
+
 export async function summarizeWhatJustHappened(context: string): Promise<string> {
   const apiKey = getGeminiApiKey();
   if (!apiKey) return "API Key not found. Please set it in settings.";

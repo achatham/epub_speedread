@@ -14,6 +14,10 @@ export const GEMINI_PRICING: Record<string, ModelPricing> = {
     input: { text: 0.50, audio: 1.00 },
     output: { text: 3.00 }
   },
+  "gemini-3.1-flash-image-preview": {
+    input: { text: 0.50 },
+    output: { text: 3.00 } // Image tokens have different pricing but we'll use a placeholder for now
+  },
   "gemini-2.5-flash-preview-tts": {
     input: { text: 0.50 },
     output: { audio: 10.00 }
