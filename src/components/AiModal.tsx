@@ -292,7 +292,7 @@ export function AiModal({
                                                 <div className="mt-0.5 text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-200">
                                                     {selectedSuggestions.includes(s) ? <CheckSquare size={16} className="text-zinc-900 dark:text-zinc-100" /> : <Square size={16} />}
                                                 </div>
-                                                <span className="text-sm leading-tight">{s}</span>
+                                                <span className="text-sm leading-tight">{s.split('\n')[0]}</span>
                                             </button>
                                         ))}
                                     </div>

@@ -136,8 +136,12 @@ The user wants to generate an illustration of: ${description}
 Based on the character descriptions, setting details, and atmosphere in the context, please write a highly detailed, descriptive image generation prompt.
 Focus on visual details: appearance, clothing, lighting, art style (appropriate for the book's mood), and composition.
 Do not include any quality buzzwords like "photorealistic" or "4k". Just describe the scene.
-The prompt should be in English and be about 1-2 paragraphs long.
-Return ONLY the prompt text, no other conversation.
+
+The first line of your response should be a short name or title for the thing being illustrated.
+Then, include a blank line.
+Then, include the detailed image generation prompt (about 1-2 paragraphs).
+
+Return ONLY the name, blank line, and prompt text, no other conversation.
 
 Context:
 ${context}`;
@@ -170,12 +174,14 @@ export async function suggestIllustrations(context: string, existingPrompts: str
     generationConfig: { responseMimeType: "application/json" }
   });
 
-  const prompt = `Based on the following book excerpt, suggest 3-5 distinct and visually interesting scenes, characters, or objects that would be worth illustrating.
+  const prompt = `Based on the following book excerpt, suggest 10-12 distinct and visually interesting scenes, characters, or objects that would be worth illustrating.
 Focus on things that have been described in detail or are important to the current atmosphere.
 Do NOT suggest things that are already covered by these existing illustration descriptions:
 ${existingPrompts.map(p => `- ${p}`).join('\n')}
 
-Return the suggestions as a JSON array of strings, where each string is a brief description (1 sentence) of the suggestion.
+Return the suggestions as a JSON array of strings.
+Each string in the array must follow this format:
+Name of the thing being illustrated, followed by two newlines, then a brief description (1 sentence).
 
 Context:
 ${context}
