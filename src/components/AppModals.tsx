@@ -36,11 +36,17 @@ interface AppModalsProps {
 
     isAskAiOpen: boolean;
     setIsAskAiOpen: (open: boolean) => void;
+    aiTab: 'ask' | 'illustrate';
+    setAiTab: (tab: 'ask' | 'illustrate') => void;
     aiResponse: string;
     aiQuestion: string;
     setAiQuestion: (question: string) => void;
     handleAskAi: (qOverride?: string) => void;
     isAiLoading: boolean;
+    illustrationPrompt: string;
+    illustrationImage: string | null;
+    isIllustrationLoading: boolean;
+    handleGenerateIllustration: (description: string) => void;
 
     isStatsOpen: boolean;
     setIsStatsOpen: (open: boolean) => void;
@@ -67,7 +73,8 @@ export function AppModals({
 
     isOnboardingOpen, setIsOnboardingOpen, storageProvider, setOnboardingCompleted, saveGeminiApiKey,
 
-    isAskAiOpen, setIsAskAiOpen, aiResponse, aiQuestion, setAiQuestion, handleAskAi, isAiLoading,
+    isAskAiOpen, setIsAskAiOpen, aiTab, setAiTab, aiResponse, aiQuestion, setAiQuestion, handleAskAi, isAiLoading,
+    illustrationPrompt, illustrationImage, isIllustrationLoading, handleGenerateIllustration,
 
     isStatsOpen, setIsStatsOpen, sessions, library, currentBookId, theme, handleUpdateBookFinishedDate,
 
@@ -127,11 +134,17 @@ export function AppModals({
             <AiModal
                 isOpen={isAskAiOpen}
                 onClose={() => setIsAskAiOpen(false)}
+                aiTab={aiTab}
+                setAiTab={setAiTab}
                 aiResponse={aiResponse}
                 aiQuestion={aiQuestion}
                 setAiQuestion={setAiQuestion}
                 handleAskAi={handleAskAi}
                 isAiLoading={isAiLoading}
+                illustrationPrompt={illustrationPrompt}
+                illustrationImage={illustrationImage}
+                isIllustrationLoading={isIllustrationLoading}
+                handleGenerateIllustration={handleGenerateIllustration}
                 ttsSpeed={ttsSpeed}
             />
 

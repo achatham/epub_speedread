@@ -9,7 +9,7 @@ import { ConsoleLogger } from './components/ConsoleLogger';
 import { TtsDebug } from './components/TtsDebug';
 import { AppModals } from './components/AppModals';
 import { LogIn, BookOpen } from 'lucide-react';
-import { summarizeWhatJustHappened, summarizeRecent, askAboutBook } from './utils/gemini';
+import { summarizeWhatJustHappened, summarizeRecent, askAboutBook, generateIllustrationPrompt, generateIllustration } from './utils/gemini';
 import { useDeviceLogic } from './hooks/useDeviceLogic';
 import { useAuth } from './hooks/useAuth';
 import { useSettings, type Theme, type FontFamily } from './hooks/useSettings';
@@ -43,9 +43,13 @@ function App() {
 
   const [realEndIndex, setRealEndIndex] = useState<number | null>(null);
   const [furthestIndex, setFurthestIndex] = useState<number | null>(null);
+  const [aiTab, setAiTab] = useState<'ask' | 'illustrate'>('ask');
   const [aiQuestion, setAiQuestion] = useState('');
   const [aiResponse, setAiResponse] = useState('');
   const [isAiLoading, setIsAiLoading] = useState(false);
+  const [illustrationPrompt, setIllustrationPrompt] = useState('');
+  const [illustrationImage, setIllustrationImage] = useState<string | null>(null);
+  const [isIllustrationLoading, setIsIllustrationLoading] = useState(false);
   const [isReadingAloud, setIsReadingAloud] = useState(false);
   const [isSynthesizing, setIsSynthesizing] = useState(false);
 
@@ -128,6 +132,28 @@ function App() {
       } else context = words.slice(0, currentIndex + 1).map(w => w.text).join(' ');
       setAiResponse(useWh ? await summarizeWhatJustHappened(context) : useSum ? await summarizeRecent(context) : await askAboutBook(q, context));
     } catch { setAiResponse('Error'); } finally { setIsAiLoading(false); }
+  };
+
+  const handleGenerateIllustration = async (description: string) => {
+    if (!description.trim() || isIllustrationLoading) return;
+    setIsIllustrationLoading(true);
+    setIllustrationPrompt('');
+    setIllustrationImage(null);
+
+    try {
+      const context = words.slice(0, currentIndex + 1).map(w => w.text).join(' ');
+
+      const prompt = await generateIllustrationPrompt(description, context);
+      setIllustrationPrompt(prompt);
+
+      const base64Image = await generateIllustration(prompt);
+      setIllustrationImage(base64Image);
+    } catch (err) {
+      console.error("Illustration generation failed:", err);
+      setIllustrationPrompt("Error generating illustration.");
+    } finally {
+      setIsIllustrationLoading(false);
+    }
   };
 
   const handleSelectBook = async (id: string) => {
@@ -494,9 +520,14 @@ function App() {
         saveGeminiApiKey={saveGeminiApiKey}
 
         isAskAiOpen={isAskAiOpen} setIsAskAiOpen={setIsAskAiOpen}
+        aiTab={aiTab} setAiTab={setAiTab}
         aiResponse={aiResponse} aiQuestion={aiQuestion}
         setAiQuestion={setAiQuestion} handleAskAi={handleAskAi}
         isAiLoading={isAiLoading}
+        illustrationPrompt={illustrationPrompt}
+        illustrationImage={illustrationImage}
+        isIllustrationLoading={isIllustrationLoading}
+        handleGenerateIllustration={handleGenerateIllustration}
 
         isStatsOpen={isStatsOpen} setIsStatsOpen={setIsStatsOpen}
         sessions={sessions} library={library} currentBookId={currentBookId}
