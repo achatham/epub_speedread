@@ -90,4 +90,10 @@ describe('calculateRsvpMultiplier - Quotation Pauses', () => {
     // (Wait,)"
     expect(calculateRsvpMultiplier('Wait,)"', settings)).toBe(settings.commaMultiplier);
   });
+
+  it('should handle brackets and parentheses without punctuation', () => {
+    expect(calculateRsvpMultiplier('Hello)', settings)).toBe(settings.commaMultiplier);
+    expect(calculateRsvpMultiplier('Hello]', settings)).toBe(settings.commaMultiplier);
+    expect(calculateRsvpMultiplier('Hello}', settings)).toBe(settings.commaMultiplier);
+  });
 });

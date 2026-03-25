@@ -16,7 +16,7 @@ const BLOCK_TAGS = new Set([
 const CLOSING_CHARS = '\'\\"\’”»›\\)\\]\\}';
 const PERIOD_REGEX = new RegExp(`[.!?][${CLOSING_CHARS}]*$`);
 const COMMA_REGEX = new RegExp(`[,;:][${CLOSING_CHARS}]*$`);
-const QUOTE_ONLY_REGEX = new RegExp(`["”’\'»›]$`);
+const TRAILING_PAUSE_CHARS_REGEX = new RegExp(`["”’\'»›\\)\\]\\}]$`);
 
 export function calculateRsvpMultiplier(
   word: string,
@@ -28,7 +28,7 @@ export function calculateRsvpMultiplier(
     multiplier = settings.periodMultiplier;
   } else if (COMMA_REGEX.test(word)) {
     multiplier = settings.commaMultiplier;
-  } else if (QUOTE_ONLY_REGEX.test(word)) {
+  } else if (TRAILING_PAUSE_CHARS_REGEX.test(word)) {
     multiplier = settings.commaMultiplier;
   }
 
