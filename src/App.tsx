@@ -46,6 +46,8 @@ function App() {
   const [illustrations, setIllustrations] = useState<IllustrationRecord[]>([]);
   const [aiTab, setAiTab] = useState<'ask' | 'illustrate'>('ask');
   const [aiQuestion, setAiQuestion] = useState('');
+  const [aiContextMode, setAiContextMode] = useState<'recent' | 'full'>('recent');
+  const [illustrationQuery, setIllustrationQuery] = useState('');
   const [aiResponse, setAiResponse] = useState('');
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [illustrationPrompt, setIllustrationPrompt] = useState('');
@@ -117,24 +119,23 @@ function App() {
     isSynthesizing
   });
 
-  const handleAskAi = async () => {
-    const q = aiQuestion;
+  const handleAskAi = async (qOverride?: string) => {
+    const q = qOverride || aiQuestion;
     if (!q.trim() || isAiLoading) return;
     setIsAiLoading(true);
+    setAiResponse('');
     try {
       let currentChapterIdx = 0;
       for (let i = 0; i < sections.length; i++) if (sections[i].startIndex <= currentIndex) currentChapterIdx = i; else break;
-      let context = ''; let useSum = false; let useWh = false;
-      // If AI_QUESTIONS not imported, we duplicate or re-import it
-      // I will just use the string values of those constants here just to make it compile since we removed it
-      if (q === 'What just happened?' || q === 'Summarize the recent text.') {
-        context = words.slice(currentChapterIdx > 0 ? sections[currentChapterIdx - 1].startIndex : 0, currentIndex + 1).map(w => w.text).join(' ');
-        if (q === 'What just happened?') useWh = true; else useSum = true;
-      } else if (q === 'Summarize this chapter.') {
-        context = words.slice(sections[currentChapterIdx]?.startIndex || 0, currentIndex + 1).map(w => w.text).join(' ');
-        useSum = true;
-      } else context = words.slice(0, currentIndex + 1).map(w => w.text).join(' ');
-      setAiResponse(useWh ? await summarizeWhatJustHappened(context) : useSum ? await summarizeRecent(context) : await askAboutBook(q, context));
+
+      let context = '';
+      if (aiContextMode === 'recent') {
+        const startIdx = currentChapterIdx > 0 ? sections[currentChapterIdx - 1].startIndex : 0;
+        context = words.slice(startIdx, currentIndex + 1).map(w => w.text).join(' ');
+      } else {
+        context = words.slice(0, currentIndex + 1).map(w => w.text).join(' ');
+      }
+      setAiResponse(await askAboutBook(q, context));
     } catch { setAiResponse('Error'); } finally { setIsAiLoading(false); }
   };
 
@@ -152,7 +153,8 @@ function App() {
     }
   };
 
-  const handleGenerateIllustration = async (description: string) => {
+  const handleGenerateIllustration = async (descriptionOverride?: string) => {
+    const description = descriptionOverride || illustrationQuery;
     if (!description.trim() || isIllustrationLoading) return;
     setIsIllustrationLoading(true);
     setIllustrationPrompt('');
@@ -574,7 +576,10 @@ function App() {
         isAskAiOpen={isAskAiOpen} setIsAskAiOpen={setIsAskAiOpen}
         aiTab={aiTab} setAiTab={setAiTab}
         aiResponse={aiResponse} aiQuestion={aiQuestion}
-        setAiQuestion={setAiQuestion} handleAskAi={handleAskAi}
+        setAiQuestion={setAiQuestion}
+        aiContextMode={aiContextMode} setAiContextMode={setAiContextMode}
+        illustrationQuery={illustrationQuery} setIllustrationQuery={setIllustrationQuery}
+        handleAskAi={handleAskAi}
         isAiLoading={isAiLoading}
         illustrationPrompt={illustrationPrompt}
         setIllustrationPrompt={setIllustrationPrompt}

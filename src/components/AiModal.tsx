@@ -13,6 +13,10 @@ interface AiModalProps {
   aiResponse: string;
   aiQuestion: string;
   setAiQuestion: (q: string) => void;
+  aiContextMode: 'recent' | 'full';
+  setAiContextMode: (mode: 'recent' | 'full') => void;
+  illustrationQuery: string;
+  setIllustrationQuery: (q: string) => void;
   handleAskAi: (q?: string) => void;
   isAiLoading: boolean;
   illustrationPrompt: string;
@@ -20,7 +24,7 @@ interface AiModalProps {
   illustrationImage: string | null;
   setIllustrationImage: (image: string | null) => void;
   isIllustrationLoading: boolean;
-  handleGenerateIllustration: (description: string) => void;
+  handleGenerateIllustration: (description?: string) => void;
   illustrations: IllustrationRecord[];
   illustrationSuggestions: string[];
   setIllustrationSuggestions: React.Dispatch<React.SetStateAction<string[]>>;
@@ -34,9 +38,7 @@ interface AiModalProps {
 
 const CANNED_QUESTIONS = [
   AI_QUESTIONS.JUST_HAPPENED,
-  AI_QUESTIONS.RECENT_SUMMARY,
-  AI_QUESTIONS.CHAPTER_SUMMARY,
-  AI_QUESTIONS.DRAMATIS_PERSONAE
+  AI_QUESTIONS.RECENT_SUMMARY
 ];
 
 const CANNED_ILLUSTRATIONS = [
@@ -54,6 +56,10 @@ export function AiModal({
   aiResponse,
   aiQuestion,
   setAiQuestion,
+  aiContextMode,
+  setAiContextMode,
+  illustrationQuery,
+  setIllustrationQuery,
   handleAskAi,
   isAiLoading,
   illustrationPrompt,
@@ -172,19 +178,36 @@ export function AiModal({
                   <Sparkles size={48} className="mb-4 opacity-30" />
                   <p className="mb-6 opacity-50">Ask a question about what you've read so far.</p>
 
-                  <div className="flex flex-wrap gap-2 justify-center max-w-lg mb-4">
-                    {CANNED_QUESTIONS.map(q => (
+                  <div className="flex flex-col items-center gap-4">
+                    <div className="flex flex-wrap gap-2 justify-center max-w-lg">
+                      {CANNED_QUESTIONS.map(q => (
+                        <button
+                          key={q}
+                          onClick={() => {
+                            setAiQuestion(q);
+                            handleAskAi(q);
+                          }}
+                          className="text-xs bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 px-3 py-1.5 rounded-full transition-colors border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400"
+                        >
+                          {q}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="flex bg-zinc-100 dark:bg-zinc-800 p-1 rounded-lg">
                       <button
-                        key={q}
-                        onClick={() => {
-                          setAiQuestion(q);
-                          handleAskAi(q);
-                        }}
-                        className="text-xs bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 px-3 py-1.5 rounded-full transition-colors border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400"
+                        onClick={() => setAiContextMode('recent')}
+                        className={`px-3 py-1 text-xs rounded-md transition-all ${aiContextMode === 'recent' ? 'bg-white dark:bg-zinc-700 shadow-sm text-zinc-900 dark:text-zinc-100' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}
                       >
-                        {q}
+                        Recent Chapters
                       </button>
-                    ))}
+                      <button
+                        onClick={() => setAiContextMode('full')}
+                        className={`px-3 py-1 text-xs rounded-md transition-all ${aiContextMode === 'full' ? 'bg-white dark:bg-zinc-700 shadow-sm text-zinc-900 dark:text-zinc-100' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}
+                      >
+                        Full Book
+                      </button>
+                    </div>
                   </div>
 
                   <p className="text-xs opacity-30">The AI only sees text up to your current position.</p>
@@ -325,7 +348,7 @@ export function AiModal({
                                             <button
                                                 key={q}
                                                 onClick={() => {
-                                                    setAiQuestion(q);
+                                                    setIllustrationQuery(q);
                                                     handleGenerateIllustration(q);
                                                 }}
                                                 className="text-xs bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 px-3 py-1.5 rounded-full transition-colors border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400"
@@ -378,16 +401,16 @@ export function AiModal({
         <div className="flex gap-2">
           <input
             type="text"
-            value={aiQuestion}
-            onChange={(e) => setAiQuestion(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && (aiTab === 'ask' ? handleAskAi() : handleGenerateIllustration(aiQuestion))}
+            value={aiTab === 'ask' ? aiQuestion : illustrationQuery}
+            onChange={(e) => aiTab === 'ask' ? setAiQuestion(e.target.value) : setIllustrationQuery(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && (aiTab === 'ask' ? handleAskAi() : handleGenerateIllustration())}
             className="flex-1 p-3 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-transparent focus:ring-2 focus:ring-zinc-500 outline-none transition-all"
             placeholder={aiTab === 'ask' ? "How does the protagonist feel about...?" : "Describe a scene or character to illustrate..."}
             disabled={isAiLoading || isIllustrationLoading}
           />
           <button
-            onClick={() => aiTab === 'ask' ? handleAskAi() : handleGenerateIllustration(aiQuestion)}
-            disabled={isAiLoading || isIllustrationLoading || !aiQuestion.trim()}
+            onClick={() => aiTab === 'ask' ? handleAskAi() : handleGenerateIllustration()}
+            disabled={isAiLoading || isIllustrationLoading || (aiTab === 'ask' ? !aiQuestion.trim() : !illustrationQuery.trim())}
             className="bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 px-6 py-2 rounded-lg font-medium disabled:opacity-50 hover:opacity-90 transition-opacity"
           >
             {aiTab === 'ask' ? 'Ask' : 'Generate'}
