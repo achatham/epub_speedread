@@ -13,15 +13,22 @@ const BLOCK_TAGS = new Set([
   'TR', 'TD', 'TH' // Tables also break text
 ]);
 
+const CLOSING_CHARS = '\'\\"\’”»›\\)\\]\\}';
+const PERIOD_REGEX = new RegExp(`[.!?][${CLOSING_CHARS}]*$`);
+const COMMA_REGEX = new RegExp(`[,;:][${CLOSING_CHARS}]*$`);
+const TRAILING_PAUSE_CHARS_REGEX = new RegExp(`["”’\'»›\\)\\]\\}]$`);
+
 export function calculateRsvpMultiplier(
   word: string,
   settings: RsvpSettings
 ): number {
   let multiplier = 1;
 
-  if (/[.!?]['")\]]*$/.test(word) || word === '—' || word === '–') {
+  if (PERIOD_REGEX.test(word) || word === '—' || word === '–') {
     multiplier = settings.periodMultiplier;
-  } else if (/[,;:]['")\]]*$/.test(word)) {
+  } else if (COMMA_REGEX.test(word)) {
+    multiplier = settings.commaMultiplier;
+  } else if (TRAILING_PAUSE_CHARS_REGEX.test(word)) {
     multiplier = settings.commaMultiplier;
   }
 
