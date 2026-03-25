@@ -52,7 +52,7 @@ interface AppModalsProps {
     illustrationImage: string | null;
     setIllustrationImage: (image: string | null) => void;
     isIllustrationLoading: boolean;
-    handleGenerateIllustration: (description: string) => void;
+    handleGenerateIllustration: (description?: string) => void;
     illustrations: IllustrationRecord[];
     illustrationSuggestions: string[];
     setIllustrationSuggestions: React.Dispatch<React.SetStateAction<string[]>>;

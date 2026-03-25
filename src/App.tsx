@@ -9,7 +9,7 @@ import { ConsoleLogger } from './components/ConsoleLogger';
 import { TtsDebug } from './components/TtsDebug';
 import { AppModals } from './components/AppModals';
 import { LogIn, BookOpen } from 'lucide-react';
-import { summarizeWhatJustHappened, summarizeRecent, askAboutBook, generateIllustrationPrompt, generateIllustration, suggestIllustrations } from './utils/gemini';
+import { askAboutBook, generateIllustrationPrompt, generateIllustration, suggestIllustrations } from './utils/gemini';
 import { useDeviceLogic } from './hooks/useDeviceLogic';
 import { useAuth } from './hooks/useAuth';
 import { useSettings, type Theme, type FontFamily } from './hooks/useSettings';
