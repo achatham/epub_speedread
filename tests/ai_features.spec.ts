@@ -74,6 +74,6 @@ test.describe('AI Features & Dark Mode', () => {
 
     await expect(page.getByText('What just happened?')).toBeVisible();
     await expect(page.getByText('Remind me what happened recently')).toBeVisible();
-    await expect(page.getByText('Remind me what happened in this chapter so far')).toBeVisible();
+    await expect(page.getByText('Remind me what happened in this chapter so far')).not.toBeVisible();
   });
 });

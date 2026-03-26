@@ -41,6 +41,10 @@ interface AppModalsProps {
     aiResponse: string;
     aiQuestion: string;
     setAiQuestion: (question: string) => void;
+    aiContextMode: 'recent' | 'full';
+    setAiContextMode: (mode: 'recent' | 'full') => void;
+    illustrationQuery: string;
+    setIllustrationQuery: (q: string) => void;
     handleAskAi: (qOverride?: string) => void;
     isAiLoading: boolean;
     illustrationPrompt: string;
@@ -48,7 +52,7 @@ interface AppModalsProps {
     illustrationImage: string | null;
     setIllustrationImage: (image: string | null) => void;
     isIllustrationLoading: boolean;
-    handleGenerateIllustration: (description: string) => void;
+    handleGenerateIllustration: (description?: string) => void;
     illustrations: IllustrationRecord[];
     illustrationSuggestions: string[];
     setIllustrationSuggestions: React.Dispatch<React.SetStateAction<string[]>>;
@@ -83,7 +87,9 @@ export function AppModals({
 
     isOnboardingOpen, setIsOnboardingOpen, storageProvider, setOnboardingCompleted, saveGeminiApiKey,
 
-    isAskAiOpen, setIsAskAiOpen, aiTab, setAiTab, aiResponse, aiQuestion, setAiQuestion, handleAskAi, isAiLoading,
+    isAskAiOpen, setIsAskAiOpen, aiTab, setAiTab, aiResponse, aiQuestion, setAiQuestion,
+    aiContextMode, setAiContextMode, illustrationQuery, setIllustrationQuery,
+    handleAskAi, isAiLoading,
     illustrationPrompt, setIllustrationPrompt, illustrationImage, setIllustrationImage,
     isIllustrationLoading, handleGenerateIllustration, illustrations,
     illustrationSuggestions, setIllustrationSuggestions, selectedSuggestions, setSelectedSuggestions, isSuggesting,
@@ -152,6 +158,10 @@ export function AppModals({
                 aiResponse={aiResponse}
                 aiQuestion={aiQuestion}
                 setAiQuestion={setAiQuestion}
+                aiContextMode={aiContextMode}
+                setAiContextMode={setAiContextMode}
+                illustrationQuery={illustrationQuery}
+                setIllustrationQuery={setIllustrationQuery}
                 handleAskAi={handleAskAi}
                 isAiLoading={isAiLoading}
                 illustrationPrompt={illustrationPrompt}
