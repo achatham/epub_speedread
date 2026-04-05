@@ -29,6 +29,7 @@ interface ReaderMenuProps {
   furthestIndex: number | null;
   effectiveTotalWords: number;
   currentIndex: number;
+  readerMode?: 'rsvp' | 'paginated';
 }
 
 export function ReaderMenu({
@@ -51,7 +52,8 @@ export function ReaderMenu({
   navigate,
   furthestIndex,
   effectiveTotalWords,
-  currentIndex
+  currentIndex,
+  readerMode = 'rsvp'
 }: ReaderMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'main' | 'toc' | 'nav'>('main');
@@ -63,6 +65,7 @@ export function ReaderMenu({
       setActiveTab('main');
     }
   }, [isOpen]);
+
 
   useEffect(() => {
     if (activeTab === 'toc' && activeChapterRef.current) {
@@ -78,7 +81,7 @@ export function ReaderMenu({
     return (
       <button
         onClick={(e) => { e.stopPropagation(); setIsOpen(true); }}
-        className={`fixed bottom-6 right-6 z-50 p-4 rounded-full shadow-lg border transition-all pointer-events-auto ${theme === 'bedtime' ? 'bg-zinc-900 border-zinc-800 text-stone-400' : 'bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100'} hover:scale-110 active:scale-95`}
+        className={`fixed ${readerMode === 'paginated' ? 'bottom-20' : 'bottom-6'} right-6 z-50 p-4 rounded-full shadow-lg border transition-all pointer-events-auto ${theme === 'bedtime' ? 'bg-zinc-900 border-zinc-800 text-stone-400' : 'bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100'} hover:scale-110 active:scale-95`}
         title="Open Menu"
       >
         <Menu size={24} />

@@ -22,6 +22,8 @@ interface AppModalsProps {
     setAutoLandscape: (auto: boolean) => void;
     fontFamily: FontFamily;
     setFontFamily: React.Dispatch<React.SetStateAction<FontFamily>>;
+    readerMode: 'rsvp' | 'paginated';
+    setReaderMode: (mode: 'rsvp' | 'paginated') => void;
     rsvpSettings: RsvpSettings;
     setRsvpSettings: React.Dispatch<React.SetStateAction<RsvpSettings>>;
     user: any;
@@ -83,7 +85,7 @@ interface AppModalsProps {
 export function AppModals({
     isSettingsOpen, setIsSettingsOpen, geminiApiKey, setGeminiApiKey, deepgramApiKey, setDeepgramApiKey,
     syncApiKey, setSyncApiKey, ttsSpeed, setTtsSpeed, autoLandscape, setAutoLandscape,
-    fontFamily, setFontFamily, rsvpSettings, setRsvpSettings, user, handleSignIn, handleSignOut,
+    fontFamily, setFontFamily, readerMode, setReaderMode, rsvpSettings, setRsvpSettings, user, handleSignIn, handleSignOut,
 
     isOnboardingOpen, setIsOnboardingOpen, storageProvider, setOnboardingCompleted, saveGeminiApiKey,
 
@@ -117,6 +119,8 @@ export function AppModals({
                 setAutoLandscape={setAutoLandscape}
                 fontFamily={fontFamily}
                 setFontFamily={setFontFamily}
+                readerMode={readerMode}
+                setReaderMode={setReaderMode}
                 rsvpSettings={rsvpSettings}
                 setRsvpSettings={setRsvpSettings}
                 user={user}

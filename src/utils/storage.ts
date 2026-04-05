@@ -24,6 +24,7 @@ export interface UserSettings {
   fontFamily?: string;
   ttsSpeed?: number;
   autoLandscape?: boolean;
+  readerMode?: 'rsvp' | 'paginated';
   rsvp?: RsvpSettings;
   onboardingCompleted?: boolean;
   lastUpdated: number;

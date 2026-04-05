@@ -77,6 +77,7 @@ function App() {
     autoLandscape, setAutoLandscape,
     theme, setTheme, toggleTheme,
     fontFamily, setFontFamily,
+    readerMode, setReaderMode,
     rsvpSettings, setRsvpSettings
   } = useSettings(storageProvider, onboardingCompleted);
   const saveGeminiApiKey = (k: string) => {
@@ -370,6 +371,7 @@ function App() {
         const settings = await storageProvider.getSettings();
         if (settings) {
           if (settings.syncApiKey !== undefined) setSyncApiKey(settings.syncApiKey);
+          if (settings.readerMode) setReaderMode(settings.readerMode);
 
           // Only load API key from Firestore if syncing is enabled
           if (settings.syncApiKey !== false) {
@@ -566,6 +568,7 @@ function App() {
         ttsSpeed={ttsSpeed} setTtsSpeed={setTtsSpeed}
         autoLandscape={autoLandscape} setAutoLandscape={setAutoLandscape}
         fontFamily={fontFamily} setFontFamily={setFontFamily}
+        readerMode={readerMode} setReaderMode={setReaderMode}
         rsvpSettings={rsvpSettings} setRsvpSettings={setRsvpSettings}
         user={user} handleSignIn={handleSignIn} handleSignOut={handleSignOut}
 
@@ -614,6 +617,7 @@ function App() {
         handleLoadDemoBook={handleLoadDemoBook} setShowAbout={setShowAbout} words={words} currentIndex={currentIndex}
         realEndIndex={realEndIndex} furthestIndex={furthestIndex} isPlaying={isPlaying} handleSetIsPlaying={handleSetIsPlaying}
         setIsHoldPaused={setIsHoldPaused} wpm={wpm} setWpm={setWpm} storageProvider={storageProvider}
+        readerMode={readerMode} setReaderMode={setReaderMode}
         rsvpSettings={rsvpSettings} fontFamily={fontFamily} bookTitle={bookTitle} handleCloseBook={handleCloseBook}
         setIsBookSettingsOpen={setIsBookSettingsOpen} setAiResponse={setAiResponse} setIsAskAiOpen={setIsAskAiOpen}
         sections={sections} setCurrentIndex={setCurrentIndex} navigate={navigate} audioPlayerRef={audioPlayerRef}

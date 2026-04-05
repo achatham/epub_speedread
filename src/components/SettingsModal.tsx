@@ -19,6 +19,8 @@ interface SettingsModalProps {
   setAutoLandscape: (auto: boolean) => void;
   fontFamily: FontFamily;
   setFontFamily: React.Dispatch<React.SetStateAction<FontFamily>>;
+  readerMode: 'rsvp' | 'paginated';
+  setReaderMode: (mode: 'rsvp' | 'paginated') => void;
   rsvpSettings: RsvpSettings;
   setRsvpSettings: (settings: RsvpSettings) => void;
   onSave: () => void;
@@ -42,6 +44,8 @@ export function SettingsModal({
   setAutoLandscape,
   fontFamily,
   setFontFamily,
+  readerMode,
+  setReaderMode,
   rsvpSettings,
   setRsvpSettings,
   onSave,
@@ -141,6 +145,32 @@ export function SettingsModal({
                     <strong>Auto-landscape when reading</strong><br />
                     <span className="text-xs">Automatically switch to landscape mode on mobile devices when you start reading.</span>
                   </label>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-3 opacity-70">Reader Mode</label>
+                <div className="flex p-1 bg-zinc-100 dark:bg-zinc-800 rounded-lg">
+                  <button
+                    onClick={() => setReaderMode('rsvp')}
+                    className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${
+                      readerMode === 'rsvp'
+                        ? 'bg-white dark:bg-zinc-700 shadow-sm text-zinc-900 dark:text-zinc-100'
+                        : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+                    }`}
+                  >
+                    RSVP
+                  </button>
+                  <button
+                    onClick={() => setReaderMode('paginated')}
+                    className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${
+                      readerMode === 'paginated'
+                        ? 'bg-white dark:bg-zinc-700 shadow-sm text-zinc-900 dark:text-zinc-100'
+                        : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+                    }`}
+                  >
+                    Paginated
+                  </button>
                 </div>
               </div>
 

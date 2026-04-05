@@ -1,9 +1,10 @@
-import { useRef } from 'react';
+import { useRef, useState, useEffect, useMemo } from 'react';
 import { ReaderMenu } from './ReaderMenu';
 import type { WordData } from '../utils/text-processing';
 import { splitWord } from '../utils/orp';
 import { type Theme, type FontFamily } from '../hooks/useSettings';
 import type { RsvpSettings } from '../utils/storage';
+import { getPageAroundIndex, type PageContent } from '../utils/layout';
 
 interface ReaderViewProps {
   words: WordData[];
@@ -65,11 +66,44 @@ export function ReaderView({
   isChapterBreak,
   upcomingChapterTitle,
   onStatsClick,
-  vanityWpmRatio,
-  rsvpSettings
+  vanityWpmRatio
 }: ReaderViewProps) {
   const pressStartTimeRef = useRef<number | null>(null);
   const lastPauseTimeRef = useRef<number>(0);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+  const [previewContent, setPreviewContent] = useState<PageContent | null>(null);
+
+  useEffect(() => {
+    if (!containerRef.current || isPlaying) return;
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setContainerSize({
+          width: entry.contentRect.width,
+          height: entry.contentRect.height
+        });
+      }
+    });
+    resizeObserver.observe(containerRef.current);
+    return () => resizeObserver.disconnect();
+  }, [isPlaying]);
+
+  const fontClasses: Record<FontFamily, string> = useMemo(() => ({
+    system: 'ui-sans-serif, system-ui, sans-serif',
+    serif: 'font-serif',
+    mono: 'font-mono',
+    opendyslexic: 'font-opendyslexic',
+    atkinson: 'font-hyperlegible'
+  }), []);
+
+  useEffect(() => {
+    if (!isPlaying && containerSize.width > 0 && containerSize.height > 0) {
+      const font = `20px ${fontClasses[fontFamily]}`;
+      const page = getPageAroundIndex(words, currentIndex, containerSize.width, containerSize.height, font, 32, 'center');
+      setPreviewContent(page);
+    }
+  }, [isPlaying, currentIndex, containerSize, words, fontFamily, fontClasses]);
 
   if (words.length === 0) {
     return (
@@ -112,14 +146,6 @@ export function ReaderView({
   // Theme-derived classes
   const mainBg = theme === 'bedtime' ? 'bg-black' : 'bg-white dark:bg-zinc-900';
   const mainText = theme === 'bedtime' ? 'text-stone-400' : 'text-zinc-900 dark:text-zinc-100';
-
-  const fontClasses: Record<FontFamily, string> = {
-    system: 'ui-sans-serif, system-ui, sans-serif',
-    serif: 'font-serif',
-    mono: 'font-mono',
-    opendyslexic: 'font-opendyslexic',
-    atkinson: 'font-hyperlegible'
-  };
 
   const rsvpFocusColor = theme === 'bedtime' ? 'text-amber-600' : (theme === 'dark' ? 'text-red-500' : 'text-red-600');
   const rsvpContextClass = theme === 'bedtime' ? 'text-stone-600' : 'opacity-90';
@@ -247,7 +273,11 @@ export function ReaderView({
 
 
       {/* RSVP Display or Text Preview */}
-      <div className={`relative flex items-center justify-center w-full overflow-hidden ${isPlaying ? '' : 'max-w-2xl landscape:max-w-none landscape:my-2 flex-1 landscape:mx-8'} border-t border-b my-8 ${theme === 'bedtime' ? 'border-zinc-900' : 'border-zinc-200 dark:border-zinc-800'}`} style={{ minHeight: isPlaying ? Math.max(120, currentFontSize * 1.5) : '120px' }}>
+      <div
+        ref={containerRef}
+        className={`relative flex items-center justify-center w-full overflow-hidden ${isPlaying ? '' : 'max-w-2xl landscape:max-w-none landscape:my-2 flex-1 landscape:mx-8'} border-t border-b my-8 ${theme === 'bedtime' ? 'border-zinc-900' : 'border-zinc-200 dark:border-zinc-800'}`}
+        style={{ minHeight: isPlaying ? Math.max(120, currentFontSize * 1.5) : '120px' }}
+      >
         {isPlaying ? (
           <>
             {!isChapterBreak && (
@@ -277,33 +307,26 @@ export function ReaderView({
             )}
           </>
         ) : (
-          <div className={`mt-4 sm:mt-12 w-full text-center px-4 ${fontClasses[fontFamily]} landscape:text-base landscape:leading-snug ${theme === 'bedtime' ? 'text-stone-500' : 'text-zinc-500 dark:text-zinc-400'} max-h-full overflow-hidden flex items-center justify-center`}>
-            <div>
-              {(() => {
-                const half = Math.floor(rsvpSettings.previewWordCount / 2);
-                const start = Math.max(chapterStart, currentIndex - half);
-                const end = Math.min(words.length, currentIndex + half);
-
-                const before = words.slice(start, currentIndex);
-                const current = words[currentIndex];
-                const after = words.slice(currentIndex + 1, end);
-
-                return (
-                  <>
-                    {start > chapterStart && <span className="opacity-30">... </span>}
-                    {before.map((w, i) => (
-                      <span key={`before-${i}`}>{w.text} </span>
-                    ))}
-                    <span className={`font-bold ${theme === 'bedtime' ? 'text-amber-600' : 'text-zinc-900 dark:text-zinc-100 underline decoration-red-500/50'}`}>
-                      {current?.text}
-                    </span>
-                    {after.map((w, i) => (
-                      <span key={`after-${i}`}> {w.text}</span>
-                    ))}
-                    {end < words.length && <span className="opacity-30"> ...</span>}
-                  </>
-                );
-              })()}
+          <div className={`w-full text-center px-4 ${fontClasses[fontFamily]} landscape:text-base landscape:leading-tight ${theme === 'bedtime' ? 'text-stone-500' : 'text-zinc-500 dark:text-zinc-400'} max-h-full overflow-hidden flex items-center justify-center py-4`}>
+            <div className="leading-[32px] text-[20px]">
+              {previewContent && (
+                <>
+                  {previewContent.startIndex > chapterStart && <span className="opacity-30">... </span>}
+                  {previewContent.words.map((w, i) => {
+                    const idx = previewContent.startIndex + i;
+                    const isCurrent = idx === currentIndex;
+                    return (
+                      <span
+                        key={idx}
+                        className={isCurrent ? `font-bold ${theme === 'bedtime' ? 'text-amber-600' : 'text-zinc-900 dark:text-zinc-100 underline decoration-red-500/50'}` : ''}
+                      >
+                        {w.text}{' '}
+                      </span>
+                    );
+                  })}
+                  {previewContent.endIndex < words.length && <span className="opacity-30">...</span>}
+                </>
+              )}
             </div>
           </div>
         )}
