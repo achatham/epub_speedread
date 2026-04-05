@@ -5,6 +5,7 @@ import type { WordData } from '../utils/text-processing';
 import type { NavigationType } from '../utils/navigation';
 import { LibraryView } from './LibraryView';
 import { ReaderView } from './ReaderView';
+import { PaginatedReaderView } from './PaginatedReaderView';
 import { AudioBookPlayer } from '../utils/AudioBookPlayer';
 
 interface AuthenticatedAppProps {
@@ -34,6 +35,8 @@ interface AuthenticatedAppProps {
     setWpm: (wpm: number) => void;
     storageProvider: any;
     rsvpSettings: RsvpSettings;
+    readerMode: 'rsvp' | 'paginated';
+    setReaderMode: (mode: 'rsvp' | 'paginated') => void;
     fontFamily: FontFamily;
     bookTitle: string;
     handleCloseBook: () => void;
@@ -59,7 +62,7 @@ export function AuthenticatedApp({
     handleDeleteBook, handleToggleArchive, handleFileUpload, fileInputRef, onFileInputClick,
     handleOpenStats, handleLoadDemoBook, setShowAbout, words, currentIndex, realEndIndex,
     furthestIndex, isPlaying, handleSetIsPlaying, setIsHoldPaused, wpm, setWpm, storageProvider,
-    rsvpSettings, fontFamily, bookTitle, handleCloseBook, setIsBookSettingsOpen, setAiResponse,
+    rsvpSettings, readerMode, setReaderMode, fontFamily, bookTitle, handleCloseBook, setIsBookSettingsOpen, setAiResponse,
     setIsAskAiOpen, sections, setCurrentIndex, navigate, audioPlayerRef, ttsSpeed, setIsSynthesizing,
     setIsReadingAloud, setSessions, isReadingAloud, isSynthesizing, isChapterBreak,
     onTtsDebugClick
@@ -84,95 +87,114 @@ export function AuthenticatedApp({
         );
     }
 
-    return (
-        <ReaderView
-            words={words} currentIndex={currentIndex} effectiveTotalWords={realEndIndex || words.length}
-            realEndIndex={realEndIndex}
-            furthestIndex={furthestIndex}
-            isPlaying={isPlaying}
-            setIsPlaying={handleSetIsPlaying}
-            setIsHoldPaused={setIsHoldPaused}
-            wpm={wpm}
-            onWpmChange={(targetWpm) => {
-                setWpm(targetWpm);
-                storageProvider.updateBookWpm(currentBookId, targetWpm);
-            }}
-            vanityWpmRatio={rsvpSettings.vanityWpmRatio}
-            theme={theme} fontFamily={fontFamily} bookTitle={bookTitle}
-            onCloseBook={handleCloseBook} onSettingsClick={() => setIsSettingsOpen(true)}
-            onBookSettingsClick={() => setIsBookSettingsOpen(true)}
-            onToggleTheme={toggleTheme} onAskAiClick={() => { setAiResponse(''); setIsAskAiOpen(true); }}
-            sections={sections} setCurrentIndex={setCurrentIndex}
-            navigate={navigate}
-            onReadChapter={async () => {
-                if (audioPlayerRef.current?.isActive) {
-                    audioPlayerRef.current.stop();
-                    return;
-                }
+    const commonReaderProps = {
+        words,
+        currentIndex,
+        effectiveTotalWords: realEndIndex || words.length,
+        realEndIndex,
+        furthestIndex,
+        wpm,
+        onWpmChange: (targetWpm: number) => {
+            setWpm(targetWpm);
+            storageProvider.updateBookWpm(currentBookId, targetWpm);
+        },
+        theme,
+        fontFamily,
+        bookTitle,
+        onCloseBook: handleCloseBook,
+        onSettingsClick: () => setIsSettingsOpen(true),
+        onBookSettingsClick: () => setIsBookSettingsOpen(true),
+        onToggleTheme: toggleTheme,
+        onAskAiClick: () => { setAiResponse(''); setIsAskAiOpen(true); },
+        sections,
+        setCurrentIndex,
+        navigate,
+        onReadChapter: async () => {
+            if (audioPlayerRef.current?.isActive) {
+                audioPlayerRef.current.stop();
+                return;
+            }
 
-                let cIdx = -1;
-                for (let i = 0; i < sections.length; i++) {
-                    if (sections[i].startIndex <= currentIndex) cIdx = i; else break;
-                }
+            let cIdx = -1;
+            for (let i = 0; i < sections.length; i++) {
+                if (sections[i].startIndex <= currentIndex) cIdx = i; else break;
+            }
 
-                const cStart = sections[cIdx]?.startIndex || 0;
-                const cEnd = sections[cIdx + 1]?.startIndex || words.length;
-                const cWords = words.slice(cStart, cEnd);
+            const cStart = sections[cIdx]?.startIndex || 0;
+            const cEnd = sections[cIdx + 1]?.startIndex || words.length;
+            const cWords = words.slice(cStart, cEnd);
 
-                if (cWords.length === 0) return;
+            if (cWords.length === 0) return;
 
-                handleSetIsPlaying(false);
+            handleSetIsPlaying(false);
 
-                audioPlayerRef.current?.playChapter(
-                    currentBookId,
-                    cIdx,
-                    cWords,
-                    cStart,
-                    currentIndex,
-                    ttsSpeed,
-                    {
-                        onProgress: (idx) => setCurrentIndex(idx),
-                        onStateChange: (state) => {
-                            setIsSynthesizing(state.isSynthesizing);
-                            setIsReadingAloud(state.isPlaying);
-                        },
-                        onSessionFinished: (stats) => {
-                            if (storageProvider && currentBookId) {
-                                const wordsRead = Math.max(0, stats.endWordIndex - stats.startWordIndex);
-                                const effectiveWpm = stats.durationSeconds > 0 ? Math.round((wordsRead / stats.durationSeconds) * 60) : 0;
+            audioPlayerRef.current?.playChapter(
+                currentBookId,
+                cIdx,
+                cWords,
+                cStart,
+                currentIndex,
+                ttsSpeed,
+                {
+                    onProgress: (idx) => setCurrentIndex(idx),
+                    onStateChange: (state) => {
+                        setIsSynthesizing(state.isSynthesizing);
+                        setIsReadingAloud(state.isPlaying);
+                    },
+                    onSessionFinished: (stats) => {
+                        if (storageProvider && currentBookId) {
+                            const wordsRead = Math.max(0, stats.endWordIndex - stats.startWordIndex);
+                            const effectiveWpm = stats.durationSeconds > 0 ? Math.round((wordsRead / stats.durationSeconds) * 60) : 0;
 
-                                console.log(`[Listening Session] Finished:
+                            console.log(`[Listening Session] Finished:
 - Duration: ${stats.durationSeconds}s
 - Words: ${wordsRead}
 - Desired WPM: ${wpm}
 - Effective WPM: ${effectiveWpm}`);
 
-                                storageProvider.logReadingSession({
-                                    bookId: currentBookId,
-                                    bookTitle: bookTitle,
-                                    startTime: stats.startTime,
-                                    endTime: stats.endTime,
-                                    startWordIndex: stats.startWordIndex,
-                                    endWordIndex: stats.endWordIndex,
-                                    wordsRead: wordsRead,
-                                    durationSeconds: stats.durationSeconds,
-                                    type: 'listening'
-                                }).then(async () => {
-                                    await storageProvider.aggregateSessions();
-                                    setSessions(await storageProvider.getAggregatedSessions());
-                                });
-                            }
-                        },
-                        onError: (msg) => alert(msg)
-                    }
-                );
-            }}
-            isReadingAloud={isReadingAloud} isSynthesizing={isSynthesizing} isChapterBreak={isChapterBreak}
+                            storageProvider.logReadingSession({
+                                bookId: currentBookId,
+                                bookTitle: bookTitle,
+                                startTime: stats.startTime,
+                                endTime: stats.endTime,
+                                startWordIndex: stats.startWordIndex,
+                                endWordIndex: stats.endWordIndex,
+                                wordsRead: wordsRead,
+                                durationSeconds: stats.durationSeconds,
+                                type: 'listening'
+                            }).then(async () => {
+                                await storageProvider.aggregateSessions();
+                                setSessions(await storageProvider.getAggregatedSessions());
+                            });
+                        }
+                    },
+                    onError: (msg) => alert(msg)
+                }
+            );
+        },
+        isReadingAloud,
+        isSynthesizing,
+        onStatsClick: handleOpenStats,
+        rsvpSettings,
+        readerMode,
+        setReaderMode
+    };
+
+    if (readerMode === 'paginated') {
+        return <PaginatedReaderView {...commonReaderProps} />;
+    }
+
+    return (
+        <ReaderView
+            {...commonReaderProps}
+            isPlaying={isPlaying}
+            setIsPlaying={handleSetIsPlaying}
+            setIsHoldPaused={setIsHoldPaused}
+            vanityWpmRatio={rsvpSettings.vanityWpmRatio}
+            isChapterBreak={isChapterBreak}
             upcomingChapterTitle={isChapterBreak
                 ? (sections.slice().reverse().find(s => s.startIndex <= currentIndex)?.label || '')
                 : (sections.find(s => s.startIndex === currentIndex + 1)?.label || '')}
-            onStatsClick={handleOpenStats}
-            rsvpSettings={rsvpSettings}
         />
     );
 }

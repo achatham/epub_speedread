@@ -77,6 +77,7 @@ function App() {
     autoLandscape, setAutoLandscape,
     theme, setTheme, toggleTheme,
     fontFamily, setFontFamily,
+    readerMode, setReaderMode,
     rsvpSettings, setRsvpSettings
   } = useSettings(storageProvider, onboardingCompleted);
   const saveGeminiApiKey = (k: string) => {
@@ -385,6 +386,7 @@ function App() {
           if (settings.ttsSpeed) setTtsSpeed(settings.ttsSpeed);
           if (settings.autoLandscape !== undefined) setAutoLandscape(settings.autoLandscape);
           if (settings.rsvp) setRsvpSettings(prev => ({ ...prev, ...settings.rsvp }));
+          if (settings.readerMode) setReaderMode(settings.readerMode);
 
           if (settings.onboardingCompleted) {
             setOnboardingCompleted(true);
@@ -614,7 +616,8 @@ function App() {
         handleLoadDemoBook={handleLoadDemoBook} setShowAbout={setShowAbout} words={words} currentIndex={currentIndex}
         realEndIndex={realEndIndex} furthestIndex={furthestIndex} isPlaying={isPlaying} handleSetIsPlaying={handleSetIsPlaying}
         setIsHoldPaused={setIsHoldPaused} wpm={wpm} setWpm={setWpm} storageProvider={storageProvider}
-        rsvpSettings={rsvpSettings} fontFamily={fontFamily} bookTitle={bookTitle} handleCloseBook={handleCloseBook}
+        rsvpSettings={rsvpSettings} readerMode={readerMode} setReaderMode={setReaderMode}
+        fontFamily={fontFamily} bookTitle={bookTitle} handleCloseBook={handleCloseBook}
         setIsBookSettingsOpen={setIsBookSettingsOpen} setAiResponse={setAiResponse} setIsAskAiOpen={setIsAskAiOpen}
         sections={sections} setCurrentIndex={setCurrentIndex} navigate={navigate} audioPlayerRef={audioPlayerRef}
         ttsSpeed={ttsSpeed} setIsSynthesizing={setIsSynthesizing} setIsReadingAloud={setIsReadingAloud}

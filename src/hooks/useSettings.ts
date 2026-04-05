@@ -48,6 +48,13 @@ export function useSettings(storageProvider: FirestoreStorage | null, onboarding
     });
 
     const [fontFamily, setFontFamily] = useState<FontFamily>('system');
+    const [readerMode, setReaderMode] = useState<'rsvp' | 'paginated'>(() => {
+        try {
+            const saved = localStorage.getItem('user_settings');
+            if (saved) return JSON.parse(saved).readerMode || 'rsvp';
+        } catch { }
+        return 'rsvp';
+    });
 
     const [rsvpSettings, setRsvpSettings] = useState<RsvpSettings>(() => {
         try {
@@ -71,10 +78,11 @@ export function useSettings(storageProvider: FirestoreStorage | null, onboarding
             geminiApiKey: syncApiKey ? geminiApiKey : undefined,
             deepgramApiKey: syncApiKey ? deepgramApiKey : undefined,
             rsvp: rsvpSettings,
+            readerMode,
             onboardingCompleted
         };
         localStorage.setItem('user_settings', JSON.stringify(settings));
-    }, [ttsSpeed, autoLandscape, theme, fontFamily, syncApiKey, geminiApiKey, deepgramApiKey, rsvpSettings, onboardingCompleted]);
+    }, [ttsSpeed, autoLandscape, theme, fontFamily, syncApiKey, geminiApiKey, deepgramApiKey, rsvpSettings, readerMode, onboardingCompleted]);
 
     // --- Auto-save Settings to Firestore ---
     useEffect(() => {
@@ -89,11 +97,12 @@ export function useSettings(storageProvider: FirestoreStorage | null, onboarding
                 geminiApiKey: syncApiKey ? geminiApiKey : undefined,
                 deepgramApiKey: syncApiKey ? deepgramApiKey : undefined,
                 rsvp: rsvpSettings,
+                readerMode,
                 onboardingCompleted
             });
         }, 1000);
         return () => clearTimeout(timer);
-    }, [ttsSpeed, autoLandscape, theme, fontFamily, syncApiKey, geminiApiKey, deepgramApiKey, rsvpSettings, storageProvider, onboardingCompleted]);
+    }, [ttsSpeed, autoLandscape, theme, fontFamily, syncApiKey, geminiApiKey, deepgramApiKey, rsvpSettings, readerMode, storageProvider, onboardingCompleted]);
 
 
     // Apply theme class to document
@@ -119,6 +128,7 @@ export function useSettings(storageProvider: FirestoreStorage | null, onboarding
         autoLandscape, setAutoLandscape,
         theme, setTheme, toggleTheme,
         fontFamily, setFontFamily,
+        readerMode, setReaderMode,
         rsvpSettings, setRsvpSettings
     };
 }

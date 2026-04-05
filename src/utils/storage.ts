@@ -25,6 +25,7 @@ export interface UserSettings {
   ttsSpeed?: number;
   autoLandscape?: boolean;
   rsvp?: RsvpSettings;
+  readerMode?: 'rsvp' | 'paginated';
   onboardingCompleted?: boolean;
   lastUpdated: number;
   lastAggregationTime?: number;

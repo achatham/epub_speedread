@@ -35,6 +35,8 @@ interface ReaderViewProps {
   onStatsClick?: () => void;
   vanityWpmRatio: number;
   rsvpSettings: RsvpSettings;
+  readerMode: 'rsvp' | 'paginated';
+  setReaderMode: (mode: 'rsvp' | 'paginated') => void;
 }
 
 export function ReaderView({
@@ -66,7 +68,9 @@ export function ReaderView({
   upcomingChapterTitle,
   onStatsClick,
   vanityWpmRatio,
-  rsvpSettings
+  rsvpSettings,
+  readerMode,
+  setReaderMode
 }: ReaderViewProps) {
   const pressStartTimeRef = useRef<number | null>(null);
   const lastPauseTimeRef = useRef<number>(0);
@@ -391,6 +395,8 @@ export function ReaderView({
             furthestIndex={furthestIndex}
             effectiveTotalWords={effectiveTotalWords}
             currentIndex={currentIndex}
+            readerMode={readerMode}
+            setReaderMode={setReaderMode}
           />
         )}
       </div>
