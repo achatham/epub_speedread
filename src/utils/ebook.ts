@@ -149,16 +149,62 @@ export async function processEpub(
     if (item) {
       const cleanHref = item.href.split('#')[0];
       if (!(cleanHref in hrefToStartIndex)) hrefToStartIndex[cleanHref] = allWords.length;
-      const contents = await book.load(item.href);
+      let contentsStr: string | null = null;
       let doc: Document | null = null;
-      if (typeof contents === 'string') {
-        doc = new DOMParser().parseFromString(contents, 'application/xhtml+xml');
-      } else if (contents instanceof Document) {
-        doc = contents;
+
+      try {
+        if ((book as any).archive) {
+           contentsStr = await (book as any).archive.getText(item.href);
+        }
+      } catch (err) {
+        console.warn(`[Epub] archive.getText failed for ${item.href}`);
       }
-      if (doc?.body) {
+
+      let contents: any = null;
+      if (!contentsStr) {
+        contents = await book.load(item.href);
+        if (typeof contents === 'string') {
+          contentsStr = contents;
+        } else if (contents instanceof ArrayBuffer || contents instanceof Uint8Array) {
+          contentsStr = new TextDecoder('utf-8').decode(contents);
+        } else if (typeof Blob !== 'undefined' && contents instanceof Blob) {
+          contentsStr = await contents.text();
+        } else if (contents instanceof Document) {
+          // Check if document body was swallowed by a self-closing script (DOMParser 'text/html' bug)
+          if (!contents.body || contents.body.childNodes.length === 0) {
+            const scripts = contents.getElementsByTagName('script');
+            for (const script of Array.from(scripts)) {
+              const scriptText = script.textContent || '';
+              if (scriptText.includes('<body') || scriptText.includes('<div')) {
+                contentsStr = scriptText;
+                break;
+              }
+            }
+          }
+          if (!contentsStr) doc = contents;
+        }
+      }
+
+      if (contentsStr) {
+        // Fix self-closing script tags which break text/html fallback by swallowing the body
+        const fixedStr = contentsStr.replace(/(<script\b[^>]*)\/>/gi, '$1></script>');
+        
+        doc = new DOMParser().parseFromString(fixedStr, 'application/xhtml+xml');
+        // Fallback to HTML parsing if XML parsing failed, returned parsererror, or resulted in 0 words
+        const xmlParserError = doc ? doc.getElementsByTagName('parsererror').length > 0 : false;
+        const xmlWordsLength = doc && !xmlParserError ? extractWordsFromDoc(doc).length : 0;
+        
+        if (!doc || xmlParserError || xmlWordsLength === 0) {
+          console.warn(`[Epub] Falling back to text/html for ${item.href}. XML error: ${xmlParserError}, XML words: ${xmlWordsLength}`);
+          doc = new DOMParser().parseFromString(fixedStr, 'text/html');
+        }
+      }
+
+      if (doc) {
         const sectionWords = extractWordsFromDoc(doc);
         if (sectionWords.length > 0) allWords = [...allWords, ...sectionWords];
+      } else {
+        console.warn(`[Epub] No doc created for ${item.href}. Type of contents: ${typeof contents}`);
       }
     }
   }
