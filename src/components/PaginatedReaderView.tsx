@@ -1,10 +1,9 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { prepareWithSegments, layoutWithLines } from '@chenglou/pretext';
 import { ReaderMenu } from './ReaderMenu';
 import type { WordData } from '../utils/text-processing';
 import { type Theme, type FontFamily, type ReadingMode } from '../hooks/useSettings';
-import type { RsvpSettings } from '../utils/storage';
 import type { NavigationType } from '../utils/navigation';
 
 interface PaginatedReaderViewProps {
@@ -30,8 +29,6 @@ interface PaginatedReaderViewProps {
   isReadingAloud: boolean;
   isSynthesizing: boolean;
   onStatsClick?: () => void;
-  vanityWpmRatio: number;
-  rsvpSettings: RsvpSettings;
   fontSize: number;
   onFontSizeChange: (size: number) => void;
   readingMode: ReadingMode;
@@ -122,8 +119,6 @@ export function PaginatedReaderView({
   isReadingAloud,
   isSynthesizing,
   onStatsClick,
-  vanityWpmRatio,
-  rsvpSettings,
   fontSize,
   onFontSizeChange,
   readingMode,
@@ -288,7 +283,7 @@ export function PaginatedReaderView({
           className="h-full w-full px-8 py-8 overflow-hidden"
           style={{ fontSize: `${fontSize}px`, lineHeight: `${lineHeight}px` }}
         >
-          {renderPageWords(pageWords, currentIndex, theme)}
+          {renderPageWords(pageWords, theme)}
         </div>
       </div>
 
@@ -390,7 +385,6 @@ export function PaginatedReaderView({
 
 function renderPageWords(
   pageWords: WordData[],
-  startWordIndex: number,
   theme: Theme,
 ) {
   if (pageWords.length === 0) return null;

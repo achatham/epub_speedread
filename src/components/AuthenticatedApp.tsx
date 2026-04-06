@@ -171,7 +171,6 @@ export function AuthenticatedApp({
                     setWpm(targetWpm);
                     storageProvider.updateBookWpm(currentBookId, targetWpm);
                 }}
-                vanityWpmRatio={rsvpSettings.vanityWpmRatio}
                 theme={theme}
                 fontFamily={fontFamily}
                 bookTitle={bookTitle}
@@ -186,7 +185,6 @@ export function AuthenticatedApp({
                 isReadingAloud={isReadingAloud}
                 isSynthesizing={isSynthesizing}
                 onStatsClick={handleOpenStats}
-                rsvpSettings={rsvpSettings}
                 fontSize={paginatedFontSize}
                 onFontSizeChange={onPaginatedFontSizeChange}
                 readingMode={readingMode}
