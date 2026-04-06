@@ -146,8 +146,13 @@ export function PaginatedReaderView({
   const readingAreaRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   
-  // pageEndIndex acts as the perfectly measured endpoint for the visible page
-  const [pageEndIndex, setPageEndIndex] = useState<number | null>(null);
+  // layoutState tracks the measured end index for a specific starting index.
+  // We use this to ensure we never use a stale measurement from a previous page.
+  const [layoutState, setLayoutState] = useState<{ start: number; end: number | null }>({
+    start: currentIndex,
+    end: null,
+  });
+
   const [areaDims, setAreaDims] = useState<{ w: number; h: number } | null>(null);
 
   // Track reading area dimensions
@@ -182,13 +187,20 @@ export function PaginatedReaderView({
   const fontFamilyStr = FONT_FAMILY_CSS[fontFamily];
   const lineHeight = Math.round(fontSize * 1.5);
 
-  // When dimensions or settings change, nullify measured index and fallback to estimation
+  // Synchronous reset if currentIndex or dimensions change. 
+  // This informs the rest of the render that we are in a 'measuring' state for this index.
+  if (layoutState.start !== currentIndex) {
+    setLayoutState({ start: currentIndex, end: null });
+  }
+
+  // When dimensions or settings change, nullify measured index to trigger re-measurement
   useEffect(() => {
-    setPageEndIndex(null);
+    setLayoutState({ start: currentIndex, end: null });
   }, [currentIndex, areaDims?.w, areaDims?.h, fontSize, fontFamilyStr, lineHeight]);
 
   useLayoutEffect(() => {
-    if (pageEndIndex !== null) return; // Done measuring
+    // Only measure if we are currently on the correct start index and haven't measured yet.
+    if (layoutState.start !== currentIndex || layoutState.end !== null) return;
     if (!areaDims || areaDims.w === 0 || areaDims.h === 0) return;
     if (!innerRef.current) return;
 
@@ -216,8 +228,8 @@ export function PaginatedReaderView({
 
     const endIdx = currentIndex + firstOverflow;
     console.log(`Measured layout: words idx ${currentIndex}-${endIdx} visually fits inside ${areaDims.w}x${areaDims.h}`);
-    setPageEndIndex(endIdx);
-  }, [pageEndIndex, currentIndex, areaDims, words]);
+    setLayoutState({ start: currentIndex, end: endIdx });
+  }, [layoutState, currentIndex, areaDims, words]);
 
   // Find chapter info
   let activeChapterIdx = -1;
@@ -232,16 +244,23 @@ export function PaginatedReaderView({
     ? Math.min(100, (currentIndex / effectiveTotalWords) * 100)
     : 0;
 
-  const effectivePageEndIndex = pageEndIndex ?? Math.min(words.length, currentIndex + 800);
-  const pageWords = words.slice(currentIndex, effectivePageEndIndex);
+  // pageEndIndex matches layoutState.end ONLY if it belongs to the current start index.
+  const pageEndIndex = layoutState.start === currentIndex ? layoutState.end : null;
+  const isMeasuring = pageEndIndex === null;
+
+  // For rendering, we always want to show something; 800 is a safe upper bound for layout.
+  const renderEndIndex = pageEndIndex ?? Math.min(words.length, currentIndex + 800);
+  const pageWords = words.slice(currentIndex, renderEndIndex);
 
   const handleNextPage = useCallback(() => {
-    if (effectivePageEndIndex < words.length) {
+    // Crucially: Only allow navigation if we HAVE a measurement. 
+    // This prevents the "800 word skip" when clicking too fast.
+    if (pageEndIndex !== null && pageEndIndex < words.length) {
       historyRef.current.push(currentIndex);
-      expectedIndexRef.current = effectivePageEndIndex;
-      setCurrentIndex(effectivePageEndIndex);
+      expectedIndexRef.current = pageEndIndex;
+      setCurrentIndex(pageEndIndex);
     }
-  }, [effectivePageEndIndex, words.length, currentIndex, setCurrentIndex]);
+  }, [pageEndIndex, words.length, currentIndex, setCurrentIndex]);
 
   const handlePrevPage = useCallback(() => {
     if (currentIndex === 0) return;
@@ -258,9 +277,14 @@ export function PaginatedReaderView({
       targetIndex = historyRef.current.pop()!;
     } else {
       // Fallback: estimate backward and iterate forward if history was cleared 
-      // We still use pretext purely for this estimation math.
-      const estimatedStart = Math.max(chapterStart, currentIndex - 800);
-      let prevStart = estimatedStart;
+      // Determine which chapter we are constrained to
+      let anchor = chapterStart;
+      // If we are exactly at the start of the current chapter, look to the previous chapter
+      if (currentIndex === chapterStart && activeChapterIdx > 0) {
+        anchor = sections[activeChapterIdx - 1]?.startIndex ?? 0;
+      }
+
+      const estimatedStart = Math.max(anchor, currentIndex - 800);
       let curr = estimatedStart;
       const PADDING = 32;
       const effectiveHeight = Math.max(lineHeight, areaDims.h - PADDING * 2 - lineHeight);
@@ -270,19 +294,19 @@ export function PaginatedReaderView({
         if (next >= currentIndex || next === curr) {
           break;
         }
-        prevStart = curr;
         curr = next;
       }
 
-      if (curr >= currentIndex && prevStart === curr) {
-        prevStart = Math.max(chapterStart, currentIndex - 200); // Safety fallback
+      if (curr >= currentIndex) {
+        curr = Math.max(anchor, currentIndex - 200); // Safety fallback
       }
-      targetIndex = prevStart;
-    }
+      targetIndex = curr;
 
-    if (targetIndex <= chapterStart + Math.floor((currentIndex - targetIndex) / 2)) {
-      targetIndex = chapterStart;
-      historyRef.current = []; 
+      // Snap to anchor if we are very close to it
+      if (targetIndex >= anchor && targetIndex <= anchor + Math.floor((currentIndex - targetIndex) / 2)) {
+        targetIndex = anchor;
+        historyRef.current = []; 
+      }
     }
 
     expectedIndexRef.current = targetIndex;
@@ -459,9 +483,9 @@ export function PaginatedReaderView({
 
             <button
               onClick={handleNextPage}
-              disabled={effectivePageEndIndex >= words.length}
+              disabled={isMeasuring || (pageEndIndex !== null && pageEndIndex >= words.length)}
               className={`flex items-center gap-1 px-3 py-2 rounded-lg border text-sm font-medium transition-all
-                ${effectivePageEndIndex >= words.length ? 'opacity-30 cursor-not-allowed' : 'hover:opacity-80 active:scale-95'}
+                ${(isMeasuring || (pageEndIndex !== null && pageEndIndex >= words.length)) ? 'opacity-30 cursor-not-allowed' : 'hover:opacity-80 active:scale-95'}
                 ${borderColor}`}
               aria-label="Next page"
             >

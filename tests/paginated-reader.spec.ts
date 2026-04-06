@@ -117,7 +117,7 @@ test('page navigation advances and retreats word index', async ({ page }) => {
 
   const backToFirstText = await readingArea.innerText();
   // Should be identical to the first page text
-  expect(backToFirstText).toBe(firstText);
+  expect(backToFirstText).toBe(firstPageText);
 });
 
 test('font size controls change displayed size', async ({ page }) => {
@@ -291,7 +291,7 @@ The hallway smelt of boiled cabbage and old rag mats. At one end of it a coloure
 
   const storyWords: any[] = [];
   const paragraphs = rawText.split('\n');
-  for (let p of paragraphs) {
+  for (const p of paragraphs) {
     const pWords = p.trim().split(/\s+/);
     pWords.forEach((text, i) => {
       storyWords.push({

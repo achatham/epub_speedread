@@ -1,0 +1,38 @@
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] ΓÇ║ tests\pagination-stability.spec.ts:17:1 ΓÇ║ pagination stability: no words are skipped when paging forward and back
+[1A[2K[chromium] ΓÇ║ tests\pagination-stability.spec.ts:17:1 ΓÇ║ pagination stability: no words are skipped when paging forward and back
+Initial range: 4000-4139
+
+[1A[2KPage 1 forward: 4140-4279
+
+[1A[2KPage 2 forward: 4280-4419
+
+[1A[2KPage 3 forward: 4420-4559
+
+[1A[2KPage 4 forward: 4560-4699
+
+[1A[2KPage 5 forward: 4700-4839
+
+[1A[2K  1) [chromium] ΓÇ║ tests\pagination-stability.spec.ts:17:1 ΓÇ║ pagination stability: no words are skipped when paging forward and back 
+
+    Error: Expected end 4699, but got 4839
+
+    Call Log:
+    - Timeout 5000ms exceeded while waiting on the predicate
+
+      89 |       if (newRange.end === lastStart - 1) return true;
+      90 |       throw new Error(`Expected end ${lastStart - 1}, but got ${newRange.end}`);
+    > 91 |     }).toPass({ timeout: 5000 });
+         |        ^
+      92 |
+      93 |     currentRange = await getRange();
+      94 |     console.log(`Page ${i + 1} backward: ${currentRange.start}-${currentRange.end}`);
+        at C:\Users\andre\src\epub_speedread\epub_speedread\tests\pagination-stability.spec.ts:91:8
+
+    Error Context: test-results\pagination-stability-pagin-662e3-hen-paging-forward-and-back-chromium\error-context.md
+
+
+[1A[2K  1 failed
+    [chromium] ΓÇ║ tests\pagination-stability.spec.ts:17:1 ΓÇ║ pagination stability: no words are skipped when paging forward and back 

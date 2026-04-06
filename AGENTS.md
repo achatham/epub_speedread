@@ -42,6 +42,9 @@ When iterating on a specific problem, try to run only the specific tests in
 your inner loop, and have playwright exit on the first error. Only run the
 full suite after you're sure the target test case passes.
 
+If you try to capture test output, use a consistent log/text filename so I
+don't have to keep approving unique commands.
+
 - **Run all tests:**
   ```bash
   npx playwright test
