@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useCallback } from 'react';
+import { useRef, useState, useEffect, useCallback, useLayoutEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { prepareWithSegments, layoutWithLines } from '@chenglou/pretext';
 import { ReaderMenu } from './ReaderMenu';
@@ -144,20 +144,27 @@ export function PaginatedReaderView({
   onReadingModeChange,
 }: PaginatedReaderViewProps) {
   const readingAreaRef = useRef<HTMLDivElement>(null);
-  const [pageEndIndex, setPageEndIndex] = useState<number>(currentIndex + 1);
+  const innerRef = useRef<HTMLDivElement>(null);
+  
+  // pageEndIndex acts as the perfectly measured endpoint for the visible page
+  const [pageEndIndex, setPageEndIndex] = useState<number | null>(null);
   const [areaDims, setAreaDims] = useState<{ w: number; h: number } | null>(null);
 
   // Track reading area dimensions
   useEffect(() => {
-    const el = readingAreaRef.current;
-    if (!el) return;
+    if (!readingAreaRef.current) return;
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        const { width, height } = entry.contentRect;
-        setAreaDims({ w: Math.floor(width), h: Math.floor(height) });
+        // Aggressive sub-pixel rounding to prevent bounce loops
+        const w = Math.round(entry.contentRect.width / 10) * 10;
+        const h = Math.round(entry.contentRect.height / 10) * 10;
+        setAreaDims(prev => {
+          if (prev && prev.w === w && prev.h === h) return prev;
+          return { w, h };
+        });
       }
     });
-    observer.observe(el);
+    observer.observe(readingAreaRef.current);
     return () => observer.disconnect();
   }, []);
 
@@ -175,26 +182,42 @@ export function PaginatedReaderView({
   const fontFamilyStr = FONT_FAMILY_CSS[fontFamily];
   const lineHeight = Math.round(fontSize * 1.5);
 
-  // Recompute page end when relevant inputs change
+  // When dimensions or settings change, nullify measured index and fallback to estimation
   useEffect(() => {
-    if (!areaDims || areaDims.w <= 0 || areaDims.h <= 0) return;
-    const PADDING = 32; // px, matches the px-4 / px-8 padding in reading area
-    
-    // Browser text tracking can sometimes push words to the next line natively.
-    // Reserving 1 lineHeight of vertical space ensures that if the browser wraps slightly later,
-    // the final line falls safely into the reserved space instead of overflowing and clipping words in half.
-    const effectiveHeight = Math.max(lineHeight, areaDims.h - PADDING * 2 - lineHeight);
-    
-    const end = computePageEndIndex(
-      words,
-      currentIndex,
-      areaDims.w - PADDING * 2,
-      effectiveHeight,
-      fontSize,
-      fontFamilyStr,
-    );
-    setPageEndIndex(end);
-  }, [words, currentIndex, areaDims, fontSize, fontFamilyStr, lineHeight]);
+    setPageEndIndex(null);
+  }, [currentIndex, areaDims?.w, areaDims?.h, fontSize, fontFamilyStr, lineHeight]);
+
+  useLayoutEffect(() => {
+    if (pageEndIndex !== null) return; // Done measuring
+    if (!areaDims || areaDims.w === 0 || areaDims.h === 0) return;
+    if (!innerRef.current) return;
+
+    const rect = innerRef.current.getBoundingClientRect();
+    const limit = rect.bottom - 48; // -32px for py-8 bottom padding + 16px safety clearance
+
+    const spans = innerRef.current.querySelectorAll('span[data-word-idx]');
+    if (spans.length === 0) return;
+
+    let firstOverflow = spans.length; // defaults to all fit
+
+    // Explicit forward iteration to guarantee robust first boundary detection
+    for (let i = 0; i < spans.length; i++) {
+      const spanRect = spans[i].getBoundingClientRect();
+      if (spanRect.height > 0 && spanRect.bottom > limit) {
+         firstOverflow = i;
+         break;
+      }
+    }
+
+    if (firstOverflow === 0) {
+       // Container is pathologically small; assure progress
+       firstOverflow = 1;
+    }
+
+    const endIdx = currentIndex + firstOverflow;
+    console.log(`Measured layout: words idx ${currentIndex}-${endIdx} visually fits inside ${areaDims.w}x${areaDims.h}`);
+    setPageEndIndex(endIdx);
+  }, [pageEndIndex, currentIndex, areaDims, words]);
 
   // Find chapter info
   let activeChapterIdx = -1;
@@ -209,15 +232,16 @@ export function PaginatedReaderView({
     ? Math.min(100, (currentIndex / effectiveTotalWords) * 100)
     : 0;
 
-  const pageWords = words.slice(currentIndex, pageEndIndex);
+  const effectivePageEndIndex = pageEndIndex ?? Math.min(words.length, currentIndex + 800);
+  const pageWords = words.slice(currentIndex, effectivePageEndIndex);
 
   const handleNextPage = useCallback(() => {
-    if (pageEndIndex < words.length) {
+    if (effectivePageEndIndex < words.length) {
       historyRef.current.push(currentIndex);
-      expectedIndexRef.current = pageEndIndex;
-      setCurrentIndex(pageEndIndex);
+      expectedIndexRef.current = effectivePageEndIndex;
+      setCurrentIndex(effectivePageEndIndex);
     }
-  }, [pageEndIndex, words.length, currentIndex, setCurrentIndex]);
+  }, [effectivePageEndIndex, words.length, currentIndex, setCurrentIndex]);
 
   const handlePrevPage = useCallback(() => {
     if (currentIndex === 0) return;
@@ -234,17 +258,17 @@ export function PaginatedReaderView({
       targetIndex = historyRef.current.pop()!;
     } else {
       // Fallback: estimate backward and iterate forward if history was cleared 
-      const estimatedStart = Math.max(chapterStart, currentIndex - 1500);
+      // We still use pretext purely for this estimation math.
+      const estimatedStart = Math.max(chapterStart, currentIndex - 800);
       let prevStart = estimatedStart;
       let curr = estimatedStart;
       const PADDING = 32;
       const effectiveHeight = Math.max(lineHeight, areaDims.h - PADDING * 2 - lineHeight);
 
-      // Fast-forward until we find the page just preceding currentIndex
       while (curr < currentIndex) {
         const next = computePageEndIndex(words, curr, areaDims.w - PADDING * 2, effectiveHeight, fontSize, fontFamilyStr);
-        if (next >= currentIndex) {
-          break; // The page starting at `curr` covers our active index. The one before it is `prevStart`.
+        if (next >= currentIndex || next === curr) {
+          break;
         }
         prevStart = curr;
         curr = next;
@@ -256,10 +280,9 @@ export function PaginatedReaderView({
       targetIndex = prevStart;
     }
 
-    // Snap to chapter start if we'd be within half a page of it
     if (targetIndex <= chapterStart + Math.floor((currentIndex - targetIndex) / 2)) {
       targetIndex = chapterStart;
-      historyRef.current = []; // Clear history crossing chap boundary
+      historyRef.current = []; 
     }
 
     expectedIndexRef.current = targetIndex;
@@ -348,19 +371,12 @@ export function PaginatedReaderView({
         data-testid="paginated-reading-area"
       >
         <div
+          ref={innerRef}
           className="h-full w-full px-8 py-8 overflow-hidden"
-          style={{ fontSize: `${fontSize}px`, lineHeight: `${lineHeight}px` }}
+          style={{ fontSize: `${fontSize}px`, lineHeight: `${lineHeight}px`, opacity: 1 }}
         >
-          {renderPageWords(pageWords, theme)}
+          {renderPageWords(pageWords, theme, currentIndex)}
         </div>
-      </div>
-
-      {/* ── Debug bar ─────────────────────────────────────────── */}
-      <div className="shrink-0 px-4 py-1 text-xs font-mono opacity-60 bg-yellow-100 dark:bg-yellow-900 text-yellow-900 dark:text-yellow-100">
-        idx {currentIndex}–{pageEndIndex - 1} ({pageEndIndex - currentIndex} words)
-        {' | '}area {areaDims ? `${areaDims.w}×${areaDims.h}` : '?'}
-        {' | '}start: "{words[currentIndex]?.text ?? '—'}"
-        {' | '}end: "{words[pageEndIndex - 1]?.text ?? '—'}"
       </div>
 
       {/* ── Footer / controls ──────────────────────────────────── */}
@@ -443,9 +459,9 @@ export function PaginatedReaderView({
 
             <button
               onClick={handleNextPage}
-              disabled={pageEndIndex >= words.length}
+              disabled={effectivePageEndIndex >= words.length}
               className={`flex items-center gap-1 px-3 py-2 rounded-lg border text-sm font-medium transition-all
-                ${pageEndIndex >= words.length ? 'opacity-30 cursor-not-allowed' : 'hover:opacity-80 active:scale-95'}
+                ${effectivePageEndIndex >= words.length ? 'opacity-30 cursor-not-allowed' : 'hover:opacity-80 active:scale-95'}
                 ${borderColor}`}
               aria-label="Next page"
             >
@@ -462,19 +478,21 @@ export function PaginatedReaderView({
 function renderPageWords(
   pageWords: WordData[],
   theme: Theme,
+  currentIndex: number
 ) {
   if (pageWords.length === 0) return null;
 
   // Group words into paragraphs
-  const paragraphs: WordData[][] = [];
-  let current: WordData[] = [];
+  const paragraphs: { word: WordData; globalIdx: number }[][] = [];
+  let current: { word: WordData; globalIdx: number }[] = [];
+  let currentGlobalIdx = currentIndex;
 
   for (const word of pageWords) {
     if (word.isParagraphStart && current.length > 0) {
       paragraphs.push(current);
       current = [];
     }
-    current.push(word);
+    current.push({ word, globalIdx: currentGlobalIdx++ });
   }
   if (current.length > 0) paragraphs.push(current);
 
@@ -488,11 +506,13 @@ function renderPageWords(
           className={`mb-[1em] leading-[inherit] ${paraTextColor}`}
           style={{ margin: 0, marginBottom: '1em' }}
         >
-          {para.map((word, wIdx) => (
-            <span key={wIdx}>
-              {wIdx > 0 ? ' ' : ''}{word.text}
-            </span>
-          ))}
+          {para.map(({ word, globalIdx }, wIdx) => {
+            return (
+              <span key={globalIdx} data-word-idx={globalIdx}>
+                {wIdx > 0 ? ' ' : ''}{word.text}
+              </span>
+            );
+          })}
         </p>
       ))}
     </>

@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-const MOCK_WORDS = Array.from({ length: 500 }, (_, i) => ({
+const MOCK_WORDS = Array.from({ length: 2000 }, (_, i) => ({
   text: `word${i}`,
   isParagraphStart: i % 20 === 0,
   isSentenceStart: i % 5 === 0,
@@ -116,8 +116,8 @@ test('page navigation advances and retreats word index', async ({ page }) => {
   await page.waitForTimeout(300);
 
   const backToFirstText = await readingArea.innerText();
-  // Should contain words near the beginning (word0 through word9 range)
-  expect(backToFirstText).toMatch(/word[0-9]\b/);
+  // Should be identical to the first page text
+  expect(backToFirstText).toBe(firstText);
 });
 
 test('font size controls change displayed size', async ({ page }) => {
@@ -182,8 +182,8 @@ test('keyboard navigation works in paginated mode', async ({ page }) => {
   await page.waitForTimeout(300);
 
   const backText = await readingArea.innerText();
-  // Should be near the beginning again — contains low-numbered words
-  expect(backText).toMatch(/word[0-9]\b/);
+  // Should be identical back to the first page
+  expect(backText).toBe(firstText);
 });
 
 test('mode toggle in menu switches between RSVP and paginated', async ({ page }) => {
