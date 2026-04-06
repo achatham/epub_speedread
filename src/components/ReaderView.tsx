@@ -1,5 +1,4 @@
-import { useRef, useEffect, useState } from 'react';
-import { prepareWithSegments, layoutWithLines } from '@chenglou/pretext';
+import { useRef, useEffect } from 'react';
 import { ReaderMenu } from './ReaderMenu';
 import type { WordData } from '../utils/text-processing';
 import { splitWord } from '../utils/orp';
@@ -69,28 +68,24 @@ export function ReaderView({
   upcomingChapterTitle,
   onStatsClick,
   vanityWpmRatio,
-  rsvpSettings,
   readingMode,
   onReadingModeChange,
 }: ReaderViewProps) {
   const pressStartTimeRef = useRef<number | null>(null);
   const lastPauseTimeRef = useRef<number>(0);
-  const pausedAreaRef = useRef<HTMLDivElement>(null);
-  const [pausedAreaDims, setPausedAreaDims] = useState<{ w: number; h: number } | null>(null);
 
-  // Track paused reading area dimensions for pretext layout
+  const pausedAreaRef = useRef<HTMLDivElement>(null);
+  const pausedScrollRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to the current word inside RSVP paused view
   useEffect(() => {
-    const el = pausedAreaRef.current;
-    if (!el) return;
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const { width, height } = entry.contentRect;
-        setPausedAreaDims({ w: Math.floor(width), h: Math.floor(height) });
+    if (!isPlaying && readingMode === 'rsvp' && pausedScrollRef.current) {
+      const activeEl = pausedScrollRef.current.querySelector('[data-current-word="true"]');
+      if (activeEl) {
+        activeEl.scrollIntoView({ block: 'center' });
       }
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
+    }
+  }, [isPlaying, readingMode, currentIndex]);
 
   if (words.length === 0) {
     return (
@@ -240,65 +235,7 @@ export function ReaderView({
     );
   };
 
-  // Compute context word window using pretext when paused
-  const pausedContextRange = (() => {
-    const PREVIEW_FONT_SIZE = 16; // px, used for pretext measurement of paused context
-    const PREVIEW_LINE_HEIGHT = Math.round(PREVIEW_FONT_SIZE * 1.5);
-    const fontFamilyCss: Record<FontFamily, string> = {
-      system: 'ui-sans-serif, system-ui, sans-serif',
-      serif: '"Georgia", "Times New Roman", serif',
-      mono: 'ui-monospace, "Courier New", monospace',
-      opendyslexic: 'OpenDyslexic, sans-serif',
-      atkinson: 'AtkinsonHyperlegible, sans-serif',
-    };
-    if (!isPlaying && pausedAreaDims && pausedAreaDims.w > 0 && pausedAreaDims.h > 0) {
-      const areaW = pausedAreaDims.w - 32; // account for px-4
-      const areaH = pausedAreaDims.h - 32;
-      const fontStr = `${PREVIEW_FONT_SIZE}px ${fontFamilyCss[fontFamily]}`;
-      try {
-        // How many words forward from currentIndex fit?
-        const forwardChunk = Math.min(300, words.length - currentIndex);
-        const forwardText = words.slice(currentIndex, currentIndex + forwardChunk).map(w => w.text).join(' ');
-        const preparedFwd = prepareWithSegments(forwardText, fontStr);
-        const { lines: fwdLines } = layoutWithLines(preparedFwd, areaW, PREVIEW_LINE_HEIGHT);
-        let fwdWords = 0;
-        let fwdH = 0;
-        // Reserve half for backward context
-        for (const line of fwdLines) {
-          if (fwdH + PREVIEW_LINE_HEIGHT > areaH / 2) break;
-          fwdH += PREVIEW_LINE_HEIGHT;
-          fwdWords += line.text.trim() ? line.text.trim().split(/\s+/).length : 0;
-        }
-        // How many words backward fit in remaining space?
-        const backChunk = Math.min(300, currentIndex - chapterStart);
-        let bwdWords = 0;
-        if (backChunk > 0) {
-          const backText = words.slice(currentIndex - backChunk, currentIndex).map(w => w.text).join(' ');
-          const preparedBwd = prepareWithSegments(backText, fontStr);
-          const { lines: bwdLines } = layoutWithLines(preparedBwd, areaW, PREVIEW_LINE_HEIGHT);
-          let bwdH = 0;
-          const remainH = areaH - fwdH;
-          for (const line of [...bwdLines].reverse()) {
-            if (bwdH + PREVIEW_LINE_HEIGHT > remainH) break;
-            bwdH += PREVIEW_LINE_HEIGHT;
-            bwdWords += line.text.trim() ? line.text.trim().split(/\s+/).length : 0;
-          }
-        }
-        return {
-          start: Math.max(chapterStart, currentIndex - bwdWords),
-          end: Math.min(words.length, currentIndex + fwdWords),
-        };
-      } catch {
-        // Fallback to default word count
-      }
-    }
-    // Fallback
-    const half = Math.floor(rsvpSettings.previewWordCount / 2);
-    return {
-      start: Math.max(chapterStart, currentIndex - half),
-      end: Math.min(words.length, currentIndex + half),
-    };
-  })();
+  // (Context word window is generated inline in rendering block)
 
   return (
     <div
@@ -330,7 +267,8 @@ export function ReaderView({
       {/* RSVP Display or Text Preview — flex-1 ensures it fills space between header and controls */}
       <div
         ref={!isPlaying ? pausedAreaRef : undefined}
-        className={`relative flex items-center justify-center w-full overflow-hidden border-t border-b
+        className={`relative flex min-h-0 w-full overflow-hidden border-t border-b
+          ${readingMode === 'rsvp' ? 'items-center justify-center' : 'items-stretch'}
           ${isPlaying ? 'flex-1' : 'flex-1 max-w-2xl mx-auto landscape:max-w-none landscape:mx-8 w-full'}
           ${theme === 'bedtime' ? 'border-zinc-900' : 'border-zinc-200 dark:border-zinc-800'}`}
         style={{ minHeight: isPlaying ? Math.max(120, currentFontSize * 1.5) : undefined }}
@@ -364,29 +302,46 @@ export function ReaderView({
             )}
           </>
         ) : (
-          <div className={`w-full h-full text-center px-4 py-4 landscape:text-base landscape:leading-snug ${theme === 'bedtime' ? 'text-stone-500' : 'text-zinc-500 dark:text-zinc-400'} overflow-hidden flex items-center justify-center`}>
-            <div>
+          <div className={`w-full h-full text-left px-4 py-4 md:px-12 landscape:text-base landscape:leading-snug ${theme === 'bedtime' ? 'text-stone-500' : 'text-zinc-500 dark:text-zinc-400'} overflow-y-auto hidden-scrollbar`} ref={pausedScrollRef}>
+            <div className="my-auto pointer-events-none select-none max-w-4xl mx-auto pb-[40vh] pt-[40vh]">
               {(() => {
-                const { start, end } = pausedContextRange;
-                const before = words.slice(start, currentIndex);
-                const current = words[currentIndex];
-                const after = words.slice(currentIndex + 1, end);
+                const start = Math.max(chapterStart, currentIndex - 200);
+                const end = Math.min(words.length, currentIndex + 200);
+                const pageWords = words.slice(start, end);
 
-                return (
-                  <>
-                    {start > chapterStart && <span className="opacity-30">... </span>}
-                    {before.map((w, i) => (
-                      <span key={`before-${i}`}>{w.text} </span>
-                    ))}
-                    <span className={`font-bold ${theme === 'bedtime' ? 'text-amber-600' : 'text-zinc-900 dark:text-zinc-100 underline decoration-red-500/50'}`}>
-                      {current?.text}
-                    </span>
-                    {after.map((w, i) => (
-                      <span key={`after-${i}`}> {w.text}</span>
-                    ))}
-                    {end < words.length && <span className="opacity-30"> ...</span>}
-                  </>
-                );
+                const paragraphs: { word: WordData; globalIdx: number }[][] = [];
+                let current: { word: WordData; globalIdx: number }[] = [];
+                
+                for (let i = 0; i < pageWords.length; i++) {
+                  const globalIdx = start + i;
+                  const word = pageWords[i];
+                  if (word.isParagraphStart && current.length > 0) {
+                    paragraphs.push(current);
+                    current = [];
+                  }
+                  current.push({ word, globalIdx });
+                }
+                if (current.length > 0) paragraphs.push(current);
+
+                return paragraphs.map((para, pIdx) => (
+                  <p key={pIdx} className="mb-[1em] leading-relaxed text-justify">
+                    {para.map(({ word, globalIdx }, wIdx) => {
+                      const isCurrent = globalIdx === currentIndex;
+                      return (
+                        <span 
+                          key={globalIdx} 
+                          {...(isCurrent ? { 'data-current-word': 'true' } : {})}
+                          className={isCurrent 
+                            ? `font-bold inline-block scale-110 px-[1px] transition-transform ${theme === 'bedtime' ? 'text-amber-600' : 'text-zinc-900 dark:text-zinc-100 underline decoration-red-500/50'}`
+                            : "opacity-60"
+                          }
+                        >
+                          {wIdx > 0 ? ' ' : ''}{word.text}
+                        </span>
+                      );
+                    })}
+                  </p>
+                ));
               })()}
             </div>
           </div>

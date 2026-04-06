@@ -193,7 +193,7 @@ export function PaginatedReaderView({
     if (!innerRef.current) return;
 
     const rect = innerRef.current.getBoundingClientRect();
-    const limit = rect.bottom - 48; // -32px for py-8 bottom padding + 16px safety clearance
+    const limit = rect.bottom - 64; // -64px for pb-16 bottom padding + safety clearance
 
     const spans = innerRef.current.querySelectorAll('span[data-word-idx]');
     if (spans.length === 0) return;
@@ -367,12 +367,12 @@ export function PaginatedReaderView({
       {/* ── Reading area ───────────────────────────────────────── */}
       <div
         ref={readingAreaRef}
-        className={`flex-1 overflow-hidden border-b ${borderColor} relative`}
+        className={`flex-1 min-h-0 overflow-hidden border-b ${borderColor} relative`}
         data-testid="paginated-reading-area"
       >
         <div
           ref={innerRef}
-          className="h-full w-full px-8 py-8 overflow-hidden"
+          className="h-full w-full px-8 pt-8 pb-16 overflow-hidden"
           style={{ fontSize: `${fontSize}px`, lineHeight: `${lineHeight}px`, opacity: 1 }}
         >
           {renderPageWords(pageWords, theme, currentIndex)}
