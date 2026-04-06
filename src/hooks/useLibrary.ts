@@ -1,16 +1,15 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import type { FirestoreStorage, BookRecord, ReadingSession } from '../utils/storage';
+import { useEffect, useCallback, useRef } from 'react';
+import type { FirestoreStorage } from '../utils/storage';
 import { ref, getBytes } from 'firebase/storage';
 import { storage } from '../utils/firebase';
+import { useLibraryStore } from '../stores/useLibraryStore';
 
 export function useLibrary(
     storageProvider: FirestoreStorage | null,
     currentBookId: string | null,
     handleSelectBook: (id: string) => void
 ) {
-    const [library, setLibrary] = useState<BookRecord[]>([]);
-    const [sessions, setSessions] = useState<ReadingSession[]>([]);
-    const [isLoadingLibrary, setIsLoadingLibrary] = useState(true);
+    const { setLibrary, setSessions, setIsLoadingLibrary } = useLibraryStore();
     const hasAutoOpenedRef = useRef(false);
 
     // Initial Data Load
@@ -44,7 +43,8 @@ export function useLibrary(
         };
 
         loadLibrary();
-    }, [storageProvider]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageProvider]);
 
     const handleUpdateBookTitle = useCallback(async (id: string, newTitle: string) => {
         if (!storageProvider) return;
@@ -54,7 +54,8 @@ export function useLibrary(
         } catch (err) {
             console.error("Failed to update book title:", err);
         }
-    }, [storageProvider]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageProvider]);
 
     const handleUpdateBookFinishedDate = useCallback(async (updates: { id: string, date: number }[]) => {
         if (!storageProvider) return;
@@ -66,7 +67,8 @@ export function useLibrary(
         } catch (err) {
             console.error("Failed to update book finished date:", err);
         }
-    }, [storageProvider]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageProvider]);
 
     const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!storageProvider) return;
@@ -83,7 +85,8 @@ export function useLibrary(
         } finally {
             setIsLoadingLibrary(false);
         }
-    }, [storageProvider, handleSelectBook]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageProvider, handleSelectBook]);
 
     const handleLoadDemoBook = useCallback(async () => {
         if (!storageProvider || !storage) return;
@@ -102,7 +105,8 @@ export function useLibrary(
         } finally {
             setIsLoadingLibrary(false);
         }
-    }, [storageProvider, handleSelectBook]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageProvider, handleSelectBook]);
 
     const handleDeleteBook = useCallback(async (e: React.MouseEvent, id: string) => {
         e.stopPropagation();
@@ -111,28 +115,25 @@ export function useLibrary(
             await storageProvider.deleteBook(id);
             setLibrary(await storageProvider.getAllBooks());
         }
-    }, [storageProvider]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageProvider]);
 
     const handleToggleArchive = useCallback(async (id: string, archived: boolean) => {
         if (!storageProvider) return;
         await storageProvider.updateBookArchived(id, archived);
         setLibrary(await storageProvider.getAllBooks());
-    }, [storageProvider]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageProvider]);
 
     const refreshSessions = useCallback(async () => {
         if (storageProvider) {
             await storageProvider.aggregateSessions();
             setSessions(await storageProvider.getAggregatedSessions());
         }
-    }, [storageProvider]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageProvider]);
 
     return {
-        library,
-        setLibrary,
-        sessions,
-        setSessions,
-        isLoadingLibrary,
-        setIsLoadingLibrary,
         handleUpdateBookTitle,
         handleUpdateBookFinishedDate,
         handleFileUpload,

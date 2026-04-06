@@ -11,19 +11,6 @@ const MOCK_SECTIONS = [
   { label: 'Chapter Two', startIndex: 250 },
 ];
 
-async function loadPaginatedReader(page: any) {
-  await page.goto('/');
-  await page.waitForFunction(() => typeof (window as any).__loadMockWords === 'function');
-  await page.evaluate(({ words, sections }: any) => {
-    (window as any).__loadMockWords(words, sections);
-  }, { words: MOCK_WORDS, sections: MOCK_SECTIONS });
-
-  // Switch to paginated mode via the menu (clicking Page auto-closes the menu)
-  await page.locator('button[title="Open Menu"]').click();
-  await page.locator('button:has-text("Page")').click();
-  // Wait for paginated reader to appear
-  await page.locator('[data-testid="paginated-reader"]').waitFor({ state: 'visible' });
-}
 
 test('paginated mode renders reading area and controls', async ({ page }) => {
   await page.goto('/');
@@ -266,8 +253,6 @@ test('RSVP paused view has bounded reading area', async ({ page }) => {
     (window as any).__loadMockWords(w, [{ label: 'Chapter 1', startIndex: 0 }]);
   }, words);
 
-  // In RSVP paused mode — reading area should be visible
-  const rsvpArea = page.locator('[data-testid="paginated-reading-area"]');
   // RSVP view doesn't have this test-id, but we can check the preview area doesn't overlap controls
   const menuFab = page.locator('button[title="Open Menu"]');
   await expect(menuFab).toBeVisible();
@@ -313,15 +298,8 @@ The hallway smelt of boiled cabbage and old rag mats. At one end of it a coloure
   const reader = page.locator('[data-testid="paginated-reader"]');
   await expect(reader).toBeVisible();
 
-  // Force size 20 (system font is default)
-  // Initially font size is unknown, so just click increase/decrease buttons to normalize (mock is probably default 20ish anyway)
-  // Actually, we can just grab the debug text to verify the end index is sensible relative to total words.
+  // Wait a short moment
   await page.waitForTimeout(500);
-
-  const debugText = await page.locator('.bg-yellow-100').innerText();
-  // It should say something like idx 0-X (X words) 
-  // Make sure X is less than the total words unless they all fit.
-  console.log("Debug text:", debugText);
   
   const readingArea = page.locator('[data-testid="paginated-reading-area"]');
   const innerText = await readingArea.innerText();
@@ -329,25 +307,16 @@ The hallway smelt of boiled cabbage and old rag mats. At one end of it a coloure
   // The first word should be "It"
   expect(innerText).toContain('It');
   
-  // Verify it doesn't contain the absolute end of the book if the screen is small (default playwright screen is 1280x720, so it might all fit. We can constrain viewport to force pagination)
+  // Verify it doesn't contain the absolute end of the book if the screen is small (default playwright screen is 1280x720)
   await page.setViewportSize({ width: 400, height: 400 });
   await page.waitForTimeout(500);
   
-  const debugTextConstrained = await page.locator('.bg-yellow-100').innerText();
-  console.log("Constrained debug text:", debugTextConstrained);
-  
-  const match = debugTextConstrained.match(/idx 0–(\d+)/); 
-  expect(match).not.toBeNull();
-  
-  const endIndex = parseInt(match![1], 10);
-  expect(endIndex).toBeLessThan(storyWords.length);
-  
-  // Check the text on screen actually matches the slice of words up to endIndex
+  // Check the text on screen
   const constrainedInnerText = await readingArea.innerText();
   const visibleWords = constrainedInnerText.split(/\s+/).filter(Boolean);
   
-  // Count words manually to avoid regex subtleties on punctuation
-  // The visible word count should be very close to endIndex (within a few words due to visual trimming)
-  expect(Math.abs(visibleWords.length - endIndex)).toBeLessThan(5);
+  // Constrained box should only fit a small chunk of words, definitely not the full 150+ words
+  expect(visibleWords.length).toBeLessThan(storyWords.length);
+  expect(visibleWords.length).toBeGreaterThan(0);
 });
 

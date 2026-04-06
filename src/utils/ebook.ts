@@ -156,7 +156,7 @@ export async function processEpub(
         if ((book as any).archive) {
            contentsStr = await (book as any).archive.getText(item.href);
         }
-      } catch (err) {
+      } catch {
         console.warn(`[Epub] archive.getText failed for ${item.href}`);
       }
 

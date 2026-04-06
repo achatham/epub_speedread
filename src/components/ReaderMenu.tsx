@@ -5,65 +5,35 @@ import {
   ChevronLeft, Loader2, Square, LogOut, Zap, BookOpen
 } from 'lucide-react';
 import type { NavigationType } from '../utils/navigation';
-import type { ReadingMode } from '../hooks/useSettings';
-
-type Theme = 'light' | 'dark' | 'bedtime';
+import { useSettingsStore } from '../stores/useSettingsStore';
+import { useReaderStore } from '../stores/useReaderStore';
+import { useUIStore } from '../stores/useUIStore';
 
 interface ReaderMenuProps {
-  wpm: number;
-  onWpmChange: (wpm: number) => void;
-  onSettingsClick: () => void;
-  onBookSettingsClick: () => void;
-  onStatsClick: () => void;
-  onToggleTheme: () => void;
-  theme: Theme;
-  bookTitle: string;
-  sections: { label: string; startIndex: number }[];
-  activeChapterIdx: number;
-  setCurrentIndex: (index: number) => void;
   onCloseBook: () => void;
-  onAskAiClick: () => void;
   onReadChapter: () => void;
-  isReadingAloud: boolean;
-  isSynthesizing: boolean;
   navigate: (type: NavigationType) => void;
-  furthestIndex: number | null;
-  effectiveTotalWords: number;
-  currentIndex: number;
-  readingMode: ReadingMode;
-  onReadingModeChange: (mode: ReadingMode) => void;
   /** Override FAB button positioning; defaults to fixed bottom-right */
   fabClassName?: string;
+  activeChapterIdx: number;
 }
 
 export function ReaderMenu({
-  wpm,
-  onWpmChange,
-  onSettingsClick,
-  onBookSettingsClick,
-  onStatsClick,
-  onToggleTheme,
-  theme,
-  bookTitle,
-  sections,
-  activeChapterIdx,
-  setCurrentIndex,
   onCloseBook,
-  onAskAiClick,
   onReadChapter,
-  isReadingAloud,
-  isSynthesizing,
   navigate,
-  furthestIndex,
-  effectiveTotalWords,
-  currentIndex,
-  readingMode,
-  onReadingModeChange,
   fabClassName,
+  activeChapterIdx,
 }: ReaderMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'main' | 'toc' | 'nav'>('main');
   const activeChapterRef = useRef<HTMLButtonElement>(null);
+
+  const { wpm, setWpm, theme, toggleTheme, readingMode, setReadingMode } = useSettingsStore();
+  const { bookTitle, sections, setCurrentIndex, isReadingAloud, isSynthesizing, furthestIndex, words, currentIndex } = useReaderStore();
+  const { setIsSettingsOpen, setIsBookSettingsOpen, setIsStatsOpen, setIsAskAiOpen } = useUIStore();
+
+  const effectiveTotalWords = words.length;
 
   // Reset to main tab when menu opens
   useEffect(() => {
@@ -134,7 +104,7 @@ export function ReaderMenu({
                 <span className="text-[10px] uppercase font-bold tracking-widest opacity-50">Reading Speed</span>
                 <div className="flex items-center justify-between bg-zinc-50 dark:bg-zinc-950/50 p-3 rounded-xl border border-zinc-100 dark:border-zinc-800">
                   <button
-                    onClick={() => onWpmChange(Math.max(100, Math.round(wpm / 25) * 25 - 25))}
+                    onClick={() => setWpm(Math.max(100, Math.round(wpm / 25) * 25 - 25))}
                     className={`p-2 rounded-lg border transition-colors ${theme === 'bedtime' ? 'border-zinc-800 hover:bg-zinc-900' : 'border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}
                     title="Decrease Speed"
                   >
@@ -145,7 +115,7 @@ export function ReaderMenu({
                     <span className="text-[10px] opacity-40 font-semibold uppercase">WPM</span>
                   </div>
                   <button
-                    onClick={() => onWpmChange(Math.min(1200, Math.round(wpm / 25) * 25 + 25))}
+                    onClick={() => setWpm(Math.min(1200, Math.round(wpm / 25) * 25 + 25))}
                     className={`p-2 rounded-lg border transition-colors ${theme === 'bedtime' ? 'border-zinc-800 hover:bg-zinc-900' : 'border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}
                     title="Increase Speed"
                   >
@@ -159,25 +129,25 @@ export function ReaderMenu({
                 <MenuButton
                   icon={<BarChart2 size={20} />}
                   label="Stats"
-                  onClick={() => { onStatsClick(); setIsOpen(false); }}
+                  onClick={() => { setIsStatsOpen(true); setIsOpen(false); }}
                   hoverClass={itemHover}
                 />
                 <MenuButton
                   icon={<Settings size={20} />}
                   label="Settings"
-                  onClick={() => { onSettingsClick(); setIsOpen(false); }}
+                  onClick={() => { setIsSettingsOpen(true); setIsOpen(false); }}
                   hoverClass={itemHover}
                 />
                 <MenuButton
                   icon={<Settings2 size={20} />}
                   label="Book"
-                  onClick={() => { onBookSettingsClick(); setIsOpen(false); }}
+                  onClick={() => { setIsBookSettingsOpen(true); setIsOpen(false); }}
                   hoverClass={itemHover}
                 />
                 <MenuButton
                   icon={theme === 'light' ? <Sun size={20} /> : theme === 'dark' ? <Moon size={20} /> : <Sunset size={20} className="text-amber-600" />}
                   label="Theme"
-                  onClick={onToggleTheme}
+                  onClick={toggleTheme}
                   hoverClass={itemHover}
                 />
                 <MenuButton
@@ -191,7 +161,7 @@ export function ReaderMenu({
                 <MenuButton
                   icon={<Sparkles size={20} />}
                   label="Ask AI"
-                  onClick={() => { onAskAiClick(); setIsOpen(false); }}
+                  onClick={() => { setIsAskAiOpen(true); setIsOpen(false); }}
                   hoverClass={itemHover}
                 />
               </div>
@@ -201,7 +171,7 @@ export function ReaderMenu({
                 <span className="text-[10px] uppercase font-bold tracking-widest opacity-50">Reading Mode</span>
                 <div className={`flex rounded-xl border overflow-hidden ${theme === 'bedtime' ? 'border-zinc-800' : 'border-zinc-200 dark:border-zinc-700'}`}>
                   <button
-                    onClick={() => { onReadingModeChange('rsvp'); setIsOpen(false); }}
+                    onClick={() => { setReadingMode('rsvp'); setIsOpen(false); }}
                     className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold transition-colors
                       ${readingMode === 'rsvp'
                         ? (theme === 'bedtime' ? 'bg-amber-700 text-stone-100' : 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900')
@@ -213,7 +183,7 @@ export function ReaderMenu({
                     RSVP
                   </button>
                   <button
-                    onClick={() => { onReadingModeChange('paginated'); setIsOpen(false); }}
+                    onClick={() => { setReadingMode('paginated'); setIsOpen(false); }}
                     className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold transition-colors
                       ${readingMode === 'paginated'
                         ? (theme === 'bedtime' ? 'bg-amber-700 text-stone-100' : 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900')

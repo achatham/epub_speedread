@@ -1,45 +1,34 @@
 import { useState, useMemo } from 'react';
 import type { RefObject } from 'react';
 import { BookOpen, Moon, Settings, Sun, Sunset, Trash2, Upload, DownloadCloud, BarChart2, Info, Github, Search, Archive, Inbox, X, Clock, Bug } from 'lucide-react';
-import type { BookRecord } from '../utils/storage';
-
-type Theme = 'light' | 'dark' | 'bedtime';
+import { useSettingsStore } from '../stores/useSettingsStore';
+import { useLibraryStore } from '../stores/useLibraryStore';
+import { useUIStore } from '../stores/useUIStore';
 
 interface LibraryViewProps {
-  library: BookRecord[];
-  isLoading: boolean;
-  theme: Theme;
-  onSettingsClick: () => void;
-  onToggleTheme: () => void;
   onSelectBook: (id: string) => void;
   onDeleteBook: (e: React.MouseEvent, id: string) => void;
   onToggleArchive: (id: string, archived: boolean) => void;
   onFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   fileInputRef: RefObject<HTMLInputElement | null>;
   onFileInputClick: (e: React.MouseEvent<HTMLInputElement, MouseEvent>) => void;
-  onStatsClick?: () => void;
   onLoadDemoBook?: () => void;
   onAboutClick?: () => void;
-  onTtsDebugClick: () => void;
 }
 
 export function LibraryView({
-  library,
-  isLoading,
-  theme,
-  onSettingsClick,
-  onToggleTheme,
   onSelectBook,
   onDeleteBook,
   onToggleArchive,
   onFileUpload,
   fileInputRef,
   onFileInputClick,
-  onStatsClick,
   onLoadDemoBook,
   onAboutClick,
-  onTtsDebugClick
 }: LibraryViewProps) {
+  const { library, isLoadingLibrary } = useLibraryStore();
+  const { theme, toggleTheme } = useSettingsStore();
+  const { setIsSettingsOpen, setIsStatsOpen, setIsTtsDebugOpen } = useUIStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'active' | 'archived'>('active');
 
@@ -63,7 +52,7 @@ export function LibraryView({
           <div className="flex gap-1 sm:gap-2">
             {import.meta.env.DEV && (
               <button
-                onClick={onTtsDebugClick}
+                onClick={() => setIsTtsDebugOpen(true)}
                 className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors text-amber-500"
                 title="TTS Debug (Dev Mode Only)"
               >
@@ -78,21 +67,21 @@ export function LibraryView({
               <Info size={22} />
             </button>
             <button
-              onClick={onStatsClick}
+              onClick={() => setIsStatsOpen(true)}
               className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
               title="Reading Stats"
             >
               <BarChart2 size={22} />
             </button>
             <button
-              onClick={onSettingsClick}
+              onClick={() => setIsSettingsOpen(true)}
               className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
               title="Settings"
             >
               <Settings size={22} />
             </button>
             <button
-              onClick={onToggleTheme}
+              onClick={toggleTheme}
               className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
               title={`Theme: ${theme}`}
             >
@@ -154,7 +143,7 @@ export function LibraryView({
           />
         </div>
 
-        {filteredBooks.length === 0 && !isLoading && (
+        {filteredBooks.length === 0 && !isLoadingLibrary && (
           <div className="text-center opacity-70 my-20 flex flex-col items-center gap-4">
             <p className="text-lg">
               {searchQuery ? 'No books match your search.' : activeTab === 'archived' ? 'No archived books.' : 'Your library is empty.'}

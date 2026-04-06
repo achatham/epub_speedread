@@ -1,30 +1,22 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import type { WordData } from '../utils/text-processing';
-export interface Section {
-    label: string;
-    startIndex: number;
-}
 import { calculateNavigationTarget, type NavigationType } from '../utils/navigation';
 import { getResumeIndex } from '../utils/playback';
 import { calculateRsvpInterval } from '../utils/text-processing';
-import type { RsvpSettings } from '../utils/storage';
 import { AudioBookPlayer } from '../utils/AudioBookPlayer';
+import { useReaderStore } from '../stores/useReaderStore';
+import { useSettingsStore } from '../stores/useSettingsStore';
 
-export function usePlayback(
-    words: WordData[],
-    sections: Section[],
-    wpm: number,
-    rsvpSettings: RsvpSettings,
-    autoLandscape: boolean,
-    isReadingAloud: boolean,
-    setIsReadingAloud: (val: boolean) => void,
-    audioPlayerRef: React.MutableRefObject<AudioBookPlayer | null>,
-    currentIndex: number,
-    setCurrentIndex: React.Dispatch<React.SetStateAction<number>>
-) {
-    const [isPlaying, setIsPlaying] = useState(false);
-    const [isHoldPaused, setIsHoldPaused] = useState(false);
-    const [isChapterBreak, setIsChapterBreak] = useState(false);
+export function usePlayback(audioPlayerRef: React.MutableRefObject<AudioBookPlayer | null>) {
+    const { 
+        words, sections, currentIndex, setCurrentIndex, 
+        isPlaying, setIsPlaying, 
+        isHoldPaused, setIsHoldPaused, 
+        isChapterBreak, setIsChapterBreak,
+        isReadingAloud, setIsReadingAloud
+    } = useReaderStore();
+    
+    const { wpm, rsvpSettings, autoLandscape } = useSettingsStore();
+
     const [playbackStartTime, setPlaybackStartTime] = useState<number | null>(null);
 
     const rotationTriggerRef = useRef(0);
@@ -78,19 +70,19 @@ export function usePlayback(
             }
         }
         setIsPlaying(playing);
-    }, [isPlaying, currentIndex, words, sections, isChapterBreak, isReadingAloud, autoLandscape, setIsReadingAloud, setCurrentIndex, audioPlayerRef]);
+    }, [isPlaying, currentIndex, words, sections, isChapterBreak, isReadingAloud, autoLandscape, setIsReadingAloud, setCurrentIndex, audioPlayerRef, setIsChapterBreak, setIsHoldPaused, setIsPlaying]);
 
     const navigate = useCallback((type: NavigationType) => {
         setIsChapterBreak(false);
         setCurrentIndex(calculateNavigationTarget(currentIndex, words, sections, type));
-    }, [currentIndex, words, sections, setCurrentIndex]);
+    }, [currentIndex, words, sections, setCurrentIndex, setIsChapterBreak]);
 
     const nextWord = useCallback(() => {
-        setCurrentIndex((prev) => {
+        setCurrentIndex((prev: number) => {
             if (prev >= words.length - 1) { setIsPlaying(false); return prev; }
             return prev + 1;
         });
-    }, [words.length, setCurrentIndex]);
+    }, [words.length, setCurrentIndex, setIsPlaying]);
 
     // Track playback time
     useEffect(() => {
@@ -133,7 +125,7 @@ export function usePlayback(
 
                 if (sections.some(s => s.startIndex === currentIndex + 1)) {
                     callback = () => {
-                        setCurrentIndex(prev => prev + 1);
+                        setCurrentIndex((prev: number) => prev + 1);
                         setIsChapterBreak(true);
                     };
                 } else {
@@ -146,21 +138,14 @@ export function usePlayback(
         return () => {
             if (timerRef.current) clearTimeout(timerRef.current);
         };
-    }, [isPlaying, isHoldPaused, wpm, words, currentIndex, nextWord, sections, isChapterBreak, rsvpSettings, playbackStartTime, setCurrentIndex]);
+    }, [isPlaying, isHoldPaused, wpm, words, currentIndex, nextWord, sections, isChapterBreak, rsvpSettings, playbackStartTime, setCurrentIndex, setIsChapterBreak]);
 
     return {
-        isPlaying,
-        setIsPlaying, // In case manual override is needed
         handleSetIsPlaying,
-        isHoldPaused,
-        setIsHoldPaused,
-        isChapterBreak,
-        setIsChapterBreak,
-        playbackStartTime,
-        setPlaybackStartTime,
         setRotationTrigger,
         setLastRotationTime,
         navigate,
         wakeLockRef
     };
 }
+

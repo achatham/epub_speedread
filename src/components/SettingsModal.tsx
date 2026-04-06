@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { X, Minus, Plus, Type, LogIn, LogOut, Cloud, Settings2 } from 'lucide-react';
 import type { User } from 'firebase/auth';
 import { type RsvpSettings } from '../utils/storage';
-import { type FontFamily } from '../hooks/useSettings';
+import { type FontFamily } from '../stores/useSettingsStore';
 
 interface SettingsModalProps {
   isOpen: boolean;

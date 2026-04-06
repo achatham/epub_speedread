@@ -1,24 +1,15 @@
 import { useEffect, useRef } from 'react';
-import type { FirestoreStorage, RsvpSettings, BookRecord, ReadingSession } from '../utils/storage';
+import type { FirestoreStorage } from '../utils/storage';
 import { calculateRsvpMultiplier } from '../utils/text-processing';
-import type { WordData } from '../utils/text-processing';
+import { useReaderStore } from '../stores/useReaderStore';
+import { useLibraryStore } from '../stores/useLibraryStore';
+import { useSettingsStore } from '../stores/useSettingsStore';
 
+export function useReadingSession(storageProvider: FirestoreStorage | null) {
+    const { isPlaying, isHoldPaused, isChapterBreak, currentBookId, currentIndex, words, bookTitle } = useReaderStore();
+    const { library, setLibrary, setSessions } = useLibraryStore();
+    const { rsvpSettings, wpm } = useSettingsStore();
 
-export function useReadingSession(
-    storageProvider: FirestoreStorage | null,
-    isPlaying: boolean,
-    isHoldPaused: boolean,
-    isChapterBreak: boolean,
-    currentBookId: string | null,
-    currentIndex: number,
-    words: WordData[],
-    bookTitle: string,
-    rsvpSettings: RsvpSettings,
-    library: BookRecord[],
-    setLibrary: React.Dispatch<React.SetStateAction<BookRecord[]>>,
-    setSessions: React.Dispatch<React.SetStateAction<ReadingSession[]>>,
-    wpm: number
-) {
     const sessionStartTimeRef = useRef<number | null>(null);
     const wordsReadInSessionRef = useRef<number>(0);
     const multipliersSumInSessionRef = useRef<number>(0);
@@ -56,8 +47,6 @@ export function useReadingSession(
 
             // Only save if duration > 5 seconds
             if (durationMs > 5000 && wordsReadInSessionRef.current > 0) {
-
-
                 storageProvider.logReadingSession({
                     bookId: currentBookId,
                     bookTitle,
@@ -122,8 +111,6 @@ export function useReadingSession(
             if (sessionStartTimeRef.current && now - lastSessionSaveTimeRef.current > 60000 && storageProvider && currentBookId) {
                 const durationMs = now - sessionStartTimeRef.current;
                 if (wordsReadInSessionRef.current > 0) {
-
-
                     storageProvider.logReadingSession({
                         bookId: currentBookId,
                         bookTitle,

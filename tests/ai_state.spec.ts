@@ -38,7 +38,6 @@ test.describe('AI State and Context Toggle', () => {
   });
 
   test('Only two canned questions are displayed', async ({ page }) => {
-    const cannedQuestions = page.locator('.h-full.flex.flex-col.items-center.justify-center.text-center button.text-xs');
     // The selector above might match other buttons if the layout changes, but based on my edits:
     // CANNED_QUESTIONS.map(...) renders buttons.
     // There's also the context toggle buttons, but they are in a different div now.

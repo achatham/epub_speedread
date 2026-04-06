@@ -2,80 +2,39 @@ import { useRef, useEffect } from 'react';
 import { ReaderMenu } from './ReaderMenu';
 import type { WordData } from '../utils/text-processing';
 import { splitWord } from '../utils/orp';
-import { type Theme, type FontFamily, type ReadingMode } from '../hooks/useSettings';
-import type { RsvpSettings } from '../utils/storage';
+import { useSettingsStore, type FontFamily } from '../stores/useSettingsStore';
+import { useReaderStore } from '../stores/useReaderStore';
 
 interface ReaderViewProps {
-  words: WordData[];
-  currentIndex: number;
-  effectiveTotalWords: number;
-  realEndIndex: number | null;
-  furthestIndex: number | null;
-  isPlaying: boolean;
-  setIsPlaying: (playing: boolean) => void;
-  setIsHoldPaused: (paused: boolean) => void;
-  wpm: number;
-  onWpmChange: (wpm: number) => void;
-  theme: Theme;
-  fontFamily: FontFamily;
-  bookTitle: string;
   onCloseBook: () => void;
-  onSettingsClick: () => void;
-  onToggleTheme: () => void;
-  onAskAiClick: () => void;
-  onBookSettingsClick: () => void;
-  sections: { label: string; startIndex: number }[];
-  setCurrentIndex: (index: number) => void;
   navigate: (type: 'book' | 'chapter' | 'prev-paragraph' | 'prev-sentence' | 'next-paragraph' | 'next-sentence') => void;
   onReadChapter: () => void;
-  isReadingAloud: boolean;
-  isSynthesizing: boolean;
-  isChapterBreak: boolean;
   upcomingChapterTitle: string;
-  onStatsClick?: () => void;
-  vanityWpmRatio: number;
-  rsvpSettings: RsvpSettings;
-  readingMode: ReadingMode;
-  onReadingModeChange: (mode: ReadingMode) => void;
+  storageProvider?: any;
+  handleSetIsPlaying: (playing: boolean) => void;
 }
 
 export function ReaderView({
-  words,
-  currentIndex,
-  effectiveTotalWords,
-  realEndIndex,
-  furthestIndex,
-  isPlaying,
-  setIsPlaying,
-  setIsHoldPaused,
-  wpm,
-  onWpmChange,
-  theme,
-  fontFamily,
-  bookTitle,
   onCloseBook,
-  onSettingsClick,
-  onToggleTheme,
-  onAskAiClick,
-  onBookSettingsClick,
-  sections,
-  setCurrentIndex,
   navigate,
   onReadChapter,
-  isReadingAloud,
-  isSynthesizing,
-  isChapterBreak,
   upcomingChapterTitle,
-  onStatsClick,
-  vanityWpmRatio,
-  readingMode,
-  onReadingModeChange,
+  handleSetIsPlaying,
 }: ReaderViewProps) {
   const pressStartTimeRef = useRef<number | null>(null);
   const lastPauseTimeRef = useRef<number>(0);
 
   const pausedAreaRef = useRef<HTMLDivElement>(null);
   const pausedScrollRef = useRef<HTMLDivElement>(null);
+
+  const { theme, fontFamily, readingMode, wpm, rsvpSettings } = useSettingsStore();
+  const { 
+    words, currentIndex, realEndIndex, furthestIndex, 
+    isPlaying, setIsHoldPaused, 
+    bookTitle, sections, setCurrentIndex, isChapterBreak 
+  } = useReaderStore();
+
+  const effectiveTotalWords = words.length;
 
   // Auto-scroll to the current word inside RSVP paused view
   useEffect(() => {
@@ -141,8 +100,6 @@ export function ReaderView({
   const rsvpContextClass = theme === 'bedtime' ? 'text-stone-600' : 'opacity-90';
   const guidelinesClass = theme === 'bedtime' ? 'bg-amber-900/30' : 'bg-red-600 dark:bg-red-500 opacity-30';
 
-
-
   const handlePointerDown = (e: React.PointerEvent) => {
     e.stopPropagation();
     if (e.button !== 0 && e.pointerType === 'mouse') return;
@@ -161,7 +118,7 @@ export function ReaderView({
       // Short tap
       if (isPlaying) {
         // Full pause
-        setIsPlaying(false);
+        handleSetIsPlaying(false);
         lastPauseTimeRef.current = Date.now();
       }
       setIsHoldPaused(false);
@@ -204,7 +161,7 @@ export function ReaderView({
     const nextChapterStartIndex = sections[activeChapterIdx + 1]?.startIndex || words.length;
     const wordsLeftInChapter = Math.max(0, nextChapterStartIndex - currentIndex);
     const wordsLeftInBook = Math.max(0, effectiveTotalWords - currentIndex);
-    const effectiveWpm = wpm / vanityWpmRatio;
+    const effectiveWpm = wpm / rsvpSettings.vanityWpmRatio;
 
     const formatDuration = (wordCount: number) => {
       const minutes = wordCount / effectiveWpm;
@@ -235,15 +192,13 @@ export function ReaderView({
     );
   };
 
-  // (Context word window is generated inline in rendering block)
-
   return (
     <div
       className={`flex flex-col h-dvh transition-colors duration-300 ${mainBg} ${mainText} ${!isPlaying ? 'cursor-pointer' : ''}`}
       style={{ fontFamily: fontClasses[fontFamily] }}
       onClick={() => {
         if (Date.now() - lastPauseTimeRef.current < 400) return;
-        if (!isPlaying) setIsPlaying(true);
+        if (!isPlaying) handleSetIsPlaying(true);
       }}
     >
       {isPlaying && (
@@ -264,7 +219,7 @@ export function ReaderView({
         </div>
       )}
 
-      {/* RSVP Display or Text Preview — flex-1 ensures it fills space between header and controls */}
+      {/* RSVP Display or Text Preview */}
       <div
         ref={!isPlaying ? pausedAreaRef : undefined}
         className={`relative flex min-h-0 w-full overflow-hidden border-t border-b
@@ -348,7 +303,7 @@ export function ReaderView({
         )}
       </div>
 
-      {/* Controls — shrink-0 so they never expand/compress */}
+      {/* Controls */}
       <div
         className={`shrink-0 flex flex-col gap-4 items-center relative z-50 py-4
           ${isPlaying ? 'w-full max-w-md px-4' : 'portrait:w-full portrait:max-w-md portrait:px-4 landscape:pointer-events-none'}`}
@@ -410,28 +365,10 @@ export function ReaderView({
 
         {!isPlaying && (
           <ReaderMenu
-            wpm={wpm}
-            onWpmChange={onWpmChange}
-            onSettingsClick={onSettingsClick}
-            onBookSettingsClick={onBookSettingsClick}
-            onStatsClick={onStatsClick || (() => { })}
-            onToggleTheme={onToggleTheme}
-            theme={theme}
-            bookTitle={bookTitle}
-            sections={sections}
             activeChapterIdx={activeChapterIdx}
-            setCurrentIndex={setCurrentIndex}
             onCloseBook={onCloseBook}
-            onAskAiClick={onAskAiClick}
             onReadChapter={onReadChapter}
-            isReadingAloud={isReadingAloud}
-            isSynthesizing={isSynthesizing}
             navigate={navigate}
-            furthestIndex={furthestIndex}
-            effectiveTotalWords={effectiveTotalWords}
-            currentIndex={currentIndex}
-            readingMode={readingMode}
-            onReadingModeChange={onReadingModeChange}
           />
         )}
       </div>

@@ -59,7 +59,7 @@ test('pagination stability: no words are skipped when paging forward and back', 
 
   // FEATURE TEST: Verify we can navigate backwards IMMEDIATELY from a chapter 
   // start boundary when we don't have any navigation history
-  let lastStartBeforeJump = currentRange.start;
+  const lastStartBeforeJump = currentRange.start;
   await page.locator('button[aria-label="Previous page"]').click();
   await expect(async () => {
     const newRange = await getRange();

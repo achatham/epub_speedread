@@ -3,36 +3,15 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { prepareWithSegments, layoutWithLines } from '@chenglou/pretext';
 import { ReaderMenu } from './ReaderMenu';
 import type { WordData } from '../utils/text-processing';
-import { type Theme, type FontFamily, type ReadingMode } from '../hooks/useSettings';
+import { type Theme, type FontFamily } from '../stores/useSettingsStore';
 import type { NavigationType } from '../utils/navigation';
+import { useSettingsStore } from '../stores/useSettingsStore';
+import { useReaderStore } from '../stores/useReaderStore';
 
 interface PaginatedReaderViewProps {
-  words: WordData[];
-  currentIndex: number;
-  effectiveTotalWords: number;
-  realEndIndex: number | null;
-  furthestIndex: number | null;
-  setCurrentIndex: (index: number) => void;
-  wpm: number;
-  onWpmChange: (wpm: number) => void;
-  theme: Theme;
-  fontFamily: FontFamily;
-  bookTitle: string;
   onCloseBook: () => void;
-  onSettingsClick: () => void;
-  onToggleTheme: () => void;
-  onAskAiClick: () => void;
-  onBookSettingsClick: () => void;
-  sections: { label: string; startIndex: number }[];
   navigate: (type: NavigationType) => void;
   onReadChapter: () => void;
-  isReadingAloud: boolean;
-  isSynthesizing: boolean;
-  onStatsClick?: () => void;
-  fontSize: number;
-  onFontSizeChange: (size: number) => void;
-  readingMode: ReadingMode;
-  onReadingModeChange: (mode: ReadingMode) => void;
 }
 
 const FONT_FAMILY_CSS: Record<FontFamily, string> = {
@@ -116,33 +95,15 @@ function computePageEndIndex(
 }
 
 export function PaginatedReaderView({
-  words,
-  currentIndex,
-  effectiveTotalWords,
-  realEndIndex,
-  furthestIndex,
-  setCurrentIndex,
-  wpm,
-  onWpmChange,
-  theme,
-  fontFamily,
-  bookTitle,
   onCloseBook,
-  onSettingsClick,
-  onToggleTheme,
-  onAskAiClick,
-  onBookSettingsClick,
-  sections,
   navigate,
   onReadChapter,
-  isReadingAloud,
-  isSynthesizing,
-  onStatsClick,
-  fontSize,
-  onFontSizeChange,
-  readingMode,
-  onReadingModeChange,
 }: PaginatedReaderViewProps) {
+  const { words, currentIndex, realEndIndex, furthestIndex, setCurrentIndex, sections, bookTitle } = useReaderStore();
+  const { theme, fontFamily, paginatedFontSize: fontSize, setPaginatedFontSize: onFontSizeChange } = useSettingsStore();
+  
+  const effectiveTotalWords = words.length;
+
   const readingAreaRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   
@@ -456,28 +417,10 @@ export function PaginatedReaderView({
 
           <div className="flex items-center gap-2">
             <ReaderMenu
-              wpm={wpm}
-              onWpmChange={onWpmChange}
-              onSettingsClick={onSettingsClick}
-              onBookSettingsClick={onBookSettingsClick}
-              onStatsClick={onStatsClick || (() => { })}
-              onToggleTheme={onToggleTheme}
-              theme={theme}
-              bookTitle={bookTitle}
-              sections={sections}
               activeChapterIdx={activeChapterIdx}
-              setCurrentIndex={setCurrentIndex}
               onCloseBook={onCloseBook}
-              onAskAiClick={onAskAiClick}
               onReadChapter={onReadChapter}
-              isReadingAloud={isReadingAloud}
-              isSynthesizing={isSynthesizing}
               navigate={navigate}
-              furthestIndex={furthestIndex}
-              effectiveTotalWords={effectiveTotalWords}
-              currentIndex={currentIndex}
-              readingMode={readingMode}
-              onReadingModeChange={onReadingModeChange}
               fabClassName={`p-2 rounded-lg border transition-all ${theme === 'bedtime' ? 'bg-zinc-900 border-zinc-800 text-stone-400 hover:bg-zinc-800' : 'bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700'}`}
             />
 

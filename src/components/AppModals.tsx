@@ -1,205 +1,146 @@
-import React from 'react';
-import type { Theme, FontFamily } from '../hooks/useSettings';
-import type { RsvpSettings, IllustrationRecord } from '../utils/storage';
+
 import { SettingsModal } from './SettingsModal';
 import { OnboardingModal } from './OnboardingModal';
 import { AiModal } from './AiModal';
 import { StatsView } from './StatsView';
 import { BookSettingsModal } from './BookSettingsModal';
+import { useSettingsStore } from '../stores/useSettingsStore';
+import { useUIStore } from '../stores/useUIStore';
+import { useLibraryStore } from '../stores/useLibraryStore';
+import { useReaderStore } from '../stores/useReaderStore';
 
 interface AppModalsProps {
-    isSettingsOpen: boolean;
-    setIsSettingsOpen: (open: boolean) => void;
-    geminiApiKey: string;
-    setGeminiApiKey: (key: string) => void;
-    deepgramApiKey: string;
-    setDeepgramApiKey: (key: string) => void;
-    syncApiKey: boolean;
-    setSyncApiKey: (sync: boolean) => void;
-    ttsSpeed: number;
-    setTtsSpeed: (speed: number) => void;
-    autoLandscape: boolean;
-    setAutoLandscape: (auto: boolean) => void;
-    fontFamily: FontFamily;
-    setFontFamily: React.Dispatch<React.SetStateAction<FontFamily>>;
-    rsvpSettings: RsvpSettings;
-    setRsvpSettings: React.Dispatch<React.SetStateAction<RsvpSettings>>;
     user: any;
     handleSignIn: () => void;
     handleSignOut: () => void;
-
-    isOnboardingOpen: boolean;
-    setIsOnboardingOpen: (open: boolean) => void;
     storageProvider: any;
-    setOnboardingCompleted: (completed: boolean) => void;
-    saveGeminiApiKey: (key: string) => void;
-
-    isAskAiOpen: boolean;
-    setIsAskAiOpen: (open: boolean) => void;
-    aiTab: 'ask' | 'illustrate';
-    setAiTab: (tab: 'ask' | 'illustrate') => void;
-    aiResponse: string;
-    aiQuestion: string;
-    setAiQuestion: (question: string) => void;
-    aiContextMode: 'recent' | 'full';
-    setAiContextMode: (mode: 'recent' | 'full') => void;
-    illustrationQuery: string;
-    setIllustrationQuery: (q: string) => void;
     handleAskAi: (qOverride?: string) => void;
     isAiLoading: boolean;
-    illustrationPrompt: string;
-    setIllustrationPrompt: (prompt: string) => void;
-    illustrationImage: string | null;
-    setIllustrationImage: (image: string | null) => void;
     isIllustrationLoading: boolean;
     handleGenerateIllustration: (description?: string) => void;
-    illustrations: IllustrationRecord[];
-    illustrationSuggestions: string[];
-    setIllustrationSuggestions: React.Dispatch<React.SetStateAction<string[]>>;
-    selectedSuggestions: string[];
-    setSelectedSuggestions: React.Dispatch<React.SetStateAction<string[]>>;
     isSuggesting: boolean;
     handleSuggestIllustrations: () => void;
     handleGenerateMultipleIllustrations: () => void;
-
-    isStatsOpen: boolean;
-    setIsStatsOpen: (open: boolean) => void;
-    sessions: any[];
-    library: any[];
-    currentBookId: string | null;
-    theme: Theme;
     handleUpdateBookFinishedDate: (updates: { id: string, date: number }[]) => Promise<void>;
-
-    isBookSettingsOpen: boolean;
-    setIsBookSettingsOpen: (open: boolean) => void;
-    bookTitle: string;
     handleUpdateBookTitle: (bookId: string, title: string) => Promise<void>;
     handleRecomputeRealEnd: () => Promise<void>;
     isRecomputingEnd: boolean;
-    currentIndex: number;
     onClearFutureSessions: () => Promise<void>;
     onClearRecentSessions: () => Promise<void>;
 }
 
 export function AppModals({
-    isSettingsOpen, setIsSettingsOpen, geminiApiKey, setGeminiApiKey, deepgramApiKey, setDeepgramApiKey,
-    syncApiKey, setSyncApiKey, ttsSpeed, setTtsSpeed, autoLandscape, setAutoLandscape,
-    fontFamily, setFontFamily, rsvpSettings, setRsvpSettings, user, handleSignIn, handleSignOut,
-
-    isOnboardingOpen, setIsOnboardingOpen, storageProvider, setOnboardingCompleted, saveGeminiApiKey,
-
-    isAskAiOpen, setIsAskAiOpen, aiTab, setAiTab, aiResponse, aiQuestion, setAiQuestion,
-    aiContextMode, setAiContextMode, illustrationQuery, setIllustrationQuery,
+    user, handleSignIn, handleSignOut, storageProvider,
     handleAskAi, isAiLoading,
-    illustrationPrompt, setIllustrationPrompt, illustrationImage, setIllustrationImage,
-    isIllustrationLoading, handleGenerateIllustration, illustrations,
-    illustrationSuggestions, setIllustrationSuggestions, selectedSuggestions, setSelectedSuggestions, isSuggesting,
-    handleSuggestIllustrations, handleGenerateMultipleIllustrations,
-
-    isStatsOpen, setIsStatsOpen, sessions, library, currentBookId, theme, handleUpdateBookFinishedDate,
-
-    isBookSettingsOpen, setIsBookSettingsOpen, bookTitle, handleUpdateBookTitle, handleRecomputeRealEnd, isRecomputingEnd,
-    currentIndex, onClearFutureSessions, onClearRecentSessions
+    isIllustrationLoading, handleGenerateIllustration,
+    isSuggesting, handleSuggestIllustrations, handleGenerateMultipleIllustrations,
+    handleUpdateBookFinishedDate, handleUpdateBookTitle, handleRecomputeRealEnd, isRecomputingEnd,
+    onClearFutureSessions, onClearRecentSessions
 }: AppModalsProps) {
+    const settings = useSettingsStore();
+    const ui = useUIStore();
+    const library = useLibraryStore();
+    const reader = useReaderStore();
+
     return (
         <>
             <SettingsModal
-                isOpen={isSettingsOpen}
-                onClose={() => setIsSettingsOpen(false)}
-                apiKey={geminiApiKey}
-                setApiKey={setGeminiApiKey}
-                deepgramApiKey={deepgramApiKey}
-                setDeepgramApiKey={setDeepgramApiKey}
-                syncApiKey={syncApiKey}
-                setSyncApiKey={setSyncApiKey}
-                ttsSpeed={ttsSpeed}
-                setTtsSpeed={setTtsSpeed}
-                autoLandscape={autoLandscape}
-                setAutoLandscape={setAutoLandscape}
-                fontFamily={fontFamily}
-                setFontFamily={setFontFamily}
-                rsvpSettings={rsvpSettings}
-                setRsvpSettings={setRsvpSettings}
+                isOpen={ui.isSettingsOpen}
+                onClose={() => ui.setIsSettingsOpen(false)}
+                apiKey={settings.geminiApiKey}
+                setApiKey={settings.setGeminiApiKey}
+                deepgramApiKey={settings.deepgramApiKey}
+                setDeepgramApiKey={settings.setDeepgramApiKey}
+                syncApiKey={settings.syncApiKey}
+                setSyncApiKey={settings.setSyncApiKey}
+                ttsSpeed={settings.ttsSpeed}
+                setTtsSpeed={settings.setTtsSpeed}
+                autoLandscape={settings.autoLandscape}
+                setAutoLandscape={settings.setAutoLandscape}
+                fontFamily={settings.fontFamily}
+                setFontFamily={settings.setFontFamily as any}
+                rsvpSettings={settings.rsvpSettings}
+                setRsvpSettings={settings.setRsvpSettings as any}
                 user={user}
                 onSignIn={handleSignIn}
                 onSignOut={handleSignOut}
-                onSave={() => setIsSettingsOpen(false)}
+                onSave={() => ui.setIsSettingsOpen(false)}
             />
 
             <OnboardingModal
-                isOpen={isOnboardingOpen}
+                isOpen={ui.isOnboardingOpen}
                 onClose={() => {
-                    setIsOnboardingOpen(false);
-                    setOnboardingCompleted(true);
+                    ui.setIsOnboardingOpen(false);
+                    settings.setOnboardingCompleted(true);
                     storageProvider.updateSettings({ onboardingCompleted: true });
                 }}
-                apiKey={geminiApiKey}
+                apiKey={settings.geminiApiKey}
                 setApiKey={(k) => {
-                    setGeminiApiKey(k);
-                    saveGeminiApiKey(k);
+                    settings.setGeminiApiKey(k);
+                    storageProvider?.updateSettings({ geminiApiKey: k }).catch(console.error);
                 }}
-                syncApiKey={syncApiKey}
-                setSyncApiKey={setSyncApiKey}
+                syncApiKey={settings.syncApiKey}
+                setSyncApiKey={settings.setSyncApiKey}
                 onComplete={() => {
-                    setIsOnboardingOpen(false);
-                    setOnboardingCompleted(true);
+                    ui.setIsOnboardingOpen(false);
+                    settings.setOnboardingCompleted(true);
                     storageProvider.updateSettings({
                         onboardingCompleted: true,
-                        syncApiKey: syncApiKey,
-                        geminiApiKey: syncApiKey ? geminiApiKey : ""
+                        syncApiKey: settings.syncApiKey,
+                        geminiApiKey: settings.syncApiKey ? settings.geminiApiKey : ""
                     });
                 }}
             />
 
             <AiModal
-                isOpen={isAskAiOpen}
-                onClose={() => setIsAskAiOpen(false)}
-                aiTab={aiTab}
-                setAiTab={setAiTab}
-                aiResponse={aiResponse}
-                aiQuestion={aiQuestion}
-                setAiQuestion={setAiQuestion}
-                aiContextMode={aiContextMode}
-                setAiContextMode={setAiContextMode}
-                illustrationQuery={illustrationQuery}
-                setIllustrationQuery={setIllustrationQuery}
+                isOpen={ui.isAskAiOpen}
+                onClose={() => ui.setIsAskAiOpen(false)}
+                aiTab={ui.aiTab}
+                setAiTab={ui.setAiTab}
+                aiResponse={ui.aiResponse}
+                aiQuestion={ui.aiQuestion}
+                setAiQuestion={ui.setAiQuestion}
+                aiContextMode={ui.aiContextMode}
+                setAiContextMode={ui.setAiContextMode}
+                illustrationQuery={ui.illustrationQuery}
+                setIllustrationQuery={ui.setIllustrationQuery}
                 handleAskAi={handleAskAi}
                 isAiLoading={isAiLoading}
-                illustrationPrompt={illustrationPrompt}
-                setIllustrationPrompt={setIllustrationPrompt}
-                illustrationImage={illustrationImage}
-                setIllustrationImage={setIllustrationImage}
+                illustrationPrompt={ui.illustrationPrompt}
+                setIllustrationPrompt={ui.setIllustrationPrompt}
+                illustrationImage={ui.illustrationImage}
+                setIllustrationImage={ui.setIllustrationImage}
                 isIllustrationLoading={isIllustrationLoading}
                 handleGenerateIllustration={handleGenerateIllustration}
-                illustrations={illustrations}
-                illustrationSuggestions={illustrationSuggestions}
-                setIllustrationSuggestions={setIllustrationSuggestions}
-                selectedSuggestions={selectedSuggestions}
-                setSelectedSuggestions={setSelectedSuggestions}
+                illustrations={ui.illustrations as any}
+                illustrationSuggestions={ui.illustrationSuggestions}
+                setIllustrationSuggestions={ui.setIllustrationSuggestions as any}
+                selectedSuggestions={ui.selectedSuggestions}
+                setSelectedSuggestions={ui.setSelectedSuggestions as any}
                 isSuggesting={isSuggesting}
                 handleSuggestIllustrations={handleSuggestIllustrations}
                 handleGenerateMultipleIllustrations={handleGenerateMultipleIllustrations}
-                ttsSpeed={ttsSpeed}
+                ttsSpeed={settings.ttsSpeed}
             />
 
             <StatsView
-                isOpen={isStatsOpen}
-                onClose={() => setIsStatsOpen(false)}
-                sessions={sessions}
-                books={library}
-                activeBookId={currentBookId}
-                theme={theme}
+                isOpen={ui.isStatsOpen}
+                onClose={() => ui.setIsStatsOpen(false)}
+                sessions={library.sessions}
+                books={library.library}
+                activeBookId={library.currentBookId}
+                theme={settings.theme}
                 onUpdateBookFinishedDate={handleUpdateBookFinishedDate}
             />
 
             <BookSettingsModal
-                isOpen={isBookSettingsOpen}
-                onClose={() => setIsBookSettingsOpen(false)}
-                currentTitle={bookTitle}
-                onUpdateTitle={(title) => currentBookId ? handleUpdateBookTitle(currentBookId, title) : Promise.resolve()}
+                isOpen={ui.isBookSettingsOpen}
+                onClose={() => ui.setIsBookSettingsOpen(false)}
+                currentTitle={reader.bookTitle}
+                onUpdateTitle={(title) => library.currentBookId ? handleUpdateBookTitle(library.currentBookId, title) : Promise.resolve()}
                 onRecomputeRealEnd={handleRecomputeRealEnd}
                 isProcessing={isRecomputingEnd}
-                currentIndex={currentIndex}
+                currentIndex={reader.currentIndex}
                 onClearFutureSessions={onClearFutureSessions}
                 onClearRecentSessions={onClearRecentSessions}
             />

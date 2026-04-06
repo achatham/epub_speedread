@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 
-import { type BookRecord, type IllustrationRecord } from './utils/storage';
+import { type BookRecord } from './utils/storage';
 import { processBook, analyzeRealEndOfBook } from './utils/ebook';
 import { AudioBookPlayer } from './utils/AudioBookPlayer';
 import { AuthenticatedApp } from './components/AuthenticatedApp';
@@ -12,206 +12,144 @@ import { LogIn, BookOpen } from 'lucide-react';
 import { askAboutBook, generateIllustrationPrompt, generateIllustration, suggestIllustrations } from './utils/gemini';
 import { useDeviceLogic } from './hooks/useDeviceLogic';
 import { useAuth } from './hooks/useAuth';
-import { useSettings, type Theme, type FontFamily } from './hooks/useSettings';
+import { useSettingsSync } from './hooks/useSettings';
 import { useLibrary } from './hooks/useLibrary';
 import { usePlayback } from './hooks/usePlayback';
 import { useReadingSession } from './hooks/useReadingSession';
-import type { WordData } from './utils/text-processing';
+
+import { useSettingsStore } from './stores/useSettingsStore';
+import { useReaderStore } from './stores/useReaderStore';
+import { useLibraryStore } from './stores/useLibraryStore';
+import { useUIStore } from './stores/useUIStore';
 
 function App() {
-  const [currentBookId, setCurrentBookId] = useState<string | null>(null);
+  const settings = useSettingsStore();
+  const reader = useReaderStore();
+  const library = useLibraryStore();
+  const ui = useUIStore();
+
   const currentBookIdRef = useRef<string | null>(null);
   const lastLoadedBookIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    currentBookIdRef.current = currentBookId;
-  }, [currentBookId]);
+    currentBookIdRef.current = library.currentBookId;
+  }, [library.currentBookId]);
+
   const [isLoading, setIsLoading] = useState(true);
   const { user, setUser, storageProvider, setStorageProvider, handleSignIn, handleSignOut, isMockModeRef, MOCK_USER, MOCK_STORAGE } = useAuth();
 
-  const [words, setWords] = useState<WordData[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-
-  const [wpm, setWpm] = useState(300);
-  const [bookTitle, setBookTitle] = useState('');
-  const [sections, setSections] = useState<{ label: string; startIndex: number }[]>([]);
-
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isAskAiOpen, setIsAskAiOpen] = useState(false);
-  const [isStatsOpen, setIsStatsOpen] = useState(false);
-  const [isTtsDebugOpen, setIsTtsDebugOpen] = useState(false);
-
-  const [realEndIndex, setRealEndIndex] = useState<number | null>(null);
-  const [furthestIndex, setFurthestIndex] = useState<number | null>(null);
-  const [illustrations, setIllustrations] = useState<IllustrationRecord[]>([]);
-  const [aiTab, setAiTab] = useState<'ask' | 'illustrate'>('ask');
-  const [aiQuestion, setAiQuestion] = useState('');
-  const [aiContextMode, setAiContextMode] = useState<'recent' | 'full'>('recent');
-  const [illustrationQuery, setIllustrationQuery] = useState('');
-  const [aiResponse, setAiResponse] = useState('');
-  const [isAiLoading, setIsAiLoading] = useState(false);
-  const [illustrationPrompt, setIllustrationPrompt] = useState('');
-  const [illustrationImage, setIllustrationImage] = useState<string | null>(null);
-  const [isIllustrationLoading, setIsIllustrationLoading] = useState(false);
-  const [illustrationSuggestions, setIllustrationSuggestions] = useState<string[]>([]);
-  const [selectedSuggestions, setSelectedSuggestions] = useState<string[]>([]);
-  const [isSuggesting, setIsSuggesting] = useState(false);
-  const [isReadingAloud, setIsReadingAloud] = useState(false);
-  const [isSynthesizing, setIsSynthesizing] = useState(false);
-
   const [showAbout, setShowAbout] = useState(false);
-  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
-  const [onboardingCompleted, setOnboardingCompleted] = useState(() => {
-    try {
-      const saved = localStorage.getItem('user_settings');
-      if (saved) return !!JSON.parse(saved).onboardingCompleted;
-    } catch { }
-    return false;
-  });
-
-  const {
-    ttsSpeed, setTtsSpeed,
-    geminiApiKey, setGeminiApiKey,
-    deepgramApiKey, setDeepgramApiKey,
-    syncApiKey, setSyncApiKey,
-    autoLandscape, setAutoLandscape,
-    theme, setTheme, toggleTheme,
-    fontFamily, setFontFamily,
-    rsvpSettings, setRsvpSettings,
-    readingMode, setReadingMode,
-    paginatedFontSize, setPaginatedFontSize
-  } = useSettings(storageProvider, onboardingCompleted);
-  const saveGeminiApiKey = (k: string) => {
-    setGeminiApiKey(k);
-    if (storageProvider) {
-      storageProvider.updateSettings({ geminiApiKey: k }).catch(console.error);
-    }
-  };
-
-  const [isBookSettingsOpen, setIsBookSettingsOpen] = useState(false);
   const [isRecomputingEnd, setIsRecomputingEnd] = useState(false);
 
   // Fullscreen helper
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioPlayerRef = useRef<AudioBookPlayer | null>(null);
 
+  // Synchronizers that watch Zustand stores and sync with backend
+  useSettingsSync(storageProvider, settings.onboardingCompleted);
+
   const {
-    isPlaying,
     handleSetIsPlaying,
-    navigate,
-    isChapterBreak,
-    isHoldPaused,
-    setIsHoldPaused
-  } = usePlayback(
-    words,
-    sections,
-    wpm,
-    rsvpSettings,
-    autoLandscape,
-    isReadingAloud,
-    setIsReadingAloud,
-    audioPlayerRef,
-    currentIndex,
-    setCurrentIndex
-  );
+    navigate
+  } = usePlayback(audioPlayerRef);
 
   useDeviceLogic({
-    isPlaying,
-    isReadingAloud,
-    isSynthesizing
+    isPlaying: reader.isPlaying,
+    isReadingAloud: reader.isReadingAloud,
+    isSynthesizing: reader.isSynthesizing
   });
 
   const handleAskAi = async (qOverride?: string) => {
-    const q = qOverride || aiQuestion;
-    if (!q.trim() || isAiLoading) return;
-    setIsAiLoading(true);
-    setAiResponse('');
+    const q = qOverride || ui.aiQuestion;
+    if (!q.trim() || ui.isAiLoading) return;
+    ui.setIsAiLoading(true);
+    ui.setAiResponse('');
     try {
       let currentChapterIdx = 0;
-      for (let i = 0; i < sections.length; i++) if (sections[i].startIndex <= currentIndex) currentChapterIdx = i; else break;
+      for (let i = 0; i < reader.sections.length; i++) if (reader.sections[i].startIndex <= reader.currentIndex) currentChapterIdx = i; else break;
 
       let context = '';
-      if (aiContextMode === 'recent') {
-        const startIdx = currentChapterIdx > 0 ? sections[currentChapterIdx - 1].startIndex : 0;
-        context = words.slice(startIdx, currentIndex + 1).map(w => w.text).join(' ');
+      if (ui.aiContextMode === 'recent') {
+        const startIdx = currentChapterIdx > 0 ? reader.sections[currentChapterIdx - 1].startIndex : 0;
+        context = reader.words.slice(startIdx, reader.currentIndex + 1).map(w => w.text).join(' ');
       } else {
-        context = words.slice(0, currentIndex + 1).map(w => w.text).join(' ');
+        context = reader.words.slice(0, reader.currentIndex + 1).map(w => w.text).join(' ');
       }
-      setAiResponse(await askAboutBook(q, context));
-    } catch { setAiResponse('Error'); } finally { setIsAiLoading(false); }
+      ui.setAiResponse(await askAboutBook(q, context));
+    } catch { ui.setAiResponse('Error'); } finally { ui.setIsAiLoading(false); }
   };
 
   const performIllustrationGeneration = async (description: string) => {
-    const context = words.slice(0, currentIndex + 1).map(w => w.text).join(' ');
+    const context = reader.words.slice(0, reader.currentIndex + 1).map(w => w.text).join(' ');
     const prompt = await generateIllustrationPrompt(description, context);
-    setIllustrationPrompt(prompt);
+    ui.setIllustrationPrompt(prompt);
 
     const base64Image = await generateIllustration(prompt);
-    setIllustrationImage(base64Image);
+    ui.setIllustrationImage(base64Image);
 
-    if (currentBookId && storageProvider) {
-      const record = await storageProvider.addIllustration(currentBookId, prompt, base64Image, currentIndex);
-      setIllustrations(prev => [record, ...prev]);
+    if (library.currentBookId && storageProvider) {
+      const record = await storageProvider.addIllustration(library.currentBookId, prompt, base64Image, reader.currentIndex);
+      ui.setIllustrations(prev => [record, ...prev]);
     }
   };
 
   const handleGenerateIllustration = async (descriptionOverride?: string) => {
-    const description = descriptionOverride || illustrationQuery;
-    if (!description.trim() || isIllustrationLoading) return;
-    setIsIllustrationLoading(true);
-    setIllustrationPrompt('');
-    setIllustrationImage(null);
+    const description = descriptionOverride || ui.illustrationQuery;
+    if (!description.trim() || ui.isIllustrationLoading) return;
+    ui.setIsIllustrationLoading(true);
+    ui.setIllustrationPrompt('');
+    ui.setIllustrationImage(null);
 
     try {
       await performIllustrationGeneration(description);
     } catch (err) {
       console.error("Illustration generation failed:", err);
-      setIllustrationPrompt("Error generating illustration.");
+      ui.setIllustrationPrompt("Error generating illustration.");
     } finally {
-      setIsIllustrationLoading(false);
+      ui.setIsIllustrationLoading(false);
     }
   };
 
   const handleSuggestIllustrations = async () => {
-    if (isSuggesting) return;
-    setIsSuggesting(true);
-    setIllustrationSuggestions([]);
-    setSelectedSuggestions([]);
+    if (ui.isSuggesting) return;
+    ui.setIsSuggesting(true);
+    ui.setIllustrationSuggestions([]);
+    ui.setSelectedSuggestions([]);
     try {
-      const context = words.slice(0, currentIndex + 1).map(w => w.text).join(' ');
-      const suggestions = await suggestIllustrations(context, illustrations.map(i => i.prompt.split('\n')[0]));
-      setIllustrationSuggestions(suggestions);
-      setSelectedSuggestions(suggestions);
+      const context = reader.words.slice(0, reader.currentIndex + 1).map(w => w.text).join(' ');
+      const suggestions = await suggestIllustrations(context, ui.illustrations.map(i => i.prompt.split('\n')[0]));
+      ui.setIllustrationSuggestions(suggestions);
+      ui.setSelectedSuggestions(suggestions);
     } catch (err) {
       console.error("Failed to suggest illustrations:", err);
     } finally {
-      setIsSuggesting(false);
+      ui.setIsSuggesting(false);
     }
   };
 
   const handleGenerateMultipleIllustrations = async () => {
-    if (selectedSuggestions.length === 0 || isIllustrationLoading) return;
-    const toGenerate = [...selectedSuggestions];
-    setIllustrationSuggestions([]);
-    setSelectedSuggestions([]);
+    if (ui.selectedSuggestions.length === 0 || ui.isIllustrationLoading) return;
+    const toGenerate = [...ui.selectedSuggestions];
+    ui.setIllustrationSuggestions([]);
+    ui.setSelectedSuggestions([]);
 
-    setIsIllustrationLoading(true);
+    ui.setIsIllustrationLoading(true);
     try {
       for (const suggestion of toGenerate) {
-        setIllustrationPrompt('');
-        setIllustrationImage(null);
+        ui.setIllustrationPrompt('');
+        ui.setIllustrationImage(null);
         await performIllustrationGeneration(suggestion);
       }
     } catch (err) {
       console.error("Multiple illustration generation failed:", err);
     } finally {
-      setIsIllustrationLoading(false);
+      ui.setIsIllustrationLoading(false);
     }
   };
 
   const handleSelectBook = async (id: string) => {
-    setCurrentBookId(id);
-    if (autoLandscape) {
+    library.setCurrentBookId(id);
+    if (settings.autoLandscape) {
       if (!document.fullscreenElement) {
         document.documentElement.requestFullscreen().then(() => {
           if ((screen.orientation as any)?.lock) {
@@ -227,11 +165,6 @@ function App() {
   };
 
   const {
-    library,
-    setLibrary,
-    sessions,
-    setSessions,
-    isLoadingLibrary,
     handleUpdateBookTitle,
     handleUpdateBookFinishedDate,
     handleFileUpload,
@@ -239,37 +172,23 @@ function App() {
     handleDeleteBook,
     handleToggleArchive,
     refreshSessions
-  } = useLibrary(storageProvider, currentBookId, handleSelectBook);
+  } = useLibrary(storageProvider, library.currentBookId, handleSelectBook);
 
-  useReadingSession(
-    storageProvider,
-    isPlaying,
-    isHoldPaused,
-    isChapterBreak,
-    currentBookId,
-    currentIndex,
-    words,
-    bookTitle,
-    rsvpSettings,
-    library,
-    setLibrary,
-    setSessions,
-    wpm
-  );
+  useReadingSession(storageProvider);
 
   const handleRecomputeRealEnd = async () => {
-    if (!currentBookId || !storageProvider || !geminiApiKey) return;
+    if (!library.currentBookId || !storageProvider || !settings.geminiApiKey) return;
     setIsRecomputingEnd(true);
     try {
       const result = await analyzeRealEndOfBook(
-        currentBookId,
-        sections.map(s => s.label),
-        words,
+        library.currentBookId,
+        reader.sections.map(s => s.label),
+        reader.words,
         storageProvider
       );
       if (result !== null) {
-        setRealEndIndex(result);
-        setLibrary(await storageProvider.getAllBooks());
+        reader.setRealEndIndex(result);
+        library.setLibrary(await storageProvider.getAllBooks());
       }
     } catch (err) {
       console.error("Failed to recompute real end:", err);
@@ -279,28 +198,27 @@ function App() {
   };
 
   const handleClearFutureSessions = async () => {
-    if (!currentBookId || !storageProvider) return;
+    if (!library.currentBookId || !storageProvider) return;
     try {
-      await storageProvider.clearFutureSessions(currentBookId, currentIndex);
-      setFurthestIndex(currentIndex);
+      await storageProvider.clearFutureSessions(library.currentBookId, reader.currentIndex);
+      reader.setFurthestIndex(reader.currentIndex);
       await refreshSessions();
-      setLibrary(await storageProvider.getAllBooks());
+      library.setLibrary(await storageProvider.getAllBooks());
     } catch (err) {
       console.error("Failed to clear future sessions:", err);
     }
   };
 
   const handleClearRecentSessions = async () => {
-    if (!currentBookId || !storageProvider) return;
+    if (!library.currentBookId || !storageProvider) return;
     try {
-      await storageProvider.deleteRecentSessions(currentBookId, 1);
+      await storageProvider.deleteRecentSessions(library.currentBookId, 1);
       await refreshSessions();
-      setLibrary(await storageProvider.getAllBooks());
+      library.setLibrary(await storageProvider.getAllBooks());
     } catch (err) {
       console.error("Failed to clear recent sessions:", err);
     }
   };
-
 
 
   // Test Hook for Playwright
@@ -311,8 +229,8 @@ function App() {
         // Special case: Simulate logged-in Library View with empty library
         setUser(u => u || (MOCK_USER as any));
         setStorageProvider(p => p || (MOCK_STORAGE as any));
-        setLibrary([]);
-        setCurrentBookId(null);
+        library.setLibrary([]);
+        library.setCurrentBookId(null);
         setIsLoading(false);
         return;
       }
@@ -323,11 +241,11 @@ function App() {
         isSentenceStart: typeof w.isSentenceStart === 'boolean' ? w.isSentenceStart : w.sentenceIndex === 0
       }));
 
-      setWords(processedWords);
-      setSections(mockSections || [{ label: 'Mock Chapter', startIndex: 0 }]);
-      if (mockSessions) setSessions(mockSessions);
-      setCurrentIndex(0);
-      setCurrentBookId('mock');
+      reader.setWords(processedWords);
+      reader.setSections(mockSections || [{ label: 'Mock Chapter', startIndex: 0 }]);
+      if (mockSessions) library.setSessions(mockSessions);
+      reader.setCurrentIndex(0);
+      library.setCurrentBookId('mock');
       handleSetIsPlaying(false);
       setUser((u: any) => u || (MOCK_USER as any));
       setStorageProvider((p: any) => p || (MOCK_STORAGE as any));
@@ -335,7 +253,7 @@ function App() {
     };
 
     (window as any).__setWpm = (newWpm: number) => {
-      setWpm(newWpm);
+      settings.setWpm(newWpm);
     };
 
     (window as any).__setMockSettings = () => {
@@ -348,29 +266,29 @@ function App() {
       provider.getAllBooks = async () => mockBooks;
       setUser(MOCK_USER as any);
       setStorageProvider(provider);
-      setLibrary(mockBooks);
+      library.setLibrary(mockBooks);
       setIsLoading(false);
-      setCurrentBookId(null);
+      library.setCurrentBookId(null);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
 
 
   // Initialize Player
   useEffect(() => {
     if (storageProvider) {
-      audioPlayerRef.current = new AudioBookPlayer(storageProvider, geminiApiKey, deepgramApiKey);
+      audioPlayerRef.current = new AudioBookPlayer(storageProvider, settings.geminiApiKey, settings.deepgramApiKey);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageProvider]);
 
   // Update API Keys
   useEffect(() => {
     if (audioPlayerRef.current) {
-      audioPlayerRef.current.updateGeminiApiKey(geminiApiKey);
-      audioPlayerRef.current.updateDeepgramApiKey(deepgramApiKey);
+      audioPlayerRef.current.updateGeminiApiKey(settings.geminiApiKey);
+      audioPlayerRef.current.updateDeepgramApiKey(settings.deepgramApiKey);
     }
-  }, [geminiApiKey, deepgramApiKey]);
-
+  }, [settings.geminiApiKey, settings.deepgramApiKey]);
 
 
   // --- Load Data ---
@@ -380,38 +298,38 @@ function App() {
     const init = async () => {
       // Keep loading true while fetching initial data
       try {
-        const settings = await storageProvider.getSettings();
-        if (settings) {
-          if (settings.syncApiKey !== undefined) setSyncApiKey(settings.syncApiKey);
+        const s = await storageProvider.getSettings();
+        if (s) {
+          if (s.syncApiKey !== undefined) settings.setSyncApiKey(s.syncApiKey);
 
           // Only load API key from Firestore if syncing is enabled
-          if (settings.syncApiKey !== false) {
-            if (settings.geminiApiKey) {
-              setGeminiApiKey(settings.geminiApiKey);
+          if (s.syncApiKey !== false) {
+            if (s.geminiApiKey) {
+              settings.setGeminiApiKey(s.geminiApiKey);
             }
-            if (settings.deepgramApiKey) {
-              setDeepgramApiKey(settings.deepgramApiKey);
+            if (s.deepgramApiKey) {
+              settings.setDeepgramApiKey(s.deepgramApiKey);
             }
           }
-          if (settings.theme) setTheme(settings.theme as Theme);
-          if (settings.fontFamily) setFontFamily(settings.fontFamily as FontFamily);
-          if (settings.ttsSpeed) setTtsSpeed(settings.ttsSpeed);
-          if (settings.autoLandscape !== undefined) setAutoLandscape(settings.autoLandscape);
-          if (settings.rsvp) setRsvpSettings(prev => ({ ...prev, ...settings.rsvp }));
-          if (settings.readingMode) setReadingMode(settings.readingMode);
-          if (settings.paginatedFontSize) setPaginatedFontSize(settings.paginatedFontSize);
+          if (s.theme) settings.setTheme(s.theme as any);
+          if (s.fontFamily) settings.setFontFamily(s.fontFamily as any);
+          if (s.ttsSpeed) settings.setTtsSpeed(s.ttsSpeed);
+          if (s.autoLandscape !== undefined) settings.setAutoLandscape(s.autoLandscape);
+          if (s.rsvp) settings.setRsvpSettings({ ...settings.rsvpSettings, ...s.rsvp });
+          if (s.readingMode) settings.setReadingMode(s.readingMode);
+          if (s.paginatedFontSize) settings.setPaginatedFontSize(s.paginatedFontSize);
 
-          if (settings.onboardingCompleted) {
-            setOnboardingCompleted(true);
-          } else if (!onboardingCompleted) {
+          if (s.onboardingCompleted) {
+            settings.setOnboardingCompleted(true);
+          } else if (!settings.onboardingCompleted) {
             // Show onboarding if not completed and no API key set
-            if (!settings.geminiApiKey) {
-              setIsOnboardingOpen(true);
+            if (!s.geminiApiKey) {
+              ui.setIsOnboardingOpen(true);
             }
           }
-        } else if (!onboardingCompleted) {
+        } else if (!settings.onboardingCompleted) {
           // New user (no settings doc yet) and not marked as completed locally
-          setIsOnboardingOpen(true);
+          ui.setIsOnboardingOpen(true);
         }
       } catch (err) {
         console.error('Failed to load settings', err);
@@ -420,26 +338,22 @@ function App() {
       setIsLoading(false);
     };
     init();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageProvider]);
 
 
-
-  const handleOpenStats = async () => {
-    await refreshSessions();
-    setIsStatsOpen(true);
-  };
 
   const onFileInputClick = (e: React.MouseEvent<HTMLInputElement>) => { (e.target as HTMLInputElement).value = ''; };
 
   const handleCloseBook = async () => {
     handleSetIsPlaying(false);
-    if (currentBookId && storageProvider) {
-      await storageProvider.updateBookProgress(currentBookId, currentIndex);
-      setLibrary(await storageProvider.getAllBooks());
+    if (library.currentBookId && storageProvider) {
+      await storageProvider.updateBookProgress(library.currentBookId, reader.currentIndex);
+      library.setLibrary(await storageProvider.getAllBooks());
     }
-    setWords([]); setSections([]); setCurrentIndex(0); setBookTitle('');
-    setCurrentBookId(null); lastLoadedBookIdRef.current = null;
-    setRealEndIndex(null); setFurthestIndex(null);
+    reader.setWords([]); reader.setSections([]); reader.setCurrentIndex(0); reader.setBookTitle('');
+    library.setCurrentBookId(null); lastLoadedBookIdRef.current = null;
+    reader.setRealEndIndex(null); reader.setFurthestIndex(null);
 
     if (document.fullscreenElement) {
       document.exitFullscreen().catch(() => { });
@@ -455,13 +369,13 @@ function App() {
       const result = await processBook(bookRecord, storageProvider);
 
       const illusts = await storageProvider.getIllustrations(bookRecord.id);
-      setIllustrations(illusts);
+      ui.setIllustrations(illusts);
 
       lastLoadedBookIdRef.current = bookRecord.id;
-      setBookTitle(result.title);
-      setWords(result.words);
-      setSections(result.sections);
-      setCurrentIndex(result.wordIndex);
+      reader.setBookTitle(result.title);
+      reader.setWords(result.words);
+      reader.setSections(result.sections);
+      reader.setCurrentIndex(result.wordIndex);
 
       let targetWpm = Math.round(result.wpm);
       // Sanity check to recover from corrupted data
@@ -471,18 +385,18 @@ function App() {
       if (targetWpm !== result.wpm) {
         storageProvider.updateBookWpm(bookRecord.id, targetWpm).catch(e => console.error("Failed to recover WPM:", e));
       }
-      setWpm(targetWpm);
+      settings.setWpm(targetWpm);
 
-      setRealEndIndex(result.realEndIndex);
-      setFurthestIndex(bookRecord.progress.furthestWordIndex ?? bookRecord.progress.wordIndex);
+      reader.setRealEndIndex(result.realEndIndex);
+      reader.setFurthestIndex(bookRecord.progress.furthestWordIndex ?? bookRecord.progress.wordIndex);
 
       if (result.realEndQuote) {
         // Just to update the local library state if needed
-        setLibrary(prev => prev.map(b => b.id === bookRecord.id ? { ...b, analysis: { ...b.analysis, realEndQuote: result.realEndQuote } } : b));
+        library.setLibrary(prev => prev.map(b => b.id === bookRecord.id ? { ...b, analysis: { ...b.analysis, realEndQuote: result.realEndQuote } } : b));
       }
 
       // Background AI analysis if real end is unknown
-      if (result.realEndIndex === null && geminiApiKey) {
+      if (result.realEndIndex === null && settings.geminiApiKey) {
         analyzeRealEndOfBook(
           bookRecord.id,
           result.sections.map(s => s.label),
@@ -490,8 +404,8 @@ function App() {
           storageProvider
         ).then(newIndex => {
           if (newIndex !== null && currentBookIdRef.current === bookRecord.id) {
-            setRealEndIndex(newIndex);
-            setLibrary(prev => prev.map(b => b.id === bookRecord.id ? {
+            reader.setRealEndIndex(newIndex);
+            library.setLibrary(prev => prev.map(b => b.id === bookRecord.id ? {
               ...b,
               analysis: { ...b.analysis, realEndIndex: newIndex }
             } : b));
@@ -503,38 +417,43 @@ function App() {
       setIsLoading(false);
     } catch (e: any) {
       console.error("Book processing failed", e);
-      setCurrentBookId(null);
+      library.setCurrentBookId(null);
     }
-  }, [storageProvider, geminiApiKey]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageProvider, settings.geminiApiKey]);
 
   useEffect(() => {
-    if (currentBookId && currentBookId !== 'mock' && storageProvider) {
-      if (currentBookId === lastLoadedBookIdRef.current) {
+    if (library.currentBookId && library.currentBookId !== 'mock' && storageProvider) {
+      if (library.currentBookId === lastLoadedBookIdRef.current) {
         // Book already loaded, don't re-process to avoid resetting currentIndex
         return;
       }
       setIsLoading(true);
-      const record = library.find(b => b.id === currentBookId);
+      const record = library.library.find(b => b.id === library.currentBookId);
       if (record) handleProcessBook(record).then(() => setIsLoading(false));
-      else storageProvider.getBook(currentBookId).then((f: any) => {
+      else storageProvider.getBook(library.currentBookId).then((f: any) => {
         if (f) handleProcessBook(f).then(() => setIsLoading(false));
-        else { setCurrentBookId(null); setIsLoading(false); }
+        else { library.setCurrentBookId(null); setIsLoading(false); }
       });
     }
-  }, [currentBookId, handleProcessBook, library, storageProvider]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [library.currentBookId, handleProcessBook, storageProvider]);
 
   useEffect(() => {
-    if (!isPlaying && currentBookId && storageProvider) storageProvider.updateBookProgress(currentBookId, currentIndex);
-    if (furthestIndex !== null && currentIndex > furthestIndex) {
-      setFurthestIndex(currentIndex);
+    if (!reader.isPlaying && library.currentBookId && storageProvider) {
+      storageProvider.updateBookProgress(library.currentBookId, reader.currentIndex);
     }
-  }, [isPlaying, currentIndex, currentBookId, storageProvider, furthestIndex]);
+    if (reader.furthestIndex !== null && reader.currentIndex > reader.furthestIndex) {
+      reader.setFurthestIndex(reader.currentIndex);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reader.isPlaying, reader.currentIndex, library.currentBookId, storageProvider, reader.furthestIndex]);
 
 
 
-  if (user === undefined || (storageProvider && isLoading)) {
+  if (user === undefined || (storageProvider && isLoading) || library.isLoadingLibrary) {
     return (
-      <div className={`flex flex-col items-center justify-center min-h-dvh ${theme === 'bedtime' ? 'bg-black text-stone-400' : 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100'}`}>
+      <div className={`flex flex-col items-center justify-center min-h-dvh ${settings.theme === 'bedtime' ? 'bg-black text-stone-400' : 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100'}`}>
         <div className="animate-pulse flex flex-col items-center">
           <BookOpen size={48} className="mb-4 opacity-20" />
           <p className="text-sm font-light opacity-50 tracking-widest uppercase">Loading</p>
@@ -545,7 +464,7 @@ function App() {
 
   if (user === null || !storageProvider) {
     return (
-      <div className={`min-h-dvh flex flex-col ${theme === 'bedtime' ? 'bg-black text-stone-400' : 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100'}`}>
+      <div className={`min-h-dvh flex flex-col ${settings.theme === 'bedtime' ? 'bg-black text-stone-400' : 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100'}`}>
         <div className="flex flex-col items-center justify-center pt-24 pb-12 px-6">
           <h1 className="text-5xl font-light mb-8">Speed Reader</h1>
           <p className="mb-12 opacity-70 text-lg">Please sign in to access your library.</p>
@@ -568,82 +487,51 @@ function App() {
   }
 
   if (showAbout) {
-    return <AboutView onBack={() => setShowAbout(false)} theme={theme} />;
+    return <AboutView onBack={() => setShowAbout(false)} theme={settings.theme} />;
   }
 
   return (
     <>
       <AppModals
-        isSettingsOpen={isSettingsOpen} setIsSettingsOpen={setIsSettingsOpen}
-        geminiApiKey={geminiApiKey} setGeminiApiKey={setGeminiApiKey}
-        deepgramApiKey={deepgramApiKey} setDeepgramApiKey={setDeepgramApiKey}
-        syncApiKey={syncApiKey} setSyncApiKey={setSyncApiKey}
-        ttsSpeed={ttsSpeed} setTtsSpeed={setTtsSpeed}
-        autoLandscape={autoLandscape} setAutoLandscape={setAutoLandscape}
-        fontFamily={fontFamily} setFontFamily={setFontFamily}
-        rsvpSettings={rsvpSettings} setRsvpSettings={setRsvpSettings}
-        user={user} handleSignIn={handleSignIn} handleSignOut={handleSignOut}
-
-        isOnboardingOpen={isOnboardingOpen} setIsOnboardingOpen={setIsOnboardingOpen}
-        storageProvider={storageProvider} setOnboardingCompleted={setOnboardingCompleted}
-        saveGeminiApiKey={saveGeminiApiKey}
-
-        isAskAiOpen={isAskAiOpen} setIsAskAiOpen={setIsAskAiOpen}
-        aiTab={aiTab} setAiTab={setAiTab}
-        aiResponse={aiResponse} aiQuestion={aiQuestion}
-        setAiQuestion={setAiQuestion}
-        aiContextMode={aiContextMode} setAiContextMode={setAiContextMode}
-        illustrationQuery={illustrationQuery} setIllustrationQuery={setIllustrationQuery}
+        user={user}
+        handleSignIn={handleSignIn}
+        handleSignOut={handleSignOut}
+        storageProvider={storageProvider}
         handleAskAi={handleAskAi}
-        isAiLoading={isAiLoading}
-        illustrationPrompt={illustrationPrompt}
-        setIllustrationPrompt={setIllustrationPrompt}
-        illustrationImage={illustrationImage}
-        setIllustrationImage={setIllustrationImage}
-        isIllustrationLoading={isIllustrationLoading}
+        isAiLoading={ui.isAiLoading}
+        isIllustrationLoading={ui.isIllustrationLoading}
         handleGenerateIllustration={handleGenerateIllustration}
-        illustrations={illustrations}
-        illustrationSuggestions={illustrationSuggestions}
-        setIllustrationSuggestions={setIllustrationSuggestions}
-        selectedSuggestions={selectedSuggestions}
-        setSelectedSuggestions={setSelectedSuggestions}
-        isSuggesting={isSuggesting}
+        isSuggesting={ui.isSuggesting}
         handleSuggestIllustrations={handleSuggestIllustrations}
         handleGenerateMultipleIllustrations={handleGenerateMultipleIllustrations}
-
-        isStatsOpen={isStatsOpen} setIsStatsOpen={setIsStatsOpen}
-        sessions={sessions} library={library} currentBookId={currentBookId}
-        theme={theme} handleUpdateBookFinishedDate={handleUpdateBookFinishedDate}
-
-        isBookSettingsOpen={isBookSettingsOpen} setIsBookSettingsOpen={setIsBookSettingsOpen}
-        bookTitle={bookTitle} handleUpdateBookTitle={handleUpdateBookTitle}
-        handleRecomputeRealEnd={handleRecomputeRealEnd} isRecomputingEnd={isRecomputingEnd}
-        currentIndex={currentIndex} onClearFutureSessions={handleClearFutureSessions}
+        handleUpdateBookFinishedDate={handleUpdateBookFinishedDate}
+        handleUpdateBookTitle={handleUpdateBookTitle}
+        handleRecomputeRealEnd={handleRecomputeRealEnd}
+        isRecomputingEnd={isRecomputingEnd}
+        onClearFutureSessions={handleClearFutureSessions}
         onClearRecentSessions={handleClearRecentSessions}
       />
 
       <AuthenticatedApp
-        currentBookId={currentBookId} library={library} isLoading={isLoadingLibrary} theme={theme}
-        setIsSettingsOpen={setIsSettingsOpen} toggleTheme={toggleTheme} handleSelectBook={handleSelectBook}
-        handleDeleteBook={handleDeleteBook} handleToggleArchive={handleToggleArchive} handleFileUpload={handleFileUpload}
-        fileInputRef={fileInputRef} onFileInputClick={onFileInputClick} handleOpenStats={handleOpenStats}
-        handleLoadDemoBook={handleLoadDemoBook} setShowAbout={setShowAbout} words={words} currentIndex={currentIndex}
-        realEndIndex={realEndIndex} furthestIndex={furthestIndex} isPlaying={isPlaying} handleSetIsPlaying={handleSetIsPlaying}
-        setIsHoldPaused={setIsHoldPaused} wpm={wpm} setWpm={setWpm} storageProvider={storageProvider}
-        rsvpSettings={rsvpSettings} fontFamily={fontFamily} bookTitle={bookTitle} handleCloseBook={handleCloseBook}
-        setIsBookSettingsOpen={setIsBookSettingsOpen} setAiResponse={setAiResponse} setIsAskAiOpen={setIsAskAiOpen}
-        sections={sections} setCurrentIndex={setCurrentIndex} navigate={navigate} audioPlayerRef={audioPlayerRef}
-        ttsSpeed={ttsSpeed} setIsSynthesizing={setIsSynthesizing} setIsReadingAloud={setIsReadingAloud}
-        setSessions={setSessions} isReadingAloud={isReadingAloud} isSynthesizing={isSynthesizing} isChapterBreak={isChapterBreak}
-        onTtsDebugClick={() => setIsTtsDebugOpen(true)}
-        readingMode={readingMode} onReadingModeChange={setReadingMode}
-        paginatedFontSize={paginatedFontSize} onPaginatedFontSizeChange={setPaginatedFontSize}
+        fileInputRef={fileInputRef}
+        onFileInputClick={onFileInputClick}
+        handleSelectBook={handleSelectBook}
+        handleToggleArchive={handleToggleArchive}
+        handleDeleteBook={handleDeleteBook}
+        handleFileUpload={handleFileUpload}
+        handleLoadDemoBook={handleLoadDemoBook}
+        handleCloseBook={handleCloseBook}
+        navigate={navigate}
+        setShowAbout={setShowAbout}
+        storageProvider={storageProvider}
+        audioPlayerRef={audioPlayerRef}
+        handleSetIsPlaying={handleSetIsPlaying}
       />
 
       <TtsDebug
-        isOpen={isTtsDebugOpen}
-        onClose={() => setIsTtsDebugOpen(false)}
-        defaultSpeed={ttsSpeed}
+        isOpen={ui.isTtsDebugOpen}
+        onClose={() => ui.setIsTtsDebugOpen(false)}
+        defaultSpeed={settings.ttsSpeed}
       />
 
       <ConsoleLogger />

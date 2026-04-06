@@ -1,101 +1,24 @@
-import { useState, useEffect } from 'react';
-import { type RsvpSettings, type FirestoreStorage, type ReadingMode } from '../utils/storage';
-import { DEFAULT_RSVP_SETTINGS, DEFAULT_PAGINATED_FONT_SIZE } from '../constants';
-import { getGeminiApiKey, setGeminiApiKey as saveGeminiApiKey } from '../utils/gemini';
-import { getDeepgramApiKey, setDeepgramApiKey as saveDeepgramApiKey } from '../utils/deepgram';
+import { useEffect } from 'react';
+import type { FirestoreStorage } from '../utils/storage';
+import { useSettingsStore } from '../stores/useSettingsStore';
 
-export type Theme = 'light' | 'dark' | 'bedtime';
-export type FontFamily = 'system' | 'serif' | 'mono' | 'opendyslexic' | 'atkinson';
-export type { ReadingMode };
+export function useSettingsSync(storageProvider: FirestoreStorage | null, onboardingCompleted: boolean) {
+    const {
+        ttsSpeed, autoLandscape, theme, fontFamily,
+        syncApiKey, geminiApiKey, deepgramApiKey, rsvpSettings,
+        readingMode, paginatedFontSize
+    } = useSettingsStore();
 
-export function useSettings(storageProvider: FirestoreStorage | null, onboardingCompleted: boolean) {
-    const [ttsSpeed, setTtsSpeed] = useState(() => {
-        try {
-            const saved = localStorage.getItem('user_settings');
-            if (saved) return JSON.parse(saved).ttsSpeed || 1.0;
-        } catch { }
-        return 1.0;
-    });
-
-    const [geminiApiKey, setGeminiApiKey] = useState(() => {
-        return getGeminiApiKey() || '';
-    });
-
-    const [deepgramApiKey, setDeepgramApiKey] = useState(() => {
-        return getDeepgramApiKey() || '';
-    });
-
-    const [syncApiKey, setSyncApiKey] = useState(true);
-    const [autoLandscape, setAutoLandscape] = useState(() => {
-        try {
-            const saved = localStorage.getItem('user_settings');
-            if (saved) return JSON.parse(saved).autoLandscape ?? true;
-        } catch { }
-        return true;
-    });
-
-    const [theme, setTheme] = useState<Theme>(() => {
-        try {
-            const saved = localStorage.getItem('user_settings');
-            if (saved) {
-                const theme = JSON.parse(saved).theme;
-                if (theme) return theme as Theme;
-            }
-        } catch { }
-        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-            return 'dark';
-        }
-        return 'light';
-    });
-
-    const [fontFamily, setFontFamily] = useState<FontFamily>('system');
-
-    const [rsvpSettings, setRsvpSettings] = useState<RsvpSettings>(() => {
-        try {
-            const saved = localStorage.getItem('user_settings');
-            if (saved) {
-                const parsed = JSON.parse(saved);
-                if (parsed.rsvp) return { ...DEFAULT_RSVP_SETTINGS, ...parsed.rsvp };
-            }
-        } catch { }
-        return { ...DEFAULT_RSVP_SETTINGS };
-    });
-
-    const [readingMode, setReadingMode] = useState<ReadingMode>(() => {
-        try {
-            const saved = localStorage.getItem('user_settings');
-            if (saved) return JSON.parse(saved).readingMode || 'rsvp';
-        } catch { }
-        return 'rsvp';
-    });
-
-    const [paginatedFontSize, setPaginatedFontSize] = useState<number>(() => {
-        try {
-            const saved = localStorage.getItem('user_settings');
-            if (saved) return JSON.parse(saved).paginatedFontSize || DEFAULT_PAGINATED_FONT_SIZE;
-        } catch { }
-        return DEFAULT_PAGINATED_FONT_SIZE;
-    });
-
-    // --- Auto-save Settings to Local Storage ---
+    // Apply theme class to document
     useEffect(() => {
-        const settings = {
-            ttsSpeed,
-            autoLandscape,
-            theme,
-            fontFamily,
-            syncApiKey,
-            geminiApiKey: syncApiKey ? geminiApiKey : undefined,
-            deepgramApiKey: syncApiKey ? deepgramApiKey : undefined,
-            rsvp: rsvpSettings,
-            onboardingCompleted,
-            readingMode,
-            paginatedFontSize
-        };
-        localStorage.setItem('user_settings', JSON.stringify(settings));
-    }, [ttsSpeed, autoLandscape, theme, fontFamily, syncApiKey, geminiApiKey, deepgramApiKey, rsvpSettings, onboardingCompleted, readingMode, paginatedFontSize]);
+        if (theme === 'dark' || theme === 'bedtime') {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    }, [theme]);
 
-    // --- Auto-save Settings to Firestore ---
+    // Auto-save Settings to Firestore
     useEffect(() => {
         if (!storageProvider) return;
         const timer = setTimeout(() => {
@@ -115,33 +38,4 @@ export function useSettings(storageProvider: FirestoreStorage | null, onboarding
         }, 1000);
         return () => clearTimeout(timer);
     }, [ttsSpeed, autoLandscape, theme, fontFamily, syncApiKey, geminiApiKey, deepgramApiKey, rsvpSettings, storageProvider, onboardingCompleted, readingMode, paginatedFontSize]);
-
-
-    // Apply theme class to document
-    useEffect(() => {
-        if (theme === 'dark' || theme === 'bedtime') {
-            document.documentElement.classList.add('dark');
-        } else {
-            document.documentElement.classList.remove('dark');
-        }
-    }, [theme]);
-
-    const toggleTheme = () => {
-        const nextTheme: Theme = theme === 'light' ? 'dark' : theme === 'dark' ? 'bedtime' : 'light';
-        setTheme(nextTheme);
-        storageProvider?.updateSettings({ theme: nextTheme });
-    };
-
-    return {
-        ttsSpeed, setTtsSpeed,
-        geminiApiKey, setGeminiApiKey: (k: string) => { setGeminiApiKey(k); saveGeminiApiKey(k); },
-        deepgramApiKey, setDeepgramApiKey: (k: string) => { setDeepgramApiKey(k); saveDeepgramApiKey(k); },
-        syncApiKey, setSyncApiKey,
-        autoLandscape, setAutoLandscape,
-        theme, setTheme, toggleTheme,
-        fontFamily, setFontFamily,
-        rsvpSettings, setRsvpSettings,
-        readingMode, setReadingMode,
-        paginatedFontSize, setPaginatedFontSize
-    };
 }
