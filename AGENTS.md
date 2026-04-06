@@ -38,6 +38,10 @@ The project uses **Playwright** for End-to-End (E2E) testing.
 
 ### Running Tests
 
+When iterating on a specific problem, try to run only the specific tests in 
+your inner loop, and have playwright exit on the first error. Only run the
+full suite after you're sure the target test case passes.
+
 - **Run all tests:**
   ```bash
   npx playwright test

@@ -11,6 +11,7 @@ interface BookSettingsModalProps {
   isProcessing: boolean;
   currentIndex: number;
   onClearFutureSessions: () => Promise<void>;
+  onClearRecentSessions: () => Promise<void>;
 }
 
 export function BookSettingsModal({
@@ -21,7 +22,8 @@ export function BookSettingsModal({
   onRecomputeRealEnd,
   isProcessing,
   currentIndex,
-  onClearFutureSessions
+  onClearFutureSessions,
+  onClearRecentSessions
 }: BookSettingsModalProps) {
   const [newTitle, setNewTitle] = useState(currentTitle);
 
@@ -104,8 +106,19 @@ export function BookSettingsModal({
                 <Trash2 size={18} />
                 Clear Future Records
               </button>
+              <button
+                onClick={async () => {
+                  if (window.confirm(`Delete recent debugging records? This erases any logs created in the last hour.`)) {
+                    await onClearRecentSessions();
+                  }
+                }}
+                className="w-full flex items-center justify-center gap-2 p-3 rounded-lg border border-red-200 dark:border-red-900/30 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all text-sm font-medium text-red-600 dark:text-red-400"
+              >
+                <Trash2 size={18} />
+                Erase Last Hour Logs
+              </button>
               <p className="text-[10px] opacity-40 leading-relaxed text-center">
-                Use this if the app thinks you've read further than you actually have. It will remove all logs after your current position.
+                Use "Clear Future Records" if the app thinks you've read further than you actually have. Use "Erase Last Hour" to prune debugging activity.
               </p>
             </div>
           </div>

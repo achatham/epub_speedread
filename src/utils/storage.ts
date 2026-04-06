@@ -540,6 +540,42 @@ export class FirestoreStorage {
     });
   }
 
+  async deleteRecentSessions(bookId: string, hours: number = 1): Promise<void> {
+    if (!firestore) return;
+
+    const cutoffTime = Date.now() - (hours * 60 * 60 * 1000);
+    
+    // 1. Find recent raw sessions for this book
+    const rawSessionsQ = query(
+      this.sessionsCollection,
+      where('bookId', '==', bookId)
+    );
+    const rawSessionsSnap = await getDocs(rawSessionsQ);
+
+    // 2. Find recent aggregated sessions for this book
+    const aggQ = query(
+      this.aggregatedSessionsCollection,
+      where('bookId', '==', bookId)
+    );
+    const aggSnap = await getDocs(aggQ);
+
+    const rawToDelete = rawSessionsSnap.docs.filter(d => (d.data() as ReadingSession).startTime >= cutoffTime);
+    const aggToDelete = aggSnap.docs.filter(d => (d.data() as ReadingSession).startTime >= cutoffTime);
+
+    // 3. Delete them atomically
+    await runTransaction(firestore, async (transaction) => {
+      for (const d of rawToDelete) {
+        transaction.delete(d.ref);
+      }
+      for (const d of aggToDelete) {
+        transaction.delete(d.ref);
+      }
+    });
+    
+    // Note: We avoid eagerly recalculating cumulative progress attributes here 
+    // to strictly preserve the visual progress index during debug purges.
+  }
+
   async saveChapterAudio(bookId: string, chapterIndex: number, speed: number, chunks: AudioChunk[]): Promise<void> {
     const id = `${bookId}-${chapterIndex}-${speed}`;
     await this.fileCache.saveAudio(id, chunks);

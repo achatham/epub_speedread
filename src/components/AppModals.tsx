@@ -78,6 +78,7 @@ interface AppModalsProps {
     isRecomputingEnd: boolean;
     currentIndex: number;
     onClearFutureSessions: () => Promise<void>;
+    onClearRecentSessions: () => Promise<void>;
 }
 
 export function AppModals({
@@ -98,7 +99,7 @@ export function AppModals({
     isStatsOpen, setIsStatsOpen, sessions, library, currentBookId, theme, handleUpdateBookFinishedDate,
 
     isBookSettingsOpen, setIsBookSettingsOpen, bookTitle, handleUpdateBookTitle, handleRecomputeRealEnd, isRecomputingEnd,
-    currentIndex, onClearFutureSessions
+    currentIndex, onClearFutureSessions, onClearRecentSessions
 }: AppModalsProps) {
     return (
         <>
@@ -200,6 +201,7 @@ export function AppModals({
                 isProcessing={isRecomputingEnd}
                 currentIndex={currentIndex}
                 onClearFutureSessions={onClearFutureSessions}
+                onClearRecentSessions={onClearRecentSessions}
             />
         </>
     );

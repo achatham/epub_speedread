@@ -290,6 +290,17 @@ function App() {
     }
   };
 
+  const handleClearRecentSessions = async () => {
+    if (!currentBookId || !storageProvider) return;
+    try {
+      await storageProvider.deleteRecentSessions(currentBookId, 1);
+      await refreshSessions();
+      setLibrary(await storageProvider.getAllBooks());
+    } catch (err) {
+      console.error("Failed to clear recent sessions:", err);
+    }
+  };
+
 
 
   // Test Hook for Playwright
@@ -608,6 +619,7 @@ function App() {
         bookTitle={bookTitle} handleUpdateBookTitle={handleUpdateBookTitle}
         handleRecomputeRealEnd={handleRecomputeRealEnd} isRecomputingEnd={isRecomputingEnd}
         currentIndex={currentIndex} onClearFutureSessions={handleClearFutureSessions}
+        onClearRecentSessions={handleClearRecentSessions}
       />
 
       <AuthenticatedApp
