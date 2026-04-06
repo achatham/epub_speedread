@@ -287,6 +287,14 @@ export function PaginatedReaderView({
         </div>
       </div>
 
+      {/* ── Debug bar ─────────────────────────────────────────── */}
+      <div className="shrink-0 px-4 py-1 text-xs font-mono opacity-60 bg-yellow-100 dark:bg-yellow-900 text-yellow-900 dark:text-yellow-100">
+        idx {currentIndex}–{pageEndIndex - 1} ({pageEndIndex - currentIndex} words)
+        {' | '}area {areaDims ? `${areaDims.w}×${areaDims.h}` : '?'}
+        {' | '}start: "{words[currentIndex]?.text ?? '—'}"
+        {' | '}end: "{words[pageEndIndex - 1]?.text ?? '—'}"
+      </div>
+
       {/* ── Footer / controls ──────────────────────────────────── */}
       <div className={`shrink-0 px-4 pt-3 pb-8 flex flex-col gap-2`}>
         {/* Progress bar */}
