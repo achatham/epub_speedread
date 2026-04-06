@@ -2,6 +2,7 @@ import { useRef, useState, useEffect, useCallback, useLayoutEffect } from 'react
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { prepareWithSegments, layoutWithLines } from '@chenglou/pretext';
 import { ReaderMenu } from './ReaderMenu';
+import { splitWord } from '../utils/orp';
 import type { WordData } from '../utils/text-processing';
 import { type Theme, type FontFamily } from '../stores/useSettingsStore';
 import type { NavigationType } from '../utils/navigation';
@@ -12,6 +13,8 @@ interface PaginatedReaderViewProps {
   onCloseBook: () => void;
   navigate: (type: NavigationType) => void;
   onReadChapter: () => void;
+  handleSetIsPlaying: (playing: boolean) => void;
+  upcomingChapterTitle?: string;
 }
 
 const FONT_FAMILY_CSS: Record<FontFamily, string> = {
@@ -98,10 +101,23 @@ export function PaginatedReaderView({
   onCloseBook,
   navigate,
   onReadChapter,
+  handleSetIsPlaying,
+  upcomingChapterTitle,
 }: PaginatedReaderViewProps) {
-  const { words, currentIndex, realEndIndex, furthestIndex, setCurrentIndex, sections, bookTitle } = useReaderStore();
-  const { theme, fontFamily, paginatedFontSize: fontSize, setPaginatedFontSize: onFontSizeChange } = useSettingsStore();
-  
+  const { 
+    words, currentIndex, realEndIndex, furthestIndex, 
+    setCurrentIndex, sections, bookTitle, 
+    isPlaying, setIsHoldPaused, isChapterBreak 
+  } = useReaderStore();
+  const { 
+    theme, fontFamily, paginatedFontSize: fontSize, 
+    setPaginatedFontSize: onFontSizeChange, 
+    readingMode
+  } = useSettingsStore();
+
+  const pressStartTimeRef = useRef<number | null>(null);
+  const lastPauseTimeRef = useRef<number>(0);
+
   const effectiveTotalWords = words.length;
 
   const readingAreaRef = useRef<HTMLDivElement>(null);
@@ -148,20 +164,27 @@ export function PaginatedReaderView({
   const fontFamilyStr = FONT_FAMILY_CSS[fontFamily];
   const lineHeight = Math.round(fontSize * 1.5);
 
-  // Synchronous reset if currentIndex or dimensions change. 
-  // This informs the rest of the render that we are in a 'measuring' state for this index.
-  if (layoutState.start !== currentIndex) {
-    setLayoutState({ start: currentIndex, end: null });
-  }
+  const isPageValid = layoutState.start <= currentIndex && (layoutState.end === null || currentIndex < layoutState.end);
 
   // When dimensions or settings change, nullify measured index to trigger re-measurement
   useEffect(() => {
     setLayoutState({ start: currentIndex, end: null });
   }, [currentIndex, areaDims?.w, areaDims?.h, fontSize, fontFamilyStr, lineHeight]);
 
+  // Synchronous reset if currentIndex or dimensions change. 
+  // We don't reset if we are playing RSVP, because RSVP ticks currentIndex forward decoupled from pages.
+  if (!isPlaying && !isPageValid) {
+    // We try to use currentIndex as start for simplicity when pausing out of bounds.
+    // The user will see their current word at the top of the page.
+    setLayoutState({ start: currentIndex, end: null });
+  }
+
   useLayoutEffect(() => {
+    if (isPlaying && readingMode === 'rsvp') return; // Don't measure paginated pages while playing RSVP
+
     // Only measure if we are currently on the correct start index and haven't measured yet.
-    if (layoutState.start !== currentIndex || layoutState.end !== null) return;
+    if (layoutState.start !== currentIndex && isPageValid) return; 
+    if (layoutState.end !== null) return;
     if (!areaDims || areaDims.w === 0 || areaDims.h === 0) return;
     if (!innerRef.current) return;
 
@@ -190,7 +213,7 @@ export function PaginatedReaderView({
     const endIdx = currentIndex + firstOverflow;
     console.log(`Measured layout: words idx ${currentIndex}-${endIdx} visually fits inside ${areaDims.w}x${areaDims.h}`);
     setLayoutState({ start: currentIndex, end: endIdx });
-  }, [layoutState, currentIndex, areaDims, words]);
+  }, [layoutState, currentIndex, areaDims, words, isPlaying, readingMode, isPageValid]);
 
   // Find chapter info
   let activeChapterIdx = -1;
@@ -288,12 +311,69 @@ export function PaginatedReaderView({
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [handleNextPage, handlePrevPage]);
-
   // Theme-derived classes
   const mainBg = theme === 'bedtime' ? 'bg-black' : 'bg-white dark:bg-zinc-900';
   const mainText = theme === 'bedtime' ? 'text-stone-400' : 'text-zinc-900 dark:text-zinc-100';
   const borderColor = theme === 'bedtime' ? 'border-zinc-900' : 'border-zinc-200 dark:border-zinc-800';
   const mutedText = theme === 'bedtime' ? 'text-stone-600' : 'text-zinc-400 dark:text-zinc-500';
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    pressStartTimeRef.current = Date.now();
+    setIsHoldPaused(true);
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    if (pressStartTimeRef.current === null) return;
+    const duration = Date.now() - pressStartTimeRef.current;
+    pressStartTimeRef.current = null;
+    if (duration < 300) {
+      if (isPlaying) {
+        handleSetIsPlaying(false);
+        lastPauseTimeRef.current = Date.now();
+      }
+      setIsHoldPaused(false);
+    } else {
+      setIsHoldPaused(false);
+    }
+  };
+
+  const handlePointerCancel = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    if (pressStartTimeRef.current !== null) {
+      pressStartTimeRef.current = null;
+      setIsHoldPaused(false);
+    }
+  };
+
+  // RSVP Dynamic Font Size
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const idealFontSize = vh * 0.30;
+  const { prefix: benchPrefix, suffix: benchSuffix } = splitWord("transportation");
+  const benchLeftDensity = (benchPrefix.length + 0.5) / 0.4;
+  const benchRightDensity = (benchSuffix.length + 0.5) / 0.6;
+  const benchMaxDensity = Math.max(benchLeftDensity, benchRightDensity);
+  const baseFittingFontSize = (vw * 0.9) / (0.6 * benchMaxDensity);
+  
+  const { prefix, focus, suffix } = splitWord(words[currentIndex]?.text || '');
+  const currentLeftDensity = (prefix.length + 0.5) / 0.4;
+  const currentRightDensity = (suffix.length + 0.5) / 0.6;
+  const currentMaxDensity = Math.max(currentLeftDensity, currentRightDensity);
+  
+  let targetFontSize = Math.min(idealFontSize, baseFittingFontSize);
+  if (currentMaxDensity > benchMaxDensity * 1.15) {
+    const currentFittingFontSize = (vw * 0.9) / (0.6 * currentMaxDensity);
+    targetFontSize = Math.min(targetFontSize, currentFittingFontSize);
+  }
+  const currentFontSize = isPlaying ? targetFontSize : 48;
+
+  const rsvpFocusColor = theme === 'bedtime' ? 'text-amber-600' : (theme === 'dark' ? 'text-red-500' : 'text-red-600');
+  const rsvpContextClass = theme === 'bedtime' ? 'text-stone-600' : 'opacity-90';
+  const guidelinesClass = theme === 'bedtime' ? 'bg-amber-900/30' : 'bg-red-600 dark:bg-red-500 opacity-30';
+
 
   if (words.length === 0) {
     return (
@@ -309,59 +389,103 @@ export function PaginatedReaderView({
 
   return (
     <div
-      className={`flex flex-col h-dvh transition-colors duration-300 ${mainBg} ${mainText}`}
+      className={`flex flex-col h-dvh transition-colors duration-300 ${mainBg} ${mainText} ${(readingMode === 'rsvp' && !isPlaying) ? 'cursor-pointer' : ''}`}
       style={{ fontFamily: fontFamilyStr }}
       data-testid="paginated-reader"
     >
       {/* ── Header bar ─────────────────────────────────────────── */}
-      <div className={`flex items-center justify-between px-4 py-2 border-b shrink-0 ${borderColor}`}>
-        <div className="flex items-center gap-2 min-w-0">
-          <span className={`text-xs uppercase tracking-widest font-semibold opacity-40 truncate max-w-[180px]`}>
-            {bookTitle}
-          </span>
-          {chapterLabel && (
-            <>
-              <span className="opacity-20 text-xs">·</span>
-              <span className={`text-xs truncate max-w-[140px] ${mutedText}`}>{chapterLabel}</span>
-            </>
-          )}
-        </div>
+      {!isPlaying && (
+        <div className={`flex items-center justify-between px-4 py-2 border-b shrink-0 ${borderColor}`}>
+          <div className="flex items-center gap-2 min-w-0">
+            <span className={`text-xs uppercase tracking-widest font-semibold opacity-40 truncate max-w-[180px]`}>
+              {bookTitle}
+            </span>
+            {chapterLabel && (
+              <>
+                <span className="opacity-20 text-xs">·</span>
+                <span className={`text-xs truncate max-w-[140px] ${mutedText}`}>{chapterLabel}</span>
+              </>
+            )}
+          </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          {/* Font size controls */}
-          <button
-            onClick={() => onFontSizeChange(Math.max(12, fontSize - 2))}
-            className={`px-2 py-1 text-xs rounded border ${borderColor} ${mutedText} hover:opacity-80 transition-opacity`}
-            title="Decrease font size"
-            aria-label="Decrease font size"
-          >
-            A−
-          </button>
-          <span className={`text-xs font-mono ${mutedText} w-8 text-center`}>{fontSize}</span>
-          <button
-            onClick={() => onFontSizeChange(Math.min(64, fontSize + 2))}
-            className={`px-2 py-1 text-xs rounded border ${borderColor} ${mutedText} hover:opacity-80 transition-opacity`}
-            title="Increase font size"
-            aria-label="Increase font size"
-          >
-            A+
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => onFontSizeChange(Math.max(12, fontSize - 2))}
+              className={`px-2 py-1 text-xs rounded border ${borderColor} ${mutedText} hover:opacity-80 transition-opacity`}
+              title="Decrease font size"
+            >
+              A−
+            </button>
+            <span className={`text-xs font-mono ${mutedText} w-8 text-center`}>{fontSize}</span>
+            <button
+              onClick={() => onFontSizeChange(Math.min(64, fontSize + 2))}
+              className={`px-2 py-1 text-xs rounded border ${borderColor} ${mutedText} hover:opacity-80 transition-opacity`}
+              title="Increase font size"
+            >
+              A+
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ── Reading area ───────────────────────────────────────── */}
       <div
         ref={readingAreaRef}
-        className={`flex-1 min-h-0 overflow-hidden border-b ${borderColor} relative`}
+        className={`flex-1 min-h-0 overflow-hidden border-b ${borderColor} relative
+          ${isPlaying && readingMode === 'rsvp' ? 'flex items-center justify-center' : ''}`}
         data-testid="paginated-reading-area"
+        onClick={() => {
+          if (Date.now() - lastPauseTimeRef.current < 400) return;
+          if (!isPlaying && readingMode === 'rsvp') handleSetIsPlaying(true);
+        }}
       >
-        <div
-          ref={innerRef}
-          className="h-full w-full px-8 pt-8 pb-16 overflow-hidden"
-          style={{ fontSize: `${fontSize}px`, lineHeight: `${lineHeight}px`, opacity: 1 }}
-        >
-          {renderPageWords(pageWords, theme, currentIndex)}
-        </div>
+        {isPlaying && readingMode === 'rsvp' && (
+          <div
+            className="fixed inset-0 z-40 bg-transparent cursor-pointer"
+            onPointerDown={handlePointerDown}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerCancel}
+            title="Hold to pause, tap for menu"
+          />
+        )}
+
+        {(isPlaying && readingMode === 'rsvp') ? (
+          <div className="w-full relative" style={{ minHeight: Math.max(120, currentFontSize * 1.5) }}>
+            {!isChapterBreak && (
+              <>
+                <div className={`absolute top-0 left-[40%] -translate-x-1/2 w-0.5 h-10 ${guidelinesClass}`}></div>
+                <div className={`absolute bottom-0 left-[40%] -translate-x-1/2 w-0.5 h-10 ${guidelinesClass}`}></div>
+              </>
+            )}
+
+            {isChapterBreak ? (
+              <div className="flex flex-col items-center justify-center text-center px-4 animate-in fade-in zoom-in duration-500">
+                <div className={`text-xs uppercase tracking-widest mb-3 opacity-50 font-bold ${theme === 'bedtime' ? 'text-amber-600' : 'text-zinc-500'}`}>
+                  Next Chapter
+                </div>
+                <div className={`text-3xl font-serif italic ${theme === 'bedtime' ? 'text-stone-300' : 'text-zinc-800 dark:text-zinc-200'}`}>
+                  {upcomingChapterTitle}
+                </div>
+              </div>
+            ) : (
+              <div className="flex w-full items-baseline justify-center font-medium transition-all duration-100" style={{ fontSize: `${currentFontSize}px` }}>
+                <div className={`text-right whitespace-pre ${rsvpContextClass} flex-[0_0_40%] pr-[0.6ch]`}>{prefix}</div>
+                <div className="w-0 flex justify-center items-baseline overflow-visible z-10">
+                  <div className={`${rsvpFocusColor} font-bold text-center`}>{focus}</div>
+                </div>
+                <div className={`text-left whitespace-pre ${rsvpContextClass} flex-1 pl-[0.6ch]`}>{suffix}</div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div
+            ref={innerRef}
+            className="h-full w-full px-8 pt-8 pb-16 overflow-hidden"
+            style={{ fontSize: `${fontSize}px`, lineHeight: `${lineHeight}px`, opacity: 1 }}
+          >
+            {renderPageWords(pageWords, theme, currentIndex, readingMode === 'rsvp' ? currentIndex : undefined)}
+          </div>
+        )}
       </div>
 
       {/* ── Footer / controls ──────────────────────────────────── */}
@@ -397,46 +521,48 @@ export function PaginatedReaderView({
         </div>
 
         {/* Navigation row */}
-        <div className="flex items-center justify-between">
-          <button
-            onClick={handlePrevPage}
-            disabled={currentIndex === 0}
-            className={`flex items-center gap-1 px-3 py-2 rounded-lg border text-sm font-medium transition-all
-              ${currentIndex === 0 ? 'opacity-30 cursor-not-allowed' : 'hover:opacity-80 active:scale-95'}
-              ${borderColor}`}
-            aria-label="Previous page"
-          >
-            <ChevronLeft size={16} />
-            Prev
-          </button>
-
-          <div className={`flex flex-col items-center text-xs ${mutedText}`}>
-            <span>{Math.round(bookProgress)}%</span>
-            <span className="opacity-60">p.{Math.floor(currentIndex / 300) + 1}</span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <ReaderMenu
-              activeChapterIdx={activeChapterIdx}
-              onCloseBook={onCloseBook}
-              onReadChapter={onReadChapter}
-              navigate={navigate}
-              fabClassName={`p-2 rounded-lg border transition-all ${theme === 'bedtime' ? 'bg-zinc-900 border-zinc-800 text-stone-400 hover:bg-zinc-800' : 'bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700'}`}
-            />
-
+        {!isPlaying && (
+          <div className="flex items-center justify-between">
             <button
-              onClick={handleNextPage}
-              disabled={isMeasuring || (pageEndIndex !== null && pageEndIndex >= words.length)}
+              onClick={handlePrevPage}
+              disabled={currentIndex === 0}
               className={`flex items-center gap-1 px-3 py-2 rounded-lg border text-sm font-medium transition-all
-                ${(isMeasuring || (pageEndIndex !== null && pageEndIndex >= words.length)) ? 'opacity-30 cursor-not-allowed' : 'hover:opacity-80 active:scale-95'}
+                ${currentIndex === 0 ? 'opacity-30 cursor-not-allowed' : 'hover:opacity-80 active:scale-95'}
                 ${borderColor}`}
-              aria-label="Next page"
+              aria-label="Previous page"
             >
-              Next
-              <ChevronRight size={16} />
+              <ChevronLeft size={16} />
+              Prev
             </button>
+
+            <div className={`flex flex-col items-center text-xs ${mutedText}`}>
+              <span>{Math.round(bookProgress)}%</span>
+              <span className="opacity-60">p.{Math.floor(currentIndex / 300) + 1}</span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <ReaderMenu
+                activeChapterIdx={activeChapterIdx}
+                onCloseBook={onCloseBook}
+                onReadChapter={onReadChapter}
+                navigate={navigate}
+                fabClassName={`p-2 rounded-lg border transition-all ${theme === 'bedtime' ? 'bg-zinc-900 border-zinc-800 text-stone-400 hover:bg-zinc-800' : 'bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700'}`}
+              />
+
+              <button
+                onClick={handleNextPage}
+                disabled={isMeasuring || (pageEndIndex !== null && pageEndIndex >= words.length)}
+                className={`flex items-center gap-1 px-3 py-2 rounded-lg border text-sm font-medium transition-all
+                  ${(isMeasuring || (pageEndIndex !== null && pageEndIndex >= words.length)) ? 'opacity-30 cursor-not-allowed' : 'hover:opacity-80 active:scale-95'}
+                  ${borderColor}`}
+                aria-label="Next page"
+              >
+                Next
+                <ChevronRight size={16} />
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -445,7 +571,8 @@ export function PaginatedReaderView({
 function renderPageWords(
   pageWords: WordData[],
   theme: Theme,
-  currentIndex: number
+  currentIndex: number,
+  highlightIndex?: number
 ) {
   if (pageWords.length === 0) return null;
 
@@ -474,8 +601,13 @@ function renderPageWords(
           style={{ margin: 0, marginBottom: '1em' }}
         >
           {para.map(({ word, globalIdx }, wIdx) => {
+            const isHighlighted = globalIdx === highlightIndex;
             return (
-              <span key={globalIdx} data-word-idx={globalIdx}>
+              <span 
+                key={globalIdx} 
+                data-word-idx={globalIdx}
+                className={isHighlighted ? 'underline decoration-red-500/50 dark:decoration-red-400/50 decoration-2 underline-offset-4' : ''}
+              >
                 {wIdx > 0 ? ' ' : ''}{word.text}
               </span>
             );

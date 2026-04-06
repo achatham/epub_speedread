@@ -1,0 +1,15 @@
+
+> epub_rsvp@0.0.0 lint
+> eslint .
+
+
+C:\Users\andre\src\epub_speedread\epub_speedread\src\components\AuthenticatedApp.tsx
+  31:13  warning  'readingMode' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\andre\src\epub_speedread\epub_speedread\src\components\PaginatedReaderView.tsx
+  115:18  warning  'wpm' is assigned a value but never used                                                                                                                @typescript-eslint/no-unused-vars
+  115:23  warning  'rsvpSettings' is assigned a value but never used                                                                                                       @typescript-eslint/no-unused-vars
+  216:6   warning  React Hook useLayoutEffect has missing dependencies: 'isPageValid', 'isPlaying', and 'readingMode'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+Γ£û 4 problems (0 errors, 4 warnings)
+

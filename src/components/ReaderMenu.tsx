@@ -77,6 +77,7 @@ export function ReaderMenu({
           <div className="flex items-center gap-2">
             {activeTab !== 'main' && (
               <button
+                aria-label="Back to main menu"
                 onClick={() => setActiveTab('main')}
                 className={`p-1 rounded-md ${itemHover}`}
               >

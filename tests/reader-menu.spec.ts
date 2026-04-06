@@ -18,13 +18,13 @@ test('Reader Menu Functionality', async ({ page }) => {
   await expect(page.locator('button[title="Open Menu"]')).toBeVisible();
 
   // 2. Play/Pause via screen click
-  // Click on the main container (avoiding the FAB)
-  await page.click('body', { position: { x: 100, y: 100 } });
+  // Click on the reading area
+  await page.click('[data-testid="paginated-reading-area"]');
   // Now it should be playing. FAB should be hidden.
   await expect(page.locator('button[title="Open Menu"]')).not.toBeVisible();
 
   // Pause again
-  await page.click('body', { position: { x: 100, y: 100 } });
+  await page.click('[data-testid="paginated-reading-area"]');
   await expect(page.locator('button[title="Open Menu"]')).toBeVisible();
 
   // 3. Open Menu
@@ -41,7 +41,7 @@ test('Reader Menu Functionality', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Chapter 2' })).toBeVisible();
 
   // Go back to main
-  await page.locator('button:has(svg.lucide-chevron-left)').click();
+  await page.locator('button[aria-label="Back to main menu"]').click();
   await expect(page.getByText('Reading Speed')).toBeVisible();
 
   // 5. Test Navigation Jumps
@@ -50,7 +50,7 @@ test('Reader Menu Functionality', async ({ page }) => {
   await expect(page.getByText('Next Sentence')).toBeVisible();
 
   // Go back to main
-  await page.locator('button:has(svg.lucide-chevron-left)').click();
+  await page.locator('button[aria-label="Back to main menu"]').click();
   await expect(page.getByText('Reading Speed')).toBeVisible();
 
   // 6. Test WPM Change

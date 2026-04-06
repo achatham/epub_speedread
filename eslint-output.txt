@@ -1,0 +1,9 @@
+
+C:\Users\andre\src\epub_speedread\epub_speedread\src\components\AuthenticatedApp.tsx
+  31:13  warning  'readingMode' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\andre\src\epub_speedread\epub_speedread\src\components\PaginatedReaderView.tsx
+  216:6  warning  React Hook useLayoutEffect has a missing dependency: 'isPageValid'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+Γ£û 2 problems (0 errors, 2 warnings)
+

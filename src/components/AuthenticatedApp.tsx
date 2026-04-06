@@ -1,6 +1,5 @@
 import React from 'react';
 import { LibraryView } from './LibraryView';
-import { ReaderView } from './ReaderView';
 import { PaginatedReaderView } from './PaginatedReaderView';
 import { AudioBookPlayer } from '../utils/AudioBookPlayer';
 import { useReaderStore } from '../stores/useReaderStore';
@@ -29,7 +28,7 @@ export function AuthenticatedApp({
 }: AuthenticatedAppProps) {
     const { isChapterBreak, words, sections, currentIndex, bookTitle, setIsSynthesizing, setIsReadingAloud, setIsPlaying, setCurrentIndex } = useReaderStore();
     const { currentBookId, setSessions } = useLibraryStore();
-    const { readingMode, wpm, ttsSpeed } = useSettingsStore();
+    const { wpm, ttsSpeed } = useSettingsStore();
 
     if (!currentBookId) {
         return (
@@ -114,24 +113,13 @@ export function AuthenticatedApp({
         ? (sections.slice().reverse().find(s => s.startIndex <= currentIndex)?.label || '')
         : (sections.find(s => s.startIndex === currentIndex + 1)?.label || '');
 
-    if (readingMode === 'paginated') {
-        return (
-            <PaginatedReaderView
-                onCloseBook={handleCloseBook}
-                navigate={navigate}
-                onReadChapter={sharedReadChapter}
-            />
-        );
-    }
-
     return (
-        <ReaderView
+        <PaginatedReaderView
             onCloseBook={handleCloseBook}
             navigate={navigate}
             onReadChapter={sharedReadChapter}
             upcomingChapterTitle={sharedUpcomingChapterTitle}
             handleSetIsPlaying={handleSetIsPlaying}
-            storageProvider={storageProvider}
         />
     );
 }
