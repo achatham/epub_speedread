@@ -10,6 +10,8 @@ export const AI_QUESTIONS = {
 // closer to the WPM number the user indicated.
 export const WPM_VANITY_RATIO = 1.25;
 
+export const DEFAULT_PAGINATED_FONT_SIZE = 20;
+
 export const DEFAULT_RSVP_SETTINGS = {
   periodMultiplier: 2.0,
   commaMultiplier: 1.5,

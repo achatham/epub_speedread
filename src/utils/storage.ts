@@ -16,6 +16,8 @@ export interface RsvpSettings {
   previewWordCount: number;
 }
 
+export type ReadingMode = 'rsvp' | 'paginated';
+
 export interface UserSettings {
   geminiApiKey?: string;
   deepgramApiKey?: string;
@@ -26,6 +28,8 @@ export interface UserSettings {
   autoLandscape?: boolean;
   rsvp?: RsvpSettings;
   onboardingCompleted?: boolean;
+  readingMode?: ReadingMode;
+  paginatedFontSize?: number;
   lastUpdated: number;
   lastAggregationTime?: number;
 }

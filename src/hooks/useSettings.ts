@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { type RsvpSettings, type FirestoreStorage } from '../utils/storage';
-import { DEFAULT_RSVP_SETTINGS } from '../constants';
+import { type RsvpSettings, type FirestoreStorage, type ReadingMode } from '../utils/storage';
+import { DEFAULT_RSVP_SETTINGS, DEFAULT_PAGINATED_FONT_SIZE } from '../constants';
 import { getGeminiApiKey, setGeminiApiKey as saveGeminiApiKey } from '../utils/gemini';
 import { getDeepgramApiKey, setDeepgramApiKey as saveDeepgramApiKey } from '../utils/deepgram';
 
 export type Theme = 'light' | 'dark' | 'bedtime';
 export type FontFamily = 'system' | 'serif' | 'mono' | 'opendyslexic' | 'atkinson';
+export type { ReadingMode };
 
 export function useSettings(storageProvider: FirestoreStorage | null, onboardingCompleted: boolean) {
     const [ttsSpeed, setTtsSpeed] = useState(() => {
@@ -60,6 +61,22 @@ export function useSettings(storageProvider: FirestoreStorage | null, onboarding
         return { ...DEFAULT_RSVP_SETTINGS };
     });
 
+    const [readingMode, setReadingMode] = useState<ReadingMode>(() => {
+        try {
+            const saved = localStorage.getItem('user_settings');
+            if (saved) return JSON.parse(saved).readingMode || 'rsvp';
+        } catch { }
+        return 'rsvp';
+    });
+
+    const [paginatedFontSize, setPaginatedFontSize] = useState<number>(() => {
+        try {
+            const saved = localStorage.getItem('user_settings');
+            if (saved) return JSON.parse(saved).paginatedFontSize || DEFAULT_PAGINATED_FONT_SIZE;
+        } catch { }
+        return DEFAULT_PAGINATED_FONT_SIZE;
+    });
+
     // --- Auto-save Settings to Local Storage ---
     useEffect(() => {
         const settings = {
@@ -71,10 +88,12 @@ export function useSettings(storageProvider: FirestoreStorage | null, onboarding
             geminiApiKey: syncApiKey ? geminiApiKey : undefined,
             deepgramApiKey: syncApiKey ? deepgramApiKey : undefined,
             rsvp: rsvpSettings,
-            onboardingCompleted
+            onboardingCompleted,
+            readingMode,
+            paginatedFontSize
         };
         localStorage.setItem('user_settings', JSON.stringify(settings));
-    }, [ttsSpeed, autoLandscape, theme, fontFamily, syncApiKey, geminiApiKey, deepgramApiKey, rsvpSettings, onboardingCompleted]);
+    }, [ttsSpeed, autoLandscape, theme, fontFamily, syncApiKey, geminiApiKey, deepgramApiKey, rsvpSettings, onboardingCompleted, readingMode, paginatedFontSize]);
 
     // --- Auto-save Settings to Firestore ---
     useEffect(() => {
@@ -89,11 +108,13 @@ export function useSettings(storageProvider: FirestoreStorage | null, onboarding
                 geminiApiKey: syncApiKey ? geminiApiKey : undefined,
                 deepgramApiKey: syncApiKey ? deepgramApiKey : undefined,
                 rsvp: rsvpSettings,
-                onboardingCompleted
+                onboardingCompleted,
+                readingMode,
+                paginatedFontSize
             });
         }, 1000);
         return () => clearTimeout(timer);
-    }, [ttsSpeed, autoLandscape, theme, fontFamily, syncApiKey, geminiApiKey, deepgramApiKey, rsvpSettings, storageProvider, onboardingCompleted]);
+    }, [ttsSpeed, autoLandscape, theme, fontFamily, syncApiKey, geminiApiKey, deepgramApiKey, rsvpSettings, storageProvider, onboardingCompleted, readingMode, paginatedFontSize]);
 
 
     // Apply theme class to document
@@ -119,6 +140,8 @@ export function useSettings(storageProvider: FirestoreStorage | null, onboarding
         autoLandscape, setAutoLandscape,
         theme, setTheme, toggleTheme,
         fontFamily, setFontFamily,
-        rsvpSettings, setRsvpSettings
+        rsvpSettings, setRsvpSettings,
+        readingMode, setReadingMode,
+        paginatedFontSize, setPaginatedFontSize
     };
 }
