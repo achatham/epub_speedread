@@ -60,39 +60,58 @@ function computePageEndIndex(
   const chunkSize = Math.min(800, words.length - startIndex);
   const chunk = words.slice(startIndex, startIndex + chunkSize);
 
-  // Build text, inserting double newlines at paragraph starts
-  let text = '';
-  for (let i = 0; i < chunk.length; i++) {
-    if (i > 0 && chunk[i].isParagraphStart) {
-      text += '\n\n';
-    } else if (i > 0) {
-      text += ' ';
-    }
-    text += chunk[i].text;
-  }
-
   const lineHeight = Math.round(fontSize * 1.5);
+  const paragraphGap = fontSize; // matches mb-[1em]
   const fontStr = `${fontSize}px ${fontFamilyStr}`;
 
-  const prepared = prepareWithSegments(text, fontStr);
-  const { lines } = layoutWithLines(prepared, areaWidth, lineHeight);
-
   let accHeight = 0;
-  let accWords = 0;
+  let wordsIncluded = 0;
 
-  for (const line of lines) {
-    const nextHeight = accHeight + lineHeight;
-    if (nextHeight > areaHeight) break;
-    accHeight = nextHeight;
-    const lineText = line.text.trim();
-    if (lineText.length > 0) {
-      // Count words in this line
-      accWords += lineText.split(/\s+/).length;
+  // Group chunk into paragraphs to accurately simulate DOM rendering
+  const paragraphs: WordData[][] = [];
+  let currentPara: WordData[] = [];
+  for (const w of chunk) {
+    if (w.isParagraphStart && currentPara.length > 0) {
+      paragraphs.push(currentPara);
+      currentPara = [];
+    }
+    currentPara.push(w);
+  }
+  if (currentPara.length > 0) {
+    paragraphs.push(currentPara);
+  }
+
+  // Layout paragraph by paragraph
+  for (const paraWords of paragraphs) {
+    const text = paraWords.map((w) => w.text).join(' ');
+
+    const prepared = prepareWithSegments(text, fontStr);
+    const { lines } = layoutWithLines(prepared, areaWidth, lineHeight);
+
+    const paraHeight = lines.length * lineHeight;
+
+    // Check if the text of this paragraph fits in the remaining visible area
+    if (accHeight + paraHeight <= areaHeight) {
+      // Entire paragraph fits
+      wordsIncluded += paraWords.length;
+      accHeight += paraHeight + paragraphGap;
+    } else {
+      // Paragraph doesn't fully fit, figure out how many lines do fit
+      const remainingHeight = areaHeight - accHeight;
+      const linesThatFit = Math.floor(remainingHeight / lineHeight);
+
+      for (let l = 0; l < linesThatFit; l++) {
+        const lineText = lines[l].text.trim();
+        if (lineText.length > 0) {
+          wordsIncluded += lineText.split(/\s+/).length;
+        }
+      }
+      break; // Run out of space, stop processing paragraphs
     }
   }
 
   // Ensure we advance at least 1 word so we never get stuck
-  const pageWords = Math.max(1, accWords);
+  const pageWords = Math.max(1, wordsIncluded);
   return Math.min(startIndex + pageWords, words.length);
 }
 
@@ -142,22 +161,40 @@ export function PaginatedReaderView({
     return () => observer.disconnect();
   }, []);
 
+  const historyRef = useRef<number[]>([]);
+  const expectedIndexRef = useRef<number>(currentIndex);
+
+  // Clear history if index leaped via external means (progress bar, chapter select)
+  useEffect(() => {
+    if (currentIndex !== expectedIndexRef.current) {
+      historyRef.current = [];
+      expectedIndexRef.current = currentIndex;
+    }
+  }, [currentIndex]);
+
   const fontFamilyStr = FONT_FAMILY_CSS[fontFamily];
+  const lineHeight = Math.round(fontSize * 1.5);
 
   // Recompute page end when relevant inputs change
   useEffect(() => {
     if (!areaDims || areaDims.w <= 0 || areaDims.h <= 0) return;
     const PADDING = 32; // px, matches the px-4 / px-8 padding in reading area
+    
+    // Browser text tracking can sometimes push words to the next line natively.
+    // Reserving 1 lineHeight of vertical space ensures that if the browser wraps slightly later,
+    // the final line falls safely into the reserved space instead of overflowing and clipping words in half.
+    const effectiveHeight = Math.max(lineHeight, areaDims.h - PADDING * 2 - lineHeight);
+    
     const end = computePageEndIndex(
       words,
       currentIndex,
       areaDims.w - PADDING * 2,
-      areaDims.h - PADDING * 2,
+      effectiveHeight,
       fontSize,
       fontFamilyStr,
     );
     setPageEndIndex(end);
-  }, [words, currentIndex, areaDims, fontSize, fontFamilyStr]);
+  }, [words, currentIndex, areaDims, fontSize, fontFamilyStr, lineHeight]);
 
   // Find chapter info
   let activeChapterIdx = -1;
@@ -176,25 +213,58 @@ export function PaginatedReaderView({
 
   const handleNextPage = useCallback(() => {
     if (pageEndIndex < words.length) {
+      historyRef.current.push(currentIndex);
+      expectedIndexRef.current = pageEndIndex;
       setCurrentIndex(pageEndIndex);
     }
-  }, [pageEndIndex, words.length, setCurrentIndex]);
+  }, [pageEndIndex, words.length, currentIndex, setCurrentIndex]);
 
   const handlePrevPage = useCallback(() => {
     if (currentIndex === 0) return;
     const chapterStart = sections[activeChapterIdx]?.startIndex ?? 0;
     if (!areaDims || areaDims.w <= 0 || areaDims.h <= 0) {
-      setCurrentIndex(Math.max(chapterStart, currentIndex - 1));
+      const prev = Math.max(chapterStart, currentIndex - 1);
+      expectedIndexRef.current = prev;
+      setCurrentIndex(prev);
       return;
     }
-    const pageSize = pageEndIndex - currentIndex;
-    const prevStart = Math.max(0, currentIndex - pageSize);
+
+    let targetIndex = 0;
+    if (historyRef.current.length > 0) {
+      targetIndex = historyRef.current.pop()!;
+    } else {
+      // Fallback: estimate backward and iterate forward if history was cleared 
+      const estimatedStart = Math.max(chapterStart, currentIndex - 1500);
+      let prevStart = estimatedStart;
+      let curr = estimatedStart;
+      const PADDING = 32;
+      const effectiveHeight = Math.max(lineHeight, areaDims.h - PADDING * 2 - lineHeight);
+
+      // Fast-forward until we find the page just preceding currentIndex
+      while (curr < currentIndex) {
+        const next = computePageEndIndex(words, curr, areaDims.w - PADDING * 2, effectiveHeight, fontSize, fontFamilyStr);
+        if (next >= currentIndex) {
+          break; // The page starting at `curr` covers our active index. The one before it is `prevStart`.
+        }
+        prevStart = curr;
+        curr = next;
+      }
+
+      if (curr >= currentIndex && prevStart === curr) {
+        prevStart = Math.max(chapterStart, currentIndex - 200); // Safety fallback
+      }
+      targetIndex = prevStart;
+    }
+
     // Snap to chapter start if we'd be within half a page of it
-    const target = prevStart <= chapterStart + Math.floor(pageSize / 2)
-      ? chapterStart
-      : prevStart;
-    setCurrentIndex(target);
-  }, [currentIndex, pageEndIndex, areaDims, sections, activeChapterIdx, setCurrentIndex]);
+    if (targetIndex <= chapterStart + Math.floor((currentIndex - targetIndex) / 2)) {
+      targetIndex = chapterStart;
+      historyRef.current = []; // Clear history crossing chap boundary
+    }
+
+    expectedIndexRef.current = targetIndex;
+    setCurrentIndex(targetIndex);
+  }, [currentIndex, areaDims, sections, activeChapterIdx, setCurrentIndex, words, fontSize, fontFamilyStr, lineHeight]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -216,8 +286,6 @@ export function PaginatedReaderView({
   const mainText = theme === 'bedtime' ? 'text-stone-400' : 'text-zinc-900 dark:text-zinc-100';
   const borderColor = theme === 'bedtime' ? 'border-zinc-900' : 'border-zinc-200 dark:border-zinc-800';
   const mutedText = theme === 'bedtime' ? 'text-stone-600' : 'text-zinc-400 dark:text-zinc-500';
-
-  const lineHeight = Math.round(fontSize * 1.5);
 
   if (words.length === 0) {
     return (

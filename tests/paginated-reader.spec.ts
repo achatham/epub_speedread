@@ -280,3 +280,74 @@ test('RSVP paused view has bounded reading area', async ({ page }) => {
   // Take a screenshot to visually verify
   await page.screenshot({ path: 'tests/rsvp-paused-bounded.png' });
 });
+
+test('page layout accurately computes end index with margin spacing without overflowing', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => typeof (window as any).__loadMockWords === 'function');
+
+  // Use real-looking words with multiple paragraphs
+  const rawText = `It was a bright cold day in April, and the clocks were striking thirteen. Winston Smith, his chin nuzzled into his breast in an effort to escape the vile wind, slipped quickly through the glass doors of Victory Mansions, though not quickly enough to prevent a swirl of gritty dust from entering along with him.
+The hallway smelt of boiled cabbage and old rag mats. At one end of it a coloured poster, too large for indoor display, had been tacked to the wall. It depicted simply an enormous face, more than a metre wide: the face of a man of about forty-five, with a heavy black moustache and ruggedly handsome features. Winston made for the stairs. It was no use trying the lift. Even at the best of times it was seldom working, and at present the electric current was cut off during daylight hours. It was part of the economy drive in preparation for Hate Week. The flat was seven flights up, and Winston, who was thirty-nine and had a varicose ulcer above his right ankle, went slowly, resting several times on the way. He took out a cigarette from a crumpled packet marked VICTORY CIGARETTES and incautiously held it upright, whereupon the tobacco fell out on to the floor.`;
+
+  const storyWords: any[] = [];
+  const paragraphs = rawText.split('\n');
+  for (let p of paragraphs) {
+    const pWords = p.trim().split(/\s+/);
+    pWords.forEach((text, i) => {
+      storyWords.push({
+        text,
+        isParagraphStart: i === 0,
+        isSentenceStart: text.match(/^[A-Z]/) !== null,
+      });
+    });
+  }
+
+  await page.evaluate((words: any[]) => {
+    (window as any).__loadMockWords(words, [{ label: 'Chapter One', startIndex: 0 }]);
+  }, storyWords);
+
+  // Switch to paginated mode
+  await page.locator('button[title="Open Menu"]').click();
+  await page.locator('button:has-text("Page")').click();
+
+  const reader = page.locator('[data-testid="paginated-reader"]');
+  await expect(reader).toBeVisible();
+
+  // Force size 20 (system font is default)
+  // Initially font size is unknown, so just click increase/decrease buttons to normalize (mock is probably default 20ish anyway)
+  // Actually, we can just grab the debug text to verify the end index is sensible relative to total words.
+  await page.waitForTimeout(500);
+
+  const debugText = await page.locator('.bg-yellow-100').innerText();
+  // It should say something like idx 0-X (X words) 
+  // Make sure X is less than the total words unless they all fit.
+  console.log("Debug text:", debugText);
+  
+  const readingArea = page.locator('[data-testid="paginated-reading-area"]');
+  const innerText = await readingArea.innerText();
+  
+  // The first word should be "It"
+  expect(innerText).toContain('It');
+  
+  // Verify it doesn't contain the absolute end of the book if the screen is small (default playwright screen is 1280x720, so it might all fit. We can constrain viewport to force pagination)
+  await page.setViewportSize({ width: 400, height: 400 });
+  await page.waitForTimeout(500);
+  
+  const debugTextConstrained = await page.locator('.bg-yellow-100').innerText();
+  console.log("Constrained debug text:", debugTextConstrained);
+  
+  const match = debugTextConstrained.match(/idx 0–(\d+)/); 
+  expect(match).not.toBeNull();
+  
+  const endIndex = parseInt(match![1], 10);
+  expect(endIndex).toBeLessThan(storyWords.length);
+  
+  // Check the text on screen actually matches the slice of words up to endIndex
+  const constrainedInnerText = await readingArea.innerText();
+  const visibleWords = constrainedInnerText.split(/\s+/).filter(Boolean);
+  
+  // Count words manually to avoid regex subtleties on punctuation
+  // The visible word count should be very close to endIndex (within a few words due to visual trimming)
+  expect(Math.abs(visibleWords.length - endIndex)).toBeLessThan(5);
+});
+
