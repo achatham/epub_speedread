@@ -2,9 +2,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   Menu, X, Minus, Plus, Settings, Settings2, BarChart2,
   Sun, Moon, Sunset, Volume2, Sparkles, SkipBack,
-  ChevronLeft, Loader2, Square, LogOut
+  ChevronLeft, Loader2, Square, LogOut, Zap, BookOpen
 } from 'lucide-react';
 import type { NavigationType } from '../utils/navigation';
+import type { ReadingMode } from '../hooks/useSettings';
 
 type Theme = 'light' | 'dark' | 'bedtime';
 
@@ -29,6 +30,10 @@ interface ReaderMenuProps {
   furthestIndex: number | null;
   effectiveTotalWords: number;
   currentIndex: number;
+  readingMode: ReadingMode;
+  onReadingModeChange: (mode: ReadingMode) => void;
+  /** Override FAB button positioning; defaults to fixed bottom-right */
+  fabClassName?: string;
 }
 
 export function ReaderMenu({
@@ -51,7 +56,10 @@ export function ReaderMenu({
   navigate,
   furthestIndex,
   effectiveTotalWords,
-  currentIndex
+  currentIndex,
+  readingMode,
+  onReadingModeChange,
+  fabClassName,
 }: ReaderMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'main' | 'toc' | 'nav'>('main');
@@ -78,7 +86,7 @@ export function ReaderMenu({
     return (
       <button
         onClick={(e) => { e.stopPropagation(); setIsOpen(true); }}
-        className={`fixed bottom-6 right-6 z-50 p-4 rounded-full shadow-lg border transition-all pointer-events-auto ${theme === 'bedtime' ? 'bg-zinc-900 border-zinc-800 text-stone-400' : 'bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100'} hover:scale-110 active:scale-95`}
+        className={fabClassName ?? `fixed bottom-6 right-6 z-50 p-4 rounded-full shadow-lg border transition-all pointer-events-auto ${theme === 'bedtime' ? 'bg-zinc-900 border-zinc-800 text-stone-400' : 'bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100'} hover:scale-110 active:scale-95`}
         title="Open Menu"
       >
         <Menu size={24} />
@@ -186,6 +194,37 @@ export function ReaderMenu({
                   onClick={() => { onAskAiClick(); setIsOpen(false); }}
                   hoverClass={itemHover}
                 />
+              </div>
+
+              {/* Reading Mode Toggle */}
+              <div className="flex flex-col gap-2">
+                <span className="text-[10px] uppercase font-bold tracking-widest opacity-50">Reading Mode</span>
+                <div className={`flex rounded-xl border overflow-hidden ${theme === 'bedtime' ? 'border-zinc-800' : 'border-zinc-200 dark:border-zinc-700'}`}>
+                  <button
+                    onClick={() => { onReadingModeChange('rsvp'); setIsOpen(false); }}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold transition-colors
+                      ${readingMode === 'rsvp'
+                        ? (theme === 'bedtime' ? 'bg-amber-700 text-stone-100' : 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900')
+                        : (theme === 'bedtime' ? 'text-stone-400 hover:bg-zinc-900' : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800')
+                      }`}
+                    title="Speed reading (RSVP)"
+                  >
+                    <Zap size={14} />
+                    RSVP
+                  </button>
+                  <button
+                    onClick={() => { onReadingModeChange('paginated'); setIsOpen(false); }}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold transition-colors
+                      ${readingMode === 'paginated'
+                        ? (theme === 'bedtime' ? 'bg-amber-700 text-stone-100' : 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900')
+                        : (theme === 'bedtime' ? 'text-stone-400 hover:bg-zinc-900' : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800')
+                      }`}
+                    title="Paginated reading"
+                  >
+                    <BookOpen size={14} />
+                    Page
+                  </button>
+                </div>
               </div>
 
               {/* Sub-menu Triggers */}

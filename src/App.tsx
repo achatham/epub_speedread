@@ -77,7 +77,9 @@ function App() {
     autoLandscape, setAutoLandscape,
     theme, setTheme, toggleTheme,
     fontFamily, setFontFamily,
-    rsvpSettings, setRsvpSettings
+    rsvpSettings, setRsvpSettings,
+    readingMode, setReadingMode,
+    paginatedFontSize, setPaginatedFontSize
   } = useSettings(storageProvider, onboardingCompleted);
   const saveGeminiApiKey = (k: string) => {
     setGeminiApiKey(k);
@@ -385,6 +387,8 @@ function App() {
           if (settings.ttsSpeed) setTtsSpeed(settings.ttsSpeed);
           if (settings.autoLandscape !== undefined) setAutoLandscape(settings.autoLandscape);
           if (settings.rsvp) setRsvpSettings(prev => ({ ...prev, ...settings.rsvp }));
+          if (settings.readingMode) setReadingMode(settings.readingMode);
+          if (settings.paginatedFontSize) setPaginatedFontSize(settings.paginatedFontSize);
 
           if (settings.onboardingCompleted) {
             setOnboardingCompleted(true);
@@ -620,6 +624,8 @@ function App() {
         ttsSpeed={ttsSpeed} setIsSynthesizing={setIsSynthesizing} setIsReadingAloud={setIsReadingAloud}
         setSessions={setSessions} isReadingAloud={isReadingAloud} isSynthesizing={isSynthesizing} isChapterBreak={isChapterBreak}
         onTtsDebugClick={() => setIsTtsDebugOpen(true)}
+        readingMode={readingMode} onReadingModeChange={setReadingMode}
+        paginatedFontSize={paginatedFontSize} onPaginatedFontSizeChange={setPaginatedFontSize}
       />
 
       <TtsDebug

@@ -1,10 +1,11 @@
 import React from 'react';
-import type { Theme, FontFamily } from '../hooks/useSettings';
+import type { Theme, FontFamily, ReadingMode } from '../hooks/useSettings';
 import type { RsvpSettings, BookRecord } from '../utils/storage';
 import type { WordData } from '../utils/text-processing';
 import type { NavigationType } from '../utils/navigation';
 import { LibraryView } from './LibraryView';
 import { ReaderView } from './ReaderView';
+import { PaginatedReaderView } from './PaginatedReaderView';
 import { AudioBookPlayer } from '../utils/AudioBookPlayer';
 
 interface AuthenticatedAppProps {
@@ -52,6 +53,10 @@ interface AuthenticatedAppProps {
     isSynthesizing: boolean;
     isChapterBreak: boolean;
     onTtsDebugClick: () => void;
+    readingMode: ReadingMode;
+    onReadingModeChange: (mode: ReadingMode) => void;
+    paginatedFontSize: number;
+    onPaginatedFontSizeChange: (size: number) => void;
 }
 
 export function AuthenticatedApp({
@@ -62,7 +67,7 @@ export function AuthenticatedApp({
     rsvpSettings, fontFamily, bookTitle, handleCloseBook, setIsBookSettingsOpen, setAiResponse,
     setIsAskAiOpen, sections, setCurrentIndex, navigate, audioPlayerRef, ttsSpeed, setIsSynthesizing,
     setIsReadingAloud, setSessions, isReadingAloud, isSynthesizing, isChapterBreak,
-    onTtsDebugClick
+    onTtsDebugClick, readingMode, onReadingModeChange, paginatedFontSize, onPaginatedFontSizeChange
 }: AuthenticatedAppProps) {
     if (!currentBookId) {
         return (
@@ -80,6 +85,112 @@ export function AuthenticatedApp({
                 onLoadDemoBook={handleLoadDemoBook}
                 onAboutClick={() => setShowAbout(true)}
                 onTtsDebugClick={onTtsDebugClick}
+            />
+        );
+    }
+
+    const sharedReadChapter = async () => {
+        if (audioPlayerRef.current?.isActive) {
+            audioPlayerRef.current.stop();
+            return;
+        }
+
+        let cIdx = -1;
+        for (let i = 0; i < sections.length; i++) {
+            if (sections[i].startIndex <= currentIndex) cIdx = i; else break;
+        }
+
+        const cStart = sections[cIdx]?.startIndex || 0;
+        const cEnd = sections[cIdx + 1]?.startIndex || words.length;
+        const cWords = words.slice(cStart, cEnd);
+
+        if (cWords.length === 0) return;
+
+        handleSetIsPlaying(false);
+
+        audioPlayerRef.current?.playChapter(
+            currentBookId,
+            cIdx,
+            cWords,
+            cStart,
+            currentIndex,
+            ttsSpeed,
+            {
+                onProgress: (idx) => setCurrentIndex(idx),
+                onStateChange: (state) => {
+                    setIsSynthesizing(state.isSynthesizing);
+                    setIsReadingAloud(state.isPlaying);
+                },
+                onSessionFinished: (stats) => {
+                    if (storageProvider && currentBookId) {
+                        const wordsRead = Math.max(0, stats.endWordIndex - stats.startWordIndex);
+                        const effectiveWpm = stats.durationSeconds > 0 ? Math.round((wordsRead / stats.durationSeconds) * 60) : 0;
+
+                        console.log(`[Listening Session] Finished:
+- Duration: ${stats.durationSeconds}s
+- Words: ${wordsRead}
+- Desired WPM: ${wpm}
+- Effective WPM: ${effectiveWpm}`);
+
+                        storageProvider.logReadingSession({
+                            bookId: currentBookId,
+                            bookTitle: bookTitle,
+                            startTime: stats.startTime,
+                            endTime: stats.endTime,
+                            startWordIndex: stats.startWordIndex,
+                            endWordIndex: stats.endWordIndex,
+                            wordsRead: wordsRead,
+                            durationSeconds: stats.durationSeconds,
+                            type: 'listening'
+                        }).then(async () => {
+                            await storageProvider.aggregateSessions();
+                            setSessions(await storageProvider.getAggregatedSessions());
+                        });
+                    }
+                },
+                onError: (msg) => alert(msg)
+            }
+        );
+    };
+
+    const sharedUpcomingChapterTitle = isChapterBreak
+        ? (sections.slice().reverse().find(s => s.startIndex <= currentIndex)?.label || '')
+        : (sections.find(s => s.startIndex === currentIndex + 1)?.label || '');
+
+    if (readingMode === 'paginated') {
+        return (
+            <PaginatedReaderView
+                words={words}
+                currentIndex={currentIndex}
+                effectiveTotalWords={realEndIndex || words.length}
+                realEndIndex={realEndIndex}
+                furthestIndex={furthestIndex}
+                setCurrentIndex={setCurrentIndex}
+                wpm={wpm}
+                onWpmChange={(targetWpm) => {
+                    setWpm(targetWpm);
+                    storageProvider.updateBookWpm(currentBookId, targetWpm);
+                }}
+                vanityWpmRatio={rsvpSettings.vanityWpmRatio}
+                theme={theme}
+                fontFamily={fontFamily}
+                bookTitle={bookTitle}
+                onCloseBook={handleCloseBook}
+                onSettingsClick={() => setIsSettingsOpen(true)}
+                onBookSettingsClick={() => setIsBookSettingsOpen(true)}
+                onToggleTheme={toggleTheme}
+                onAskAiClick={() => { setAiResponse(''); setIsAskAiOpen(true); }}
+                sections={sections}
+                navigate={navigate}
+                onReadChapter={sharedReadChapter}
+                isReadingAloud={isReadingAloud}
+                isSynthesizing={isSynthesizing}
+                onStatsClick={handleOpenStats}
+                rsvpSettings={rsvpSettings}
+                fontSize={paginatedFontSize}
+                onFontSizeChange={onPaginatedFontSizeChange}
+                readingMode={readingMode}
+                onReadingModeChange={onReadingModeChange}
             />
         );
     }
@@ -104,75 +215,13 @@ export function AuthenticatedApp({
             onToggleTheme={toggleTheme} onAskAiClick={() => { setAiResponse(''); setIsAskAiOpen(true); }}
             sections={sections} setCurrentIndex={setCurrentIndex}
             navigate={navigate}
-            onReadChapter={async () => {
-                if (audioPlayerRef.current?.isActive) {
-                    audioPlayerRef.current.stop();
-                    return;
-                }
-
-                let cIdx = -1;
-                for (let i = 0; i < sections.length; i++) {
-                    if (sections[i].startIndex <= currentIndex) cIdx = i; else break;
-                }
-
-                const cStart = sections[cIdx]?.startIndex || 0;
-                const cEnd = sections[cIdx + 1]?.startIndex || words.length;
-                const cWords = words.slice(cStart, cEnd);
-
-                if (cWords.length === 0) return;
-
-                handleSetIsPlaying(false);
-
-                audioPlayerRef.current?.playChapter(
-                    currentBookId,
-                    cIdx,
-                    cWords,
-                    cStart,
-                    currentIndex,
-                    ttsSpeed,
-                    {
-                        onProgress: (idx) => setCurrentIndex(idx),
-                        onStateChange: (state) => {
-                            setIsSynthesizing(state.isSynthesizing);
-                            setIsReadingAloud(state.isPlaying);
-                        },
-                        onSessionFinished: (stats) => {
-                            if (storageProvider && currentBookId) {
-                                const wordsRead = Math.max(0, stats.endWordIndex - stats.startWordIndex);
-                                const effectiveWpm = stats.durationSeconds > 0 ? Math.round((wordsRead / stats.durationSeconds) * 60) : 0;
-
-                                console.log(`[Listening Session] Finished:
-- Duration: ${stats.durationSeconds}s
-- Words: ${wordsRead}
-- Desired WPM: ${wpm}
-- Effective WPM: ${effectiveWpm}`);
-
-                                storageProvider.logReadingSession({
-                                    bookId: currentBookId,
-                                    bookTitle: bookTitle,
-                                    startTime: stats.startTime,
-                                    endTime: stats.endTime,
-                                    startWordIndex: stats.startWordIndex,
-                                    endWordIndex: stats.endWordIndex,
-                                    wordsRead: wordsRead,
-                                    durationSeconds: stats.durationSeconds,
-                                    type: 'listening'
-                                }).then(async () => {
-                                    await storageProvider.aggregateSessions();
-                                    setSessions(await storageProvider.getAggregatedSessions());
-                                });
-                            }
-                        },
-                        onError: (msg) => alert(msg)
-                    }
-                );
-            }}
+            onReadChapter={sharedReadChapter}
             isReadingAloud={isReadingAloud} isSynthesizing={isSynthesizing} isChapterBreak={isChapterBreak}
-            upcomingChapterTitle={isChapterBreak
-                ? (sections.slice().reverse().find(s => s.startIndex <= currentIndex)?.label || '')
-                : (sections.find(s => s.startIndex === currentIndex + 1)?.label || '')}
+            upcomingChapterTitle={sharedUpcomingChapterTitle}
             onStatsClick={handleOpenStats}
             rsvpSettings={rsvpSettings}
+            readingMode={readingMode}
+            onReadingModeChange={onReadingModeChange}
         />
     );
 }

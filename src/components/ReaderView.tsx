@@ -1,8 +1,9 @@
-import { useRef } from 'react';
+import { useRef, useEffect, useState } from 'react';
+import { prepareWithSegments, layoutWithLines } from '@chenglou/pretext';
 import { ReaderMenu } from './ReaderMenu';
 import type { WordData } from '../utils/text-processing';
 import { splitWord } from '../utils/orp';
-import { type Theme, type FontFamily } from '../hooks/useSettings';
+import { type Theme, type FontFamily, type ReadingMode } from '../hooks/useSettings';
 import type { RsvpSettings } from '../utils/storage';
 
 interface ReaderViewProps {
@@ -35,6 +36,8 @@ interface ReaderViewProps {
   onStatsClick?: () => void;
   vanityWpmRatio: number;
   rsvpSettings: RsvpSettings;
+  readingMode: ReadingMode;
+  onReadingModeChange: (mode: ReadingMode) => void;
 }
 
 export function ReaderView({
@@ -66,10 +69,28 @@ export function ReaderView({
   upcomingChapterTitle,
   onStatsClick,
   vanityWpmRatio,
-  rsvpSettings
+  rsvpSettings,
+  readingMode,
+  onReadingModeChange,
 }: ReaderViewProps) {
   const pressStartTimeRef = useRef<number | null>(null);
   const lastPauseTimeRef = useRef<number>(0);
+  const pausedAreaRef = useRef<HTMLDivElement>(null);
+  const [pausedAreaDims, setPausedAreaDims] = useState<{ w: number; h: number } | null>(null);
+
+  // Track paused reading area dimensions for pretext layout
+  useEffect(() => {
+    const el = pausedAreaRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        setPausedAreaDims({ w: Math.floor(width), h: Math.floor(height) });
+      }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   if (words.length === 0) {
     return (
@@ -219,9 +240,69 @@ export function ReaderView({
     );
   };
 
+  // Compute context word window using pretext when paused
+  const pausedContextRange = (() => {
+    const PREVIEW_FONT_SIZE = 16; // px, used for pretext measurement of paused context
+    const PREVIEW_LINE_HEIGHT = Math.round(PREVIEW_FONT_SIZE * 1.5);
+    const fontFamilyCss: Record<FontFamily, string> = {
+      system: 'ui-sans-serif, system-ui, sans-serif',
+      serif: '"Georgia", "Times New Roman", serif',
+      mono: 'ui-monospace, "Courier New", monospace',
+      opendyslexic: 'OpenDyslexic, sans-serif',
+      atkinson: 'AtkinsonHyperlegible, sans-serif',
+    };
+    if (!isPlaying && pausedAreaDims && pausedAreaDims.w > 0 && pausedAreaDims.h > 0) {
+      const areaW = pausedAreaDims.w - 32; // account for px-4
+      const areaH = pausedAreaDims.h - 32;
+      const fontStr = `${PREVIEW_FONT_SIZE}px ${fontFamilyCss[fontFamily]}`;
+      try {
+        // How many words forward from currentIndex fit?
+        const forwardChunk = Math.min(300, words.length - currentIndex);
+        const forwardText = words.slice(currentIndex, currentIndex + forwardChunk).map(w => w.text).join(' ');
+        const preparedFwd = prepareWithSegments(forwardText, fontStr);
+        const { lines: fwdLines } = layoutWithLines(preparedFwd, areaW, PREVIEW_LINE_HEIGHT);
+        let fwdWords = 0;
+        let fwdH = 0;
+        // Reserve half for backward context
+        for (const line of fwdLines) {
+          if (fwdH + PREVIEW_LINE_HEIGHT > areaH / 2) break;
+          fwdH += PREVIEW_LINE_HEIGHT;
+          fwdWords += line.text.trim() ? line.text.trim().split(/\s+/).length : 0;
+        }
+        // How many words backward fit in remaining space?
+        const backChunk = Math.min(300, currentIndex - chapterStart);
+        let bwdWords = 0;
+        if (backChunk > 0) {
+          const backText = words.slice(currentIndex - backChunk, currentIndex).map(w => w.text).join(' ');
+          const preparedBwd = prepareWithSegments(backText, fontStr);
+          const { lines: bwdLines } = layoutWithLines(preparedBwd, areaW, PREVIEW_LINE_HEIGHT);
+          let bwdH = 0;
+          const remainH = areaH - fwdH;
+          for (const line of [...bwdLines].reverse()) {
+            if (bwdH + PREVIEW_LINE_HEIGHT > remainH) break;
+            bwdH += PREVIEW_LINE_HEIGHT;
+            bwdWords += line.text.trim() ? line.text.trim().split(/\s+/).length : 0;
+          }
+        }
+        return {
+          start: Math.max(chapterStart, currentIndex - bwdWords),
+          end: Math.min(words.length, currentIndex + fwdWords),
+        };
+      } catch {
+        // Fallback to default word count
+      }
+    }
+    // Fallback
+    const half = Math.floor(rsvpSettings.previewWordCount / 2);
+    return {
+      start: Math.max(chapterStart, currentIndex - half),
+      end: Math.min(words.length, currentIndex + half),
+    };
+  })();
+
   return (
     <div
-      className={`flex flex-col items-center justify-center h-dvh transition-colors duration-300 relative ${mainBg} ${mainText} ${!isPlaying ? 'cursor-pointer' : ''}`}
+      className={`flex flex-col h-dvh transition-colors duration-300 ${mainBg} ${mainText} ${!isPlaying ? 'cursor-pointer' : ''}`}
       style={{ fontFamily: fontClasses[fontFamily] }}
       onClick={() => {
         if (Date.now() - lastPauseTimeRef.current < 400) return;
@@ -238,16 +319,22 @@ export function ReaderView({
         />
       )}
 
+      {/* Paused: book title + stats header */}
       {!isPlaying && (
-        <div className="absolute top-8 text-center w-full px-4 landscape:top-4 landscape:left-8 landscape:text-left landscape:w-auto landscape:px-0 z-20" onClick={(e) => e.stopPropagation()}>
+        <div className="shrink-0 text-center w-full px-4 pt-6 pb-2 landscape:pt-3 landscape:text-left landscape:px-8 z-20" onClick={(e) => e.stopPropagation()}>
           <h3 className="m-0 font-normal opacity-60 text-lg truncate max-w-2xl mx-auto landscape:mx-0 landscape:max-w-md">{bookTitle}</h3>
           {getProgressStats()}
         </div>
       )}
 
-
-      {/* RSVP Display or Text Preview */}
-      <div className={`relative flex items-center justify-center w-full overflow-hidden ${isPlaying ? '' : 'max-w-2xl landscape:max-w-none landscape:my-2 flex-1 landscape:mx-8'} border-t border-b my-8 ${theme === 'bedtime' ? 'border-zinc-900' : 'border-zinc-200 dark:border-zinc-800'}`} style={{ minHeight: isPlaying ? Math.max(120, currentFontSize * 1.5) : '120px' }}>
+      {/* RSVP Display or Text Preview — flex-1 ensures it fills space between header and controls */}
+      <div
+        ref={!isPlaying ? pausedAreaRef : undefined}
+        className={`relative flex items-center justify-center w-full overflow-hidden border-t border-b
+          ${isPlaying ? 'flex-1' : 'flex-1 max-w-2xl mx-auto landscape:max-w-none landscape:mx-8 w-full'}
+          ${theme === 'bedtime' ? 'border-zinc-900' : 'border-zinc-200 dark:border-zinc-800'}`}
+        style={{ minHeight: isPlaying ? Math.max(120, currentFontSize * 1.5) : undefined }}
+      >
         {isPlaying ? (
           <>
             {!isChapterBreak && (
@@ -277,13 +364,10 @@ export function ReaderView({
             )}
           </>
         ) : (
-          <div className={`mt-4 sm:mt-12 w-full text-center px-4 ${fontClasses[fontFamily]} landscape:text-base landscape:leading-snug ${theme === 'bedtime' ? 'text-stone-500' : 'text-zinc-500 dark:text-zinc-400'} max-h-full overflow-hidden flex items-center justify-center`}>
+          <div className={`w-full h-full text-center px-4 py-4 landscape:text-base landscape:leading-snug ${theme === 'bedtime' ? 'text-stone-500' : 'text-zinc-500 dark:text-zinc-400'} overflow-hidden flex items-center justify-center`}>
             <div>
               {(() => {
-                const half = Math.floor(rsvpSettings.previewWordCount / 2);
-                const start = Math.max(chapterStart, currentIndex - half);
-                const end = Math.min(words.length, currentIndex + half);
-
+                const { start, end } = pausedContextRange;
                 const before = words.slice(start, currentIndex);
                 const current = words[currentIndex];
                 const after = words.slice(currentIndex + 1, end);
@@ -309,9 +393,9 @@ export function ReaderView({
         )}
       </div>
 
-      {/* Controls */}
+      {/* Controls — shrink-0 so they never expand/compress */}
       <div
-        className={`flex flex-col gap-6 items-center relative z-50
+        className={`shrink-0 flex flex-col gap-4 items-center relative z-50 py-4
           ${isPlaying ? 'w-full max-w-md px-4' : 'portrait:w-full portrait:max-w-md portrait:px-4 landscape:pointer-events-none'}`}
         onClick={(e) => e.stopPropagation()}
       >
@@ -391,6 +475,8 @@ export function ReaderView({
             furthestIndex={furthestIndex}
             effectiveTotalWords={effectiveTotalWords}
             currentIndex={currentIndex}
+            readingMode={readingMode}
+            onReadingModeChange={onReadingModeChange}
           />
         )}
       </div>
