@@ -6,10 +6,11 @@ import { useLibraryStore } from '../stores/useLibraryStore';
 import { useSettingsStore } from '../stores/useSettingsStore';
 
 export function useReadingSession(storageProvider: FirestoreStorage | null) {
-    const { isPlaying, isHoldPaused, isChapterBreak, currentBookId, currentIndex, words, bookTitle } = useReaderStore();
+    const { isPlaying, isHoldPaused, isChapterBreak, currentBookId, currentIndex, words, bookTitle, isReadingAloud } = useReaderStore();
     const { library, setLibrary, setSessions } = useLibraryStore();
-    const { rsvpSettings, wpm } = useSettingsStore();
+    const { rsvpSettings, wpm, readingMode } = useSettingsStore();
 
+    // RSVP Session Refs
     const sessionStartTimeRef = useRef<number | null>(null);
     const wordsReadInSessionRef = useRef<number>(0);
     const multipliersSumInSessionRef = useRef<number>(0);
@@ -19,7 +20,14 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
     const fullSessionStartTimeRef = useRef<number | null>(null);
     const totalWordsInFullSessionRef = useRef<number>(0);
 
-    // Track Session Start / Stop
+    // Paginated Session Refs
+    const paginatedSessionStartTimeRef = useRef<number | null>(null);
+    const paginatedWordsReadRef = useRef<number>(0);
+    const paginatedSessionStartIndexRef = useRef<number | null>(null);
+    const lastPaginatedIndexRef = useRef<number>(currentIndex);
+    const lastPaginatedSaveTimeRef = useRef<number>(0);
+
+    // Track RSVP Session Start / Stop
     useEffect(() => {
         if (isPlaying && sessionStartTimeRef.current === null && currentBookId) {
             sessionStartTimeRef.current = Date.now();
@@ -38,7 +46,7 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
             if (totalWordsRead > 0 && fullDurationMs > 0) {
                 const durationSeconds = Math.round(fullDurationMs / 1000);
                 const effectiveWpm = Math.round((totalWordsRead / (fullDurationMs / 1000)) * 60);
-                console.log(`[Reading Session] Finished:
+                console.log(`[RSVP Session] Finished:
 - Duration: ${durationSeconds}s
 - Words: ${totalWordsRead}
 - Desired WPM: ${wpm}
@@ -56,7 +64,7 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
                     startWordIndex: sessionStartIndexRef.current || 0,
                     endWordIndex: currentIndex,
                     wordsRead: wordsReadInSessionRef.current,
-                    type: 'reading'
+                    type: 'rsvp'
                 })
                     .then(async () => {
                         await storageProvider.aggregateSessions();
@@ -120,8 +128,8 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
                         startWordIndex: sessionStartIndexRef.current || 0,
                         endWordIndex: currentIndex,
                         wordsRead: wordsReadInSessionRef.current,
-                        type: 'reading'
-                    }).catch(err => console.error("Failed to save periodic session", err));
+                    type: 'rsvp'
+                }).catch(err => console.error("Failed to save periodic RSVP session", err));
 
                     // Reset stats for the next chunk
                     sessionStartTimeRef.current = now;
@@ -133,6 +141,80 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
             }
         }
     }, [currentIndex, isPlaying, isHoldPaused, isChapterBreak, words, rsvpSettings, storageProvider, currentBookId, bookTitle, library, setLibrary, setSessions]);
+
+    // Track Paginated Session Lifecycle
+    useEffect(() => {
+        const isPaginatedActive = readingMode === 'paginated' && !isPlaying && !isReadingAloud && currentBookId;
+
+        if (isPaginatedActive && paginatedSessionStartTimeRef.current === null) {
+            paginatedSessionStartTimeRef.current = Date.now();
+            paginatedWordsReadRef.current = 0;
+            paginatedSessionStartIndexRef.current = currentIndex;
+            lastPaginatedIndexRef.current = currentIndex;
+            lastPaginatedSaveTimeRef.current = Date.now();
+        } else if (!isPaginatedActive && paginatedSessionStartTimeRef.current !== null && storageProvider && currentBookId) {
+            const durationMs = Date.now() - paginatedSessionStartTimeRef.current;
+
+            if (durationMs > 5000 && paginatedWordsReadRef.current > 0) {
+
+                storageProvider.logReadingSession({
+                    bookId: currentBookId,
+                    bookTitle,
+                    startTime: paginatedSessionStartTimeRef.current,
+                    endTime: Date.now(),
+                    durationSeconds: Math.round(durationMs / 1000),
+                    startWordIndex: paginatedSessionStartIndexRef.current || 0,
+                    endWordIndex: currentIndex,
+                    wordsRead: paginatedWordsReadRef.current,
+                    type: 'paginated'
+                }).then(async () => {
+                    await storageProvider.aggregateSessions();
+                    setSessions(await storageProvider.getAggregatedSessions());
+                }).catch(err => console.error("Failed to save paginated session", err));
+            }
+            paginatedSessionStartTimeRef.current = null;
+            paginatedWordsReadRef.current = 0;
+        }
+    }, [readingMode, isPlaying, isReadingAloud, currentBookId, storageProvider, bookTitle, setSessions]);
+
+    // Track Paginated Words Read
+    useEffect(() => {
+        const isPaginatedActive = readingMode === 'paginated' && !isPlaying && !isReadingAloud && currentBookId;
+        if (!isPaginatedActive) return;
+
+        if (currentIndex > lastPaginatedIndexRef.current) {
+            const delta = currentIndex - lastPaginatedIndexRef.current;
+            // Sanity check: if they jump more than 2000 words (approx 6-7 pages), it's probably a seek, not a page turn
+            if (delta < 2000) {
+                paginatedWordsReadRef.current += delta;
+            }
+        }
+        lastPaginatedIndexRef.current = currentIndex;
+
+        // Periodic save for paginated mode
+        const now = Date.now();
+        if (paginatedSessionStartTimeRef.current && now - lastPaginatedSaveTimeRef.current > 60000 && storageProvider && currentBookId) {
+            const durationMs = now - paginatedSessionStartTimeRef.current;
+            if (paginatedWordsReadRef.current > 0) {
+                storageProvider.logReadingSession({
+                    bookId: currentBookId,
+                    bookTitle,
+                    startTime: paginatedSessionStartTimeRef.current,
+                    endTime: Date.now(),
+                    durationSeconds: Math.round(durationMs / 1000),
+                    startWordIndex: paginatedSessionStartIndexRef.current || 0,
+                    endWordIndex: currentIndex,
+                    wordsRead: paginatedWordsReadRef.current,
+                    type: 'paginated'
+                }).catch(err => console.error("Failed to save periodic paginated session", err));
+
+                paginatedSessionStartTimeRef.current = now;
+                lastPaginatedSaveTimeRef.current = now;
+                paginatedSessionStartIndexRef.current = currentIndex;
+                paginatedWordsReadRef.current = 0;
+            }
+        }
+    }, [currentIndex, readingMode, isPlaying, isReadingAloud, currentBookId, storageProvider, bookTitle]);
 
     return {};
 }

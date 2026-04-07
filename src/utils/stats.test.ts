@@ -167,7 +167,7 @@ describe('getHistoryRangeData', () => {
     it('should return 7 days for week range, even with no data', () => {
         const data = getHistoryRangeData('week', []);
         expect(data).toHaveLength(7);
-        expect(data.every(d => d.read === 0 && d.listen === 0)).toBe(true);
+        expect(data.every(d => d.rsvp === 0 && d.paginated === 0 && d.listen === 0)).toBe(true);
     });
 
     it('should aggregate sessions into correct day buckets', () => {
@@ -183,12 +183,24 @@ describe('getHistoryRangeData', () => {
             wordsRead: 100,
             durationSeconds: 60,
             type: 'reading'
+        }, {
+            id: 's2',
+            bookId: 'b1',
+            bookTitle: 'B1',
+            startTime: now,
+            endTime: now + 60000,
+            startWordIndex: 100,
+            endWordIndex: 200,
+            wordsRead: 100,
+            durationSeconds: 60,
+            type: 'paginated'
         }];
         const data = getHistoryRangeData('week', sessions);
         expect(data).toHaveLength(7);
         const todayKey = new Date(now).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
         const todayData = data.find(d => d.key === todayKey);
-        expect(todayData?.read).toBe(1);
+        expect(todayData?.rsvp).toBe(1);
+        expect(todayData?.paginated).toBe(1);
     });
 
     it('should return 12 months for year range', () => {
