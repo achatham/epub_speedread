@@ -1,9 +1,10 @@
-import { useRef, useState, useEffect, useCallback, useLayoutEffect } from 'react';
+import { useRef, useState, useEffect, useLayoutEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { prepareWithSegments, layoutWithLines } from '@chenglou/pretext';
+
 import { ReaderMenu } from './ReaderMenu';
 import { splitWord } from '../utils/orp';
 import type { WordData } from '../utils/text-processing';
+import { useReaderLayout } from '../hooks/useReaderLayout';
 import { type Theme, type FontFamily } from '../stores/useSettingsStore';
 import type { NavigationType } from '../utils/navigation';
 import { useSettingsStore } from '../stores/useSettingsStore';
@@ -24,78 +25,6 @@ const FONT_FAMILY_CSS: Record<FontFamily, string> = {
   opendyslexic: 'OpenDyslexic, sans-serif',
   atkinson: 'AtkinsonHyperlegible, sans-serif',
 };
-
-/** Use pretext to compute the end index of words that fit in the reading area. */
-function computePageEndIndex(
-  words: WordData[],
-  startIndex: number,
-  areaWidth: number,
-  areaHeight: number,
-  fontSize: number,
-  fontFamilyStr: string,
-): number {
-  if (areaWidth <= 0 || areaHeight <= 0 || startIndex >= words.length) {
-    return Math.min(startIndex + 1, words.length);
-  }
-
-  // Take a generous chunk — pretext is fast once fonts are cached
-  const chunkSize = Math.min(800, words.length - startIndex);
-  const chunk = words.slice(startIndex, startIndex + chunkSize);
-
-  const lineHeight = Math.round(fontSize * 1.5);
-  const paragraphGap = fontSize; // matches mb-[1em]
-  const fontStr = `${fontSize}px ${fontFamilyStr}`;
-
-  let accHeight = 0;
-  let wordsIncluded = 0;
-
-  // Group chunk into paragraphs to accurately simulate DOM rendering
-  const paragraphs: WordData[][] = [];
-  let currentPara: WordData[] = [];
-  for (const w of chunk) {
-    if (w.isParagraphStart && currentPara.length > 0) {
-      paragraphs.push(currentPara);
-      currentPara = [];
-    }
-    currentPara.push(w);
-  }
-  if (currentPara.length > 0) {
-    paragraphs.push(currentPara);
-  }
-
-  // Layout paragraph by paragraph
-  for (const paraWords of paragraphs) {
-    const text = paraWords.map((w) => w.text).join(' ');
-
-    const prepared = prepareWithSegments(text, fontStr);
-    const { lines } = layoutWithLines(prepared, areaWidth, lineHeight);
-
-    const paraHeight = lines.length * lineHeight;
-
-    // Check if the text of this paragraph fits in the remaining visible area
-    if (accHeight + paraHeight <= areaHeight) {
-      // Entire paragraph fits
-      wordsIncluded += paraWords.length;
-      accHeight += paraHeight + paragraphGap;
-    } else {
-      // Paragraph doesn't fully fit, figure out how many lines do fit
-      const remainingHeight = areaHeight - accHeight;
-      const linesThatFit = Math.floor(remainingHeight / lineHeight);
-
-      for (let l = 0; l < linesThatFit; l++) {
-        const lineText = lines[l].text.trim();
-        if (lineText.length > 0) {
-          wordsIncluded += lineText.split(/\s+/).length;
-        }
-      }
-      break; // Run out of space, stop processing paragraphs
-    }
-  }
-
-  // Ensure we advance at least 1 word so we never get stuck
-  const pageWords = Math.max(1, wordsIncluded);
-  return Math.min(startIndex + pageWords, words.length);
-}
 
 export function PaginatedReaderView({
   onCloseBook,
@@ -123,20 +52,7 @@ export function PaginatedReaderView({
   const readingAreaRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   
-  // layoutState tracks the measured end index for a specific starting index.
-  // We use this to ensure we never use a stale measurement from a previous page.
-  const [layoutState, setLayoutState] = useState<{ start: number; end: number | null }>({
-    start: currentIndex,
-    end: null,
-  });
-
   const [areaDims, setAreaDims] = useState<{ w: number; h: number } | null>(null);
-
-  const prevIsPlayingRef = useRef(isPlaying);
-  const justPaused = prevIsPlayingRef.current && !isPlaying;
-  useEffect(() => {
-    prevIsPlayingRef.current = isPlaying;
-  }, [isPlaying]);
 
   // Track reading area dimensions
   useEffect(() => {
@@ -156,87 +72,43 @@ export function PaginatedReaderView({
     return () => observer.disconnect();
   }, []);
 
-  const historyRef = useRef<number[]>([]);
-  const expectedIndexRef = useRef<number>(currentIndex);
-
-  // Clear history if index leaped via external means (progress bar, chapter select)
-  useEffect(() => {
-    if (currentIndex !== expectedIndexRef.current) {
-      historyRef.current = [];
-      expectedIndexRef.current = currentIndex;
-    }
-  }, [currentIndex]);
-
   const fontFamilyStr = FONT_FAMILY_CSS[fontFamily];
   const lineHeight = Math.round(fontSize * 1.5);
 
-  const isPageValid = layoutState.start <= currentIndex && (layoutState.end === null || currentIndex < layoutState.end);
-
-  // When dimensions or settings change, nullify measured index to trigger re-measurement
-  useEffect(() => {
-    setLayoutState(prev => ({ start: prev.start, end: null }));
-  }, [areaDims?.w, areaDims?.h, fontSize, fontFamilyStr, lineHeight]);
-
-  // Synchronous reset for layout coordination
-  if (!isPlaying) {
-    if (readingMode === 'paginated' && layoutState.start !== currentIndex) {
-      // In paginated mode, the current index absolutely MUST be the first word on the page.
-      setLayoutState({ start: currentIndex, end: null });
-    } else if (readingMode === 'rsvp') {
-      // In RSVP mode, we want the current word to be roughly in the middle for context.
-      // We offset backward by 40 words, bounded by the chapter start limit.
-      // But only do this if we aren't perfectly aligned already (e.g. from a user jump).
-      let activeChapterIdxLocal = -1;
-      for (let i = 0; i < sections.length; i++) {
-        if (sections[i].startIndex <= currentIndex) activeChapterIdxLocal = i;
-        else break;
-      }
-      const chapterStart = activeChapterIdxLocal !== -1 ? sections[activeChapterIdxLocal].startIndex : 0;
-      let desiredStart = currentIndex;
-      if (currentIndex > chapterStart) {
-        if (!areaDims || areaDims.w <= 0 || areaDims.h <= 0) {
-          desiredStart = Math.max(chapterStart, currentIndex - 40);
-        } else {
-          const PADDING = 32;
-          const effectiveHeight = Math.max(lineHeight, areaDims.h - PADDING * 2 - lineHeight);
-          const targetHalfHeight = effectiveHeight / 2;
-          const estimatedStart = Math.max(chapterStart, currentIndex - 400);
-          
-          let curr = estimatedStart;
-          while (curr < currentIndex) {
-            const next = computePageEndIndex(words, curr, areaDims.w - PADDING * 2, targetHalfHeight, fontSize, fontFamilyStr);
-            if (next >= currentIndex || next === curr) {
-              break;
-            }
-            curr = next;
-          }
-          desiredStart = curr;
-        }
-      }
-      if (layoutState.start !== desiredStart && (justPaused || expectedIndexRef.current !== currentIndex)) {
-         setLayoutState({ start: desiredStart, end: null });
-      }
-    }
-  }
+  const {
+    layoutState,
+    setLayoutState,
+    isPageValid,
+    navigateNextPage,
+    navigatePrevPage,
+  } = useReaderLayout({
+    currentIndex,
+    isPlaying,
+    readingMode,
+    words,
+    sections,
+    areaDims,
+    fontSize,
+    fontFamilyStr,
+    lineHeight,
+    setCurrentIndex,
+  });
 
   useLayoutEffect(() => {
-    if (isPlaying && readingMode === 'rsvp') return; // Don't measure paginated pages while playing RSVP
+    if (isPlaying && readingMode === 'rsvp') return;
 
-    // Only measure if we are currently valid on this page but missing the measured end index.
-    // We no longer abort if layoutState.start !== currentIndex, because we decouple them.
     if (layoutState.end !== null) return;
     if (!areaDims || areaDims.w === 0 || areaDims.h === 0) return;
     if (!innerRef.current) return;
 
     const rect = innerRef.current.getBoundingClientRect();
-    const limit = rect.bottom - 64; // -64px for pb-16 bottom padding + safety clearance
+    const limit = rect.bottom - 64; 
 
     const spans = innerRef.current.querySelectorAll('span[data-word-idx]');
     if (spans.length === 0) return;
 
-    let firstOverflow = spans.length; // defaults to all fit
+    let firstOverflow = spans.length; 
 
-    // Explicit forward iteration to guarantee robust first boundary detection
     for (let i = 0; i < spans.length; i++) {
       const spanRect = spans[i].getBoundingClientRect();
       if (spanRect.height > 0 && spanRect.bottom > limit) {
@@ -246,14 +118,13 @@ export function PaginatedReaderView({
     }
 
     if (firstOverflow === 0) {
-       // Container is pathologically small; assure progress
        firstOverflow = 1;
     }
 
     const endIdx = layoutState.start + firstOverflow;
     console.log(`Measured layout: words idx ${layoutState.start}-${endIdx} visually fits inside ${areaDims.w}x${areaDims.h}`);
-    setLayoutState({ start: layoutState.start, end: endIdx });
-  }, [layoutState, currentIndex, areaDims, words, isPlaying, readingMode, isPageValid]);
+    setLayoutState(prev => ({ start: prev.start, end: endIdx }));
+  }, [layoutState, currentIndex, areaDims, words, isPlaying, readingMode, isPageValid, setLayoutState]);
 
   // Find chapter info
   let activeChapterIdx = -1;
@@ -276,83 +147,20 @@ export function PaginatedReaderView({
   const renderEndIndex = pageEndIndex ?? Math.min(words.length, layoutState.start + 800);
   const pageWords = words.slice(layoutState.start, renderEndIndex);
 
-  const handleNextPage = useCallback(() => {
-    // Crucially: Only allow navigation if we HAVE a measurement. 
-    // This prevents the "800 word skip" when clicking too fast.
-    if (pageEndIndex !== null && pageEndIndex < words.length) {
-      historyRef.current.push(layoutState.start);
-      expectedIndexRef.current = pageEndIndex;
-      setCurrentIndex(pageEndIndex);
-      setLayoutState({ start: pageEndIndex, end: null });
-    }
-  }, [pageEndIndex, words.length, layoutState.start, setCurrentIndex]);
-
-  const handlePrevPage = useCallback(() => {
-    if (currentIndex === 0) return;
-    const chapterStart = sections[activeChapterIdx]?.startIndex ?? 0;
-    if (!areaDims || areaDims.w <= 0 || areaDims.h <= 0) {
-      const prev = Math.max(chapterStart, currentIndex - 1);
-      expectedIndexRef.current = prev;
-      setCurrentIndex(prev);
-      return;
-    }
-
-    let targetIndex = 0;
-    if (historyRef.current.length > 0) {
-      targetIndex = historyRef.current.pop()!;
-    } else {
-      // Fallback: estimate backward and iterate forward if history was cleared 
-      // Determine which chapter we are constrained to
-      let anchor = chapterStart;
-      // If we are exactly at the start of the current chapter, look to the previous chapter
-      if (currentIndex === chapterStart && activeChapterIdx > 0) {
-        anchor = sections[activeChapterIdx - 1]?.startIndex ?? 0;
-      }
-
-      const estimatedStart = Math.max(anchor, currentIndex - 800);
-      let curr = estimatedStart;
-      const PADDING = 32;
-      const effectiveHeight = Math.max(lineHeight, areaDims.h - PADDING * 2 - lineHeight);
-
-      while (curr < currentIndex) {
-        const next = computePageEndIndex(words, curr, areaDims.w - PADDING * 2, effectiveHeight, fontSize, fontFamilyStr);
-        if (next >= currentIndex || next === curr) {
-          break;
-        }
-        curr = next;
-      }
-
-      if (curr >= currentIndex) {
-        curr = Math.max(anchor, currentIndex - 200); // Safety fallback
-      }
-      targetIndex = curr;
-
-      // Snap to anchor if we are very close to it
-      if (targetIndex >= anchor && targetIndex <= anchor + Math.floor((currentIndex - targetIndex) / 2)) {
-        targetIndex = anchor;
-        historyRef.current = []; 
-      }
-    }
-
-    expectedIndexRef.current = targetIndex;
-    setCurrentIndex(targetIndex);
-    setLayoutState({ start: targetIndex, end: null });
-  }, [currentIndex, areaDims, sections, activeChapterIdx, setCurrentIndex, words, fontSize, fontFamilyStr, lineHeight]);
-
   // Keyboard navigation
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
         e.preventDefault();
-        handleNextPage();
+        navigateNextPage();
       } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
         e.preventDefault();
-        handlePrevPage();
+        navigatePrevPage();
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [handleNextPage, handlePrevPage]);
+  }, [navigateNextPage, navigatePrevPage]);
   // Theme-derived classes
   const mainBg = theme === 'bedtime' ? 'bg-black' : 'bg-white dark:bg-zinc-900';
   const mainText = theme === 'bedtime' ? 'text-stone-400' : 'text-zinc-900 dark:text-zinc-100';
@@ -566,7 +374,7 @@ export function PaginatedReaderView({
         {!isPlaying && (
           <div className="flex items-center justify-between">
             <button
-              onClick={handlePrevPage}
+              onClick={navigatePrevPage}
               disabled={currentIndex === 0}
               className={`flex items-center gap-1 px-3 py-2 rounded-lg border text-sm font-medium transition-all
                 ${currentIndex === 0 ? 'opacity-30 cursor-not-allowed' : 'hover:opacity-80 active:scale-95'}
@@ -592,7 +400,7 @@ export function PaginatedReaderView({
               />
 
               <button
-                onClick={handleNextPage}
+                onClick={navigateNextPage}
                 disabled={isMeasuring || (pageEndIndex !== null && pageEndIndex >= words.length)}
                 className={`flex items-center gap-1 px-3 py-2 rounded-lg border text-sm font-medium transition-all
                   ${(isMeasuring || (pageEndIndex !== null && pageEndIndex >= words.length)) ? 'opacity-30 cursor-not-allowed' : 'hover:opacity-80 active:scale-95'}
