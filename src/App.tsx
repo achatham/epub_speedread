@@ -147,8 +147,9 @@ function App() {
     }
   };
 
-  const handleSelectBook = async (id: string) => {
+  const handleSelectBook = useCallback(async (id: string) => {
     library.setCurrentBookId(id);
+    settings.setLastBookId(id);
     if (settings.autoLandscape) {
       if (!document.fullscreenElement) {
         document.documentElement.requestFullscreen().then(() => {
@@ -162,7 +163,7 @@ function App() {
         }
       }
     }
-  };
+  }, [library, settings]);
 
   const {
     handleUpdateBookTitle,
@@ -172,7 +173,7 @@ function App() {
     handleDeleteBook,
     handleToggleArchive,
     refreshSessions
-  } = useLibrary(storageProvider, library.currentBookId, handleSelectBook);
+  } = useLibrary(storageProvider, library.currentBookId, handleSelectBook, isLoading, settings.lastBookId);
 
   useReadingSession(storageProvider);
 
@@ -320,6 +321,7 @@ function App() {
           if (s.autoLandscape !== undefined) settings.setAutoLandscape(s.autoLandscape);
           if (s.rsvp) settings.setRsvpSettings({ ...settings.rsvpSettings, ...s.rsvp });
           if (s.paginatedFontSize) settings.setPaginatedFontSize(s.paginatedFontSize);
+          if (s.lastBookId !== undefined) settings.setLastBookId(s.lastBookId);
 
           if (s.onboardingCompleted) {
             settings.setOnboardingCompleted(true);
@@ -355,6 +357,7 @@ function App() {
     }
     reader.setWords([]); reader.setSections([]); reader.setCurrentIndex(0); reader.setBookTitle('');
     library.setCurrentBookId(null); lastLoadedBookIdRef.current = null;
+    settings.setLastBookId(null);
     reader.setRealEndIndex(null); reader.setFurthestIndex(null);
 
     if (document.fullscreenElement) {

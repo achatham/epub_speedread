@@ -30,6 +30,7 @@ export interface UserSettings {
   onboardingCompleted?: boolean;
   readingMode?: ReadingMode;
   paginatedFontSize?: number;
+  lastBookId?: string | null;
   lastUpdated: number;
   lastAggregationTime?: number;
 }
