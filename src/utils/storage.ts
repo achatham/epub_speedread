@@ -84,7 +84,7 @@ export interface ReadingSession {
   endWordIndex: number;
   wordsRead: number;
   durationSeconds: number;
-  type: 'reading' | 'listening';
+  type: 'reading' | 'listening' | 'rsvp' | 'paginated';
 }
 
 export interface AudioChunk {

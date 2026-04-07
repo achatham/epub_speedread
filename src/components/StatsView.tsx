@@ -146,19 +146,24 @@ export function StatsView({
   const displaySessions = activeTab === 'book' ? bookSessions : historySessions;
 
   // Split totals by type
-  const readSessions = displaySessions.filter(s => (s.type || 'reading') === 'reading');
+  const rsvpSessions = displaySessions.filter(s => (s.type || 'reading') === 'reading' || s.type === 'rsvp');
+  const paginatedSessions = displaySessions.filter(s => s.type === 'paginated');
   const listenSessions = displaySessions.filter(s => s.type === 'listening');
 
-  const totalReadSeconds = readSessions.reduce((acc, s) => acc + s.durationSeconds, 0);
+  const totalRsvpSeconds = rsvpSessions.reduce((acc, s) => acc + s.durationSeconds, 0);
+  const totalPaginatedSeconds = paginatedSessions.reduce((acc, s) => acc + s.durationSeconds, 0);
   const totalListenSeconds = listenSessions.reduce((acc, s) => acc + s.durationSeconds, 0);
 
-  const totalReadMinutes = Math.round(totalReadSeconds / 60);
+  const totalRsvpMinutes = Math.round(totalRsvpSeconds / 60);
+  const totalPaginatedMinutes = Math.round(totalPaginatedSeconds / 60);
   const totalListenMinutes = Math.round(totalListenSeconds / 60);
 
-  const totalWordsRead = readSessions.reduce((acc, s) => acc + (s.wordsRead || Math.max(0, s.endWordIndex - s.startWordIndex)), 0);
+  const totalWordsRsvp = rsvpSessions.reduce((acc, s) => acc + (s.wordsRead || Math.max(0, s.endWordIndex - s.startWordIndex)), 0);
+  const totalWordsPaginated = paginatedSessions.reduce((acc, s) => acc + (s.wordsRead || Math.max(0, s.endWordIndex - s.startWordIndex)), 0);
   const totalWordsHeard = listenSessions.reduce((acc, s) => acc + (s.wordsRead || Math.max(0, s.endWordIndex - s.startWordIndex)), 0);
 
-  const totalPagesRead = Math.round(totalWordsRead / WORDS_PER_PAGE);
+  const totalPagesRsvp = Math.round(totalWordsRsvp / WORDS_PER_PAGE);
+  const totalPagesPaginated = Math.round(totalWordsPaginated / WORDS_PER_PAGE);
   const totalPagesHeard = Math.round(totalWordsHeard / WORDS_PER_PAGE);
 
 
@@ -242,7 +247,7 @@ export function StatsView({
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className={`p-4 rounded-xl ${cardBgClass} flex flex-col items-center justify-center text-center`}>
               <BookOpen size={20} className="mb-2 opacity-50 text-blue-500" />
-              <span className="text-xl font-bold">{totalReadMinutes}</span>
+              <span className="text-xl font-bold">{totalRsvpMinutes + totalPaginatedMinutes}</span>
               <span className="text-[10px] uppercase tracking-wider opacity-50">Read Mins</span>
             </div>
             <div className={`p-4 rounded-xl ${cardBgClass} flex flex-col items-center justify-center text-center`}>
@@ -252,12 +257,12 @@ export function StatsView({
             </div>
             <div className={`p-4 rounded-xl ${cardBgClass} flex flex-col items-center justify-center text-center`}>
               <Clock size={20} className="mb-2 opacity-50" />
-              <span className="text-xl font-bold">{totalReadMinutes + totalListenMinutes}</span>
+              <span className="text-xl font-bold">{totalRsvpMinutes + totalPaginatedMinutes + totalListenMinutes}</span>
               <span className="text-[10px] uppercase tracking-wider opacity-50">Total Mins</span>
             </div>
             <div className={`p-4 rounded-xl ${cardBgClass} flex flex-col items-center justify-center text-center`}>
               <TrendingUp size={20} className="mb-2 opacity-50" />
-              <span className="text-xl font-bold">{totalPagesRead + totalPagesHeard}</span>
+              <span className="text-xl font-bold">{totalPagesRsvp + totalPagesPaginated + totalPagesHeard}</span>
               <span className="text-[10px] uppercase tracking-wider opacity-50">Total Pages</span>
             </div>
           </div>
@@ -277,7 +282,7 @@ export function StatsView({
               {activeTab === 'book'
                 ? <BookProgressChart bookToView={bookToView || null} bookSessions={bookSessions} theme={theme} />
                 : activeTab === 'history'
-                  ? <ReadingHistoryChart timeRange={timeRange} historySessions={historySessions} theme={theme} totalReadMinutes={totalReadMinutes} totalListenMinutes={totalListenMinutes} />
+                  ? <ReadingHistoryChart timeRange={timeRange} historySessions={historySessions} theme={theme} totalRsvpMinutes={totalRsvpMinutes} totalPaginatedMinutes={totalPaginatedMinutes} totalListenMinutes={totalListenMinutes} />
                   : <BooksReadChart now={now} timeRange={timeRange} finishedBooks={finishedBooks} theme={theme} />
               }
             </div>
@@ -333,7 +338,13 @@ export function StatsView({
                       <tr key={session.id} className="group hover:bg-zinc-100/50 dark:hover:bg-zinc-800/50 transition-colors">
                         <td className="py-3 pr-4 font-medium truncate max-w-[150px]">
                           <div className="flex items-center gap-2">
-                            {(session.type || 'reading') === 'listening' ? <Volume2 size={14} className="text-purple-500 shrink-0" /> : <BookOpen size={14} className="text-blue-500 shrink-0" />}
+                            {session.type === 'listening' ? (
+                                <Volume2 size={14} className="text-purple-500 shrink-0" />
+                            ) : session.type === 'paginated' ? (
+                                <Library size={14} className="text-blue-500 shrink-0" />
+                            ) : (
+                                <BookOpen size={14} className="text-red-500 shrink-0" />
+                            )}
                             <span className="truncate">{session.bookTitle}</span>
                           </div>
                         </td>

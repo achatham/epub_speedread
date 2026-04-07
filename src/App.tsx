@@ -246,9 +246,11 @@ function App() {
       if (mockSessions) library.setSessions(mockSessions);
       reader.setCurrentIndex(0);
       library.setCurrentBookId('mock');
+      reader.setCurrentBookId('mock');
       handleSetIsPlaying(false);
       setUser((u: any) => u || (MOCK_USER as any));
       setStorageProvider((p: any) => p || (MOCK_STORAGE as any));
+      (window as any).MOCK_STORAGE = MOCK_STORAGE;
       setIsLoading(false);
     };
 

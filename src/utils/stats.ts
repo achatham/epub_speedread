@@ -45,7 +45,8 @@ export function getSessionKey(s: ReadingSession): string {
 
 export interface HistoryDataPoint {
   key: string;
-  read: number;
+  rsvp: number;
+  paginated: number;
   listen: number;
   timestamp: number;
 }
@@ -64,14 +65,14 @@ export function getHistoryRangeData(
       const d = new Date(now);
       d.setDate(d.getDate() - i);
       const key = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-      data.set(key, { key, read: 0, listen: 0, timestamp: d.getTime() });
+      data.set(key, { key, rsvp: 0, paginated: 0, listen: 0, timestamp: d.getTime() });
     }
   } else if (timeRange === 'month') {
     for (let i = 29; i >= 0; i--) {
       const d = new Date(now);
       d.setDate(d.getDate() - i);
       const key = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-      data.set(key, { key, read: 0, listen: 0, timestamp: d.getTime() });
+      data.set(key, { key, rsvp: 0, paginated: 0, listen: 0, timestamp: d.getTime() });
     }
   } else if (timeRange === 'year') {
     for (let i = 11; i >= 0; i--) {
@@ -80,7 +81,7 @@ export function getHistoryRangeData(
       d.setDate(1);
       d.setMonth(now.getMonth() - i);
       const key = d.toLocaleDateString(undefined, { month: 'short', year: '2-digit' });
-      data.set(key, { key, read: 0, listen: 0, timestamp: d.getTime() });
+      data.set(key, { key, rsvp: 0, paginated: 0, listen: 0, timestamp: d.getTime() });
     }
   }
 
@@ -93,8 +94,14 @@ export function getHistoryRangeData(
 
     const existing = data.get(key);
     if (existing) {
-      if (s.type === 'listening') existing.listen += s.durationSeconds / 60;
-      else existing.read += s.durationSeconds / 60;
+      if (s.type === 'listening') {
+          existing.listen += s.durationSeconds / 60;
+      } else if (s.type === 'paginated') {
+          existing.paginated += s.durationSeconds / 60;
+      } else {
+          // Legacy 'reading' and new 'rsvp' both map to RSVP
+          existing.rsvp += s.durationSeconds / 60;
+      }
     }
   }
 
@@ -230,7 +237,7 @@ export function getIncrementalAggregationPlan(
       endWordIndex: Math.max(...group.map(s => s.endWordIndex)),
       wordsRead: group.reduce((acc, s) => acc + (s.wordsRead || Math.max(0, s.endWordIndex - s.startWordIndex)), 0),
       durationSeconds: group.reduce((acc, s) => acc + s.durationSeconds, 0),
-      type: (first.type || 'reading') as 'reading' | 'listening'
+      type: (first.type || 'reading') as 'reading' | 'listening' | 'rsvp' | 'paginated'
     };
 
     createSessions.push(aggregated);

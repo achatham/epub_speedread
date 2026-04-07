@@ -5,7 +5,8 @@ interface ReadingHistoryChartProps {
     timeRange: string;
     historySessions: ReadingSession[];
     theme: 'light' | 'dark' | 'bedtime';
-    totalReadMinutes: number;
+    totalRsvpMinutes: number;
+    totalPaginatedMinutes: number;
     totalListenMinutes: number;
 }
 
@@ -13,7 +14,8 @@ export function ReadingHistoryChart({
     timeRange,
     historySessions,
     theme,
-    totalReadMinutes,
+    totalRsvpMinutes,
+    totalPaginatedMinutes,
     totalListenMinutes
 }: ReadingHistoryChartProps) {
     const sortedData = getHistoryRangeData(timeRange as 'week' | 'month' | 'year', historySessions);
@@ -31,7 +33,7 @@ export function ReadingHistoryChart({
     const paddingTop = 20;
     const paddingBottom = 30;
 
-    const maxMins = Math.max(15, ...sortedData.map(d => d.read + d.listen));
+    const maxMins = Math.max(15, ...sortedData.map(d => d.rsvp + d.paginated + d.listen));
     const totalBars = sortedData.length;
     const chartWidth = width - paddingLeft - paddingRight;
 
@@ -63,29 +65,39 @@ export function ReadingHistoryChart({
                 {/* Bars */}
                 {sortedData.map((d, i) => {
                     const x = paddingLeft + i * (oBarWidth + oGap) + oGap / 2;
-                    const readH = (d.read / maxMins) * (height - paddingTop - paddingBottom);
+                    const rsvpH = (d.rsvp / maxMins) * (height - paddingTop - paddingBottom);
+                    const paginatedH = (d.paginated / maxMins) * (height - paddingTop - paddingBottom);
                     const listenH = (d.listen / maxMins) * (height - paddingTop - paddingBottom);
 
                     return (
                         <g key={d.key} className="group/bar">
+                            {/* Listening (Purple) */}
                             <rect
-                                x={x} y={height - paddingBottom - readH - listenH}
+                                x={x} y={height - paddingBottom - rsvpH - paginatedH - listenH}
                                 width={oBarWidth} height={listenH}
                                 fill="#a855f7" rx="1"
                                 className="opacity-80 group-hover/bar:opacity-100 transition-opacity"
                             />
+                            {/* Paginated (Blue) */}
                             <rect
-                                x={x} y={height - paddingBottom - readH}
-                                width={oBarWidth} height={readH}
+                                x={x} y={height - paddingBottom - rsvpH - paginatedH}
+                                width={oBarWidth} height={paginatedH}
+                                fill="#3b82f6" rx="1"
+                                className="opacity-80 group-hover/bar:opacity-100 transition-opacity"
+                            />
+                            {/* RSVP (Red) */}
+                            <rect
+                                x={x} y={height - paddingBottom - rsvpH}
+                                width={oBarWidth} height={rsvpH}
                                 fill={theme === 'bedtime' ? '#d97706' : '#ef4444'} rx="1"
                                 className="opacity-80 group-hover/bar:opacity-100 transition-opacity"
                             />
 
                             {/* Tooltip */}
                             <g className="opacity-0 group-hover/bar:opacity-100 pointer-events-none transition-opacity">
-                                <rect x={x + oBarWidth / 2 - 35} y={height - paddingBottom - readH - listenH - 30} width="70" height="22" rx="4" className="fill-zinc-800 dark:fill-zinc-100" />
-                                <text x={x + oBarWidth / 2} y={height - paddingBottom - readH - listenH - 16} textAnchor="middle" className="text-[9px] font-bold fill-white dark:fill-zinc-900">
-                                    {d.key}: {Math.round(d.read + d.listen)}m
+                                <rect x={x + oBarWidth / 2 - 35} y={height - paddingBottom - rsvpH - paginatedH - listenH - 30} width="70" height="22" rx="4" className="fill-zinc-800 dark:fill-zinc-100" />
+                                <text x={x + oBarWidth / 2} y={height - paddingBottom - rsvpH - paginatedH - listenH - 16} textAnchor="middle" className="text-[9px] font-bold fill-white dark:fill-zinc-900">
+                                    {d.key}: {Math.round(d.rsvp + d.paginated + d.listen)}m
                                 </text>
                             </g>
                         </g>
@@ -94,7 +106,7 @@ export function ReadingHistoryChart({
             </svg>
             <div className="flex justify-between text-[10px] opacity-50 mt-2" style={{ paddingLeft: `${paddingLeft}px`, paddingRight: `${paddingRight}px` }}>
                 <span>{sortedData[0]?.key}</span>
-                <span>Total Time: {totalReadMinutes + totalListenMinutes} mins</span>
+                <span>Total Time: {totalRsvpMinutes + totalPaginatedMinutes + totalListenMinutes} mins</span>
                 <span>{sortedData[sortedData.length - 1]?.key}</span>
             </div>
         </div>
