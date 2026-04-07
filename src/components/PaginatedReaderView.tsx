@@ -139,6 +139,13 @@ export function PaginatedReaderView({
     ? Math.min(100, (currentIndex / effectiveTotalWords) * 100)
     : 0;
 
+  const chapterStart = sections[activeChapterIdx]?.startIndex || 0;
+  const nextChapterStart = sections[activeChapterIdx + 1]?.startIndex || words.length;
+  const chapterLength = nextChapterStart - chapterStart;
+  const chapterProgress = chapterLength > 0
+    ? Math.min(100, ((currentIndex - chapterStart) / chapterLength) * 100)
+    : 0;
+
   // pageEndIndex matches layoutState.end exactly because we measure from layoutState.start
   const pageEndIndex = layoutState.end;
   const isMeasuring = pageEndIndex === null;
@@ -340,34 +347,55 @@ export function PaginatedReaderView({
 
       {/* ── Footer / controls ──────────────────────────────────── */}
       <div className={`shrink-0 px-4 pt-3 pb-8 flex flex-col gap-2`}>
-        {/* Progress bar */}
-        <div
-          className={`w-full h-1 rounded-sm relative cursor-pointer ${theme === 'bedtime' ? 'bg-zinc-900' : 'bg-zinc-200 dark:bg-zinc-800'}`}
-          onClick={(e) => {
-            const rect = e.currentTarget.getBoundingClientRect();
-            const pct = (e.clientX - rect.left) / rect.width;
-            setCurrentIndex(Math.floor(pct * words.length));
-          }}
-          title="Click to jump"
-        >
+        <div className="flex flex-col gap-1.5">
+          {/* Chapter Progress bar - only in paused/paginated state */}
+          {!isPlaying && (
+            <div
+              className={`w-full h-1 rounded-sm relative cursor-pointer ${theme === 'bedtime' ? 'bg-zinc-900/50' : 'bg-zinc-200/50 dark:bg-zinc-800/50'}`}
+              onClick={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const pct = (e.clientX - rect.left) / rect.width;
+                const newIdx = Math.floor(chapterStart + (pct * chapterLength));
+                setCurrentIndex(Math.min(nextChapterStart - 1, Math.max(chapterStart, newIdx)));
+              }}
+              title="Chapter Progress"
+            >
+              <div
+                className={`h-full rounded-sm transition-all duration-300 ${theme === 'bedtime' ? 'bg-amber-600/60' : 'bg-red-500/50'}`}
+                style={{ width: `${chapterProgress}%` }}
+              />
+            </div>
+          )}
+
+          {/* Book Progress bar */}
           <div
-            className={`h-full rounded-sm transition-all duration-300 ${theme === 'bedtime' ? 'bg-stone-500' : 'bg-zinc-900 dark:bg-zinc-100'}`}
-            style={{ width: `${bookProgress}%` }}
-          />
-          {furthestIndex !== null && furthestIndex > currentIndex && (
+            className={`w-full h-1 rounded-sm relative cursor-pointer ${theme === 'bedtime' ? 'bg-zinc-900' : 'bg-zinc-200 dark:bg-zinc-800'}`}
+            onClick={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              const pct = (e.clientX - rect.left) / rect.width;
+              setCurrentIndex(Math.floor(pct * words.length));
+            }}
+            title="Book Progress"
+          >
             <div
-              className={`absolute top-0 bottom-0 w-0.5 opacity-40 ${theme === 'bedtime' ? 'bg-stone-400' : 'bg-zinc-400 dark:bg-zinc-600'}`}
-              style={{ left: `${Math.min(100, (furthestIndex / effectiveTotalWords) * 100)}%` }}
-              title="Furthest read"
+              className={`h-full rounded-sm transition-all duration-300 ${theme === 'bedtime' ? 'bg-stone-500' : 'bg-zinc-900 dark:bg-zinc-100'}`}
+              style={{ width: `${bookProgress}%` }}
             />
-          )}
-          {realEndIndex && (
-            <div
-              className="absolute top-0 bottom-0 w-0.5 bg-red-500/30"
-              style={{ left: `${(realEndIndex / words.length) * 100}%` }}
-              title="Real end of book"
-            />
-          )}
+            {furthestIndex !== null && furthestIndex > currentIndex && (
+              <div
+                className={`absolute top-0 bottom-0 w-0.5 opacity-40 ${theme === 'bedtime' ? 'bg-stone-400' : 'bg-zinc-400 dark:bg-zinc-600'}`}
+                style={{ left: `${Math.min(100, (furthestIndex / effectiveTotalWords) * 100)}%` }}
+                title="Furthest read"
+              />
+            )}
+            {realEndIndex && (
+              <div
+                className="absolute top-0 bottom-0 w-0.5 bg-red-500/30"
+                style={{ left: `${(realEndIndex / words.length) * 100}%` }}
+                title="Real end of book"
+              />
+            )}
+          </div>
         </div>
 
         {/* Navigation row */}
