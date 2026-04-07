@@ -62,3 +62,5 @@ don't have to keep approving unique commands.
 
 - **Pre-Submit Verification:** Before submitting any changes or finishing a task, you **MUST** run `./verify.sh` on Mac/Linux or `./verify.bat` on Windows. This ensures the project lints cleanly, builds without errors, and passes all unit and E2E tests. Failure to do so is a violation of project safety standards.
 - **Gemini Versioning:** *NEVER* change a Gemini version number in code. `gemini-3-flash-preview` is the latest model and must be preserved.
+
+But only run verify.{bat,sh} at the end of your journey. It's expensive and should not be used in your inner development loop, only when you believe you're complete.
