@@ -92,6 +92,16 @@ export function PaginatedReaderView({
     setCurrentIndex,
   });
 
+  // Find chapter info early so effects can use it
+  let activeChapterIdx = -1;
+  for (let i = 0; i < sections.length; i++) {
+    if (sections[i].startIndex <= currentIndex) activeChapterIdx = i;
+    else break;
+  }
+  const chapterLabel = sections[activeChapterIdx]?.label || '';
+  const chapterStart = sections[activeChapterIdx]?.startIndex || 0;
+  const nextChapterStart = sections[activeChapterIdx + 1]?.startIndex || words.length;
+
   useLayoutEffect(() => {
     if (isPlaying) return;
 
@@ -119,25 +129,18 @@ export function PaginatedReaderView({
        firstOverflow = 1;
     }
 
-    const endIdx = layoutState.start + firstOverflow;
+    // Ensure we do not overflow into the next chapter visually
+    const unboundEndIdx = layoutState.start + firstOverflow;
+    const endIdx = Math.min(unboundEndIdx, nextChapterStart);
+    
     setLayoutState(prev => ({ start: prev.start, end: endIdx }));
-  }, [layoutState, currentIndex, areaDims, words, isPlaying, isPageValid, setLayoutState]);
-
-  // Find chapter info
-  let activeChapterIdx = -1;
-  for (let i = 0; i < sections.length; i++) {
-    if (sections[i].startIndex <= currentIndex) activeChapterIdx = i;
-    else break;
-  }
-  const chapterLabel = sections[activeChapterIdx]?.label || '';
+  }, [layoutState, currentIndex, areaDims, words, isPlaying, isPageValid, setLayoutState, nextChapterStart]);
 
   // Progress
   const bookProgress = effectiveTotalWords > 0
     ? Math.min(100, (currentIndex / effectiveTotalWords) * 100)
     : 0;
 
-  const chapterStart = sections[activeChapterIdx]?.startIndex || 0;
-  const nextChapterStart = sections[activeChapterIdx + 1]?.startIndex || words.length;
   const chapterLength = nextChapterStart - chapterStart;
   const chapterProgress = chapterLength > 0
     ? Math.min(100, ((currentIndex - chapterStart) / chapterLength) * 100)
@@ -470,14 +473,16 @@ function renderPageWords(
 
   return (
     <>
-      {paragraphs.map((para, pIdx) => (
-        <p
-          key={pIdx}
-          className={`mb-[1em] leading-[inherit] ${paraTextColor}`}
-          style={{ margin: 0, marginBottom: '1em' }}
-        >
-          {para.map(({ word, globalIdx }, wIdx) => {
-            const isHighlighted = globalIdx === highlightIndex;
+      {paragraphs.map((para, pIdx) => {
+        const isHeading = para.some(({ word }) => word.isHeading);
+        return (
+          <p
+            key={pIdx}
+            className={`mb-[1em] leading-[inherit] ${paraTextColor} ${isHeading ? 'text-[1.5em] font-bold' : ''}`}
+            style={{ margin: 0, marginBottom: '1em' }}
+          >
+            {para.map(({ word, globalIdx }, wIdx) => {
+              const isHighlighted = globalIdx === highlightIndex;
             return (
               <span 
                 key={globalIdx} 
@@ -489,7 +494,8 @@ function renderPageWords(
             );
           })}
         </p>
-      ))}
+        );
+      })}
     </>
   );
 }

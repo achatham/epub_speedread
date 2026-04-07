@@ -57,6 +57,7 @@ export function useReaderLayout({
           else break;
         }
         const chapterStart = activeChapterIdxLocal !== -1 ? sections[activeChapterIdxLocal].startIndex : 0;
+        const nextChapterStart = activeChapterIdxLocal !== -1 && activeChapterIdxLocal + 1 < sections.length ? sections[activeChapterIdxLocal + 1].startIndex : words.length;
         let desiredStart = currentIndex;
         if (currentIndex > chapterStart) {
           if (!areaDims || areaDims.w <= 0 || areaDims.h <= 0) {
@@ -69,7 +70,7 @@ export function useReaderLayout({
             
             let curr = estimatedStart;
             while (curr < currentIndex) {
-              const next = computePageEndIndex(words, curr, areaDims.w - PADDING * 2, targetHalfHeight, fontSize, fontFamilyStr);
+              const next = computePageEndIndex(words, curr, areaDims.w - PADDING * 2, targetHalfHeight, fontSize, fontFamilyStr, nextChapterStart);
               if (next >= currentIndex || next === curr) {
                 break;
               }
@@ -106,6 +107,7 @@ export function useReaderLayout({
     }
     
     const chapterStart = sections[activeChapterIdx]?.startIndex ?? 0;
+    const nextChapterStart = activeChapterIdx !== -1 && activeChapterIdx + 1 < sections.length ? sections[activeChapterIdx + 1].startIndex : words.length;
     if (!areaDims || areaDims.w <= 0 || areaDims.h <= 0) {
       const prev = Math.max(chapterStart, currentIndex - 1);
       expectedIndexRef.current = prev;
@@ -128,7 +130,7 @@ export function useReaderLayout({
       const effectiveHeight = Math.max(lineHeight, areaDims.h - PADDING * 2 - lineHeight);
 
       while (curr < currentIndex) {
-        const next = computePageEndIndex(words, curr, areaDims.w - PADDING * 2, effectiveHeight, fontSize, fontFamilyStr);
+        const next = computePageEndIndex(words, curr, areaDims.w - PADDING * 2, effectiveHeight, fontSize, fontFamilyStr, nextChapterStart);
         if (next >= currentIndex || next === curr) {
           break;
         }

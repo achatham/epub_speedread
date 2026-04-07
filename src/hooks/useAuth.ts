@@ -11,10 +11,14 @@ import {
 import { FirestoreStorage } from '../utils/storage';
 
 const MOCK_USER = { uid: 'mock-user' };
+
+let mockBooksList: any[] = [];
+let mockFiles: Record<string, File> = {};
+
 // mock storage provider used by playwright tests
 const MOCK_STORAGE = {
     getSettings: async () => ({ onboardingCompleted: localStorage.getItem('mock_onboarding_completed') !== 'false' }),
-    getAllBooks: async () => [],
+    getAllBooks: async () => mockBooksList,
     getSessions: async () => [],
     getAggregatedSessions: async () => [],
     updateBookProgress: async () => { },
@@ -28,8 +32,32 @@ const MOCK_STORAGE = {
     aggregateSessions: async () => { },
     getChapterAudio: async () => null,
     saveChapterAudio: async () => { },
-    deleteBook: async () => { },
-    getBook: async () => null,
+    getIllustrations: async () => [],
+    deleteBook: async (id: string) => {
+        mockBooksList = mockBooksList.filter(b => b.id !== id);
+        delete mockFiles[id];
+    },
+    getBook: async (id: string) => {
+        const file = mockFiles[id];
+        const record = mockBooksList.find(b => b.id === id);
+        if (!file || !record) return null;
+        return { ...record, storage: { localFile: file } };
+    },
+    addBook: async (file: File, title: string) => {
+        const id = 'mock-book-' + Date.now();
+        mockBooksList.push({
+            id,
+            meta: { title, addedAt: Date.now(), extension: 'epub' },
+            progress: { wordIndex: 0, wpm: 300, totalWords: 100 },
+            settings: { wpm: 300 },
+            analysis: { sections: [], realEndIndex: null, realEndQuote: null },
+            storage: {}
+        });
+        mockFiles[id] = file;
+        return id;
+    },
+    _resetMocks: () => { mockBooksList = []; mockFiles = {}; },
+    _setMockBooks: (books: any[]) => { mockBooksList = books; }
 };
 
 export function useAuth() {

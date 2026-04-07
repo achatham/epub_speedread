@@ -238,7 +238,8 @@ function App() {
       const processedWords = mockWords.map((w: any) => ({
         text: w.text,
         isParagraphStart: typeof w.isParagraphStart === 'boolean' ? w.isParagraphStart : (w.paragraphIndex === 0 && w.sentenceIndex === 0),
-        isSentenceStart: typeof w.isSentenceStart === 'boolean' ? w.isSentenceStart : w.sentenceIndex === 0
+        isSentenceStart: typeof w.isSentenceStart === 'boolean' ? w.isSentenceStart : w.sentenceIndex === 0,
+        isHeading: w.isHeading
       }));
 
       reader.setWords(processedWords);
@@ -265,7 +266,7 @@ function App() {
     (window as any).__setLibrary = (mockBooks: BookRecord[]) => {
       isMockModeRef.current = true;
       const provider = { ...MOCK_STORAGE } as any;
-      provider.getAllBooks = async () => mockBooks;
+      provider._setMockBooks(mockBooks);
       setUser(MOCK_USER as any);
       setStorageProvider(provider);
       library.setLibrary(mockBooks);
