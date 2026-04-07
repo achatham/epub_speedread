@@ -132,6 +132,12 @@ export function PaginatedReaderView({
 
   const [areaDims, setAreaDims] = useState<{ w: number; h: number } | null>(null);
 
+  const prevIsPlayingRef = useRef(isPlaying);
+  const justPaused = prevIsPlayingRef.current && !isPlaying;
+  useEffect(() => {
+    prevIsPlayingRef.current = isPlaying;
+  }, [isPlaying]);
+
   // Track reading area dimensions
   useEffect(() => {
     if (!readingAreaRef.current) return;
@@ -168,22 +174,56 @@ export function PaginatedReaderView({
 
   // When dimensions or settings change, nullify measured index to trigger re-measurement
   useEffect(() => {
-    setLayoutState({ start: currentIndex, end: null });
-  }, [currentIndex, areaDims?.w, areaDims?.h, fontSize, fontFamilyStr, lineHeight]);
+    setLayoutState(prev => ({ start: prev.start, end: null }));
+  }, [areaDims?.w, areaDims?.h, fontSize, fontFamilyStr, lineHeight]);
 
-  // Synchronous reset if currentIndex or dimensions change. 
-  // We don't reset if we are playing RSVP, because RSVP ticks currentIndex forward decoupled from pages.
-  if (!isPlaying && !isPageValid) {
-    // We try to use currentIndex as start for simplicity when pausing out of bounds.
-    // The user will see their current word at the top of the page.
-    setLayoutState({ start: currentIndex, end: null });
+  // Synchronous reset for layout coordination
+  if (!isPlaying) {
+    if (readingMode === 'paginated' && layoutState.start !== currentIndex) {
+      // In paginated mode, the current index absolutely MUST be the first word on the page.
+      setLayoutState({ start: currentIndex, end: null });
+    } else if (readingMode === 'rsvp') {
+      // In RSVP mode, we want the current word to be roughly in the middle for context.
+      // We offset backward by 40 words, bounded by the chapter start limit.
+      // But only do this if we aren't perfectly aligned already (e.g. from a user jump).
+      let activeChapterIdxLocal = -1;
+      for (let i = 0; i < sections.length; i++) {
+        if (sections[i].startIndex <= currentIndex) activeChapterIdxLocal = i;
+        else break;
+      }
+      const chapterStart = activeChapterIdxLocal !== -1 ? sections[activeChapterIdxLocal].startIndex : 0;
+      let desiredStart = currentIndex;
+      if (currentIndex > chapterStart) {
+        if (!areaDims || areaDims.w <= 0 || areaDims.h <= 0) {
+          desiredStart = Math.max(chapterStart, currentIndex - 40);
+        } else {
+          const PADDING = 32;
+          const effectiveHeight = Math.max(lineHeight, areaDims.h - PADDING * 2 - lineHeight);
+          const targetHalfHeight = effectiveHeight / 2;
+          const estimatedStart = Math.max(chapterStart, currentIndex - 400);
+          
+          let curr = estimatedStart;
+          while (curr < currentIndex) {
+            const next = computePageEndIndex(words, curr, areaDims.w - PADDING * 2, targetHalfHeight, fontSize, fontFamilyStr);
+            if (next >= currentIndex || next === curr) {
+              break;
+            }
+            curr = next;
+          }
+          desiredStart = curr;
+        }
+      }
+      if (layoutState.start !== desiredStart && (justPaused || expectedIndexRef.current !== currentIndex)) {
+         setLayoutState({ start: desiredStart, end: null });
+      }
+    }
   }
 
   useLayoutEffect(() => {
     if (isPlaying && readingMode === 'rsvp') return; // Don't measure paginated pages while playing RSVP
 
-    // Only measure if we are currently on the correct start index and haven't measured yet.
-    if (layoutState.start !== currentIndex && isPageValid) return; 
+    // Only measure if we are currently valid on this page but missing the measured end index.
+    // We no longer abort if layoutState.start !== currentIndex, because we decouple them.
     if (layoutState.end !== null) return;
     if (!areaDims || areaDims.w === 0 || areaDims.h === 0) return;
     if (!innerRef.current) return;
@@ -210,9 +250,9 @@ export function PaginatedReaderView({
        firstOverflow = 1;
     }
 
-    const endIdx = currentIndex + firstOverflow;
-    console.log(`Measured layout: words idx ${currentIndex}-${endIdx} visually fits inside ${areaDims.w}x${areaDims.h}`);
-    setLayoutState({ start: currentIndex, end: endIdx });
+    const endIdx = layoutState.start + firstOverflow;
+    console.log(`Measured layout: words idx ${layoutState.start}-${endIdx} visually fits inside ${areaDims.w}x${areaDims.h}`);
+    setLayoutState({ start: layoutState.start, end: endIdx });
   }, [layoutState, currentIndex, areaDims, words, isPlaying, readingMode, isPageValid]);
 
   // Find chapter info
@@ -228,23 +268,24 @@ export function PaginatedReaderView({
     ? Math.min(100, (currentIndex / effectiveTotalWords) * 100)
     : 0;
 
-  // pageEndIndex matches layoutState.end ONLY if it belongs to the current start index.
-  const pageEndIndex = layoutState.start === currentIndex ? layoutState.end : null;
+  // pageEndIndex matches layoutState.end exactly because we measure from layoutState.start
+  const pageEndIndex = layoutState.end;
   const isMeasuring = pageEndIndex === null;
 
   // For rendering, we always want to show something; 800 is a safe upper bound for layout.
-  const renderEndIndex = pageEndIndex ?? Math.min(words.length, currentIndex + 800);
-  const pageWords = words.slice(currentIndex, renderEndIndex);
+  const renderEndIndex = pageEndIndex ?? Math.min(words.length, layoutState.start + 800);
+  const pageWords = words.slice(layoutState.start, renderEndIndex);
 
   const handleNextPage = useCallback(() => {
     // Crucially: Only allow navigation if we HAVE a measurement. 
     // This prevents the "800 word skip" when clicking too fast.
     if (pageEndIndex !== null && pageEndIndex < words.length) {
-      historyRef.current.push(currentIndex);
+      historyRef.current.push(layoutState.start);
       expectedIndexRef.current = pageEndIndex;
       setCurrentIndex(pageEndIndex);
+      setLayoutState({ start: pageEndIndex, end: null });
     }
-  }, [pageEndIndex, words.length, currentIndex, setCurrentIndex]);
+  }, [pageEndIndex, words.length, layoutState.start, setCurrentIndex]);
 
   const handlePrevPage = useCallback(() => {
     if (currentIndex === 0) return;
@@ -295,6 +336,7 @@ export function PaginatedReaderView({
 
     expectedIndexRef.current = targetIndex;
     setCurrentIndex(targetIndex);
+    setLayoutState({ start: targetIndex, end: null });
   }, [currentIndex, areaDims, sections, activeChapterIdx, setCurrentIndex, words, fontSize, fontFamilyStr, lineHeight]);
 
   // Keyboard navigation
@@ -483,7 +525,7 @@ export function PaginatedReaderView({
             className="h-full w-full px-8 pt-8 pb-16 overflow-hidden"
             style={{ fontSize: `${fontSize}px`, lineHeight: `${lineHeight}px`, opacity: 1 }}
           >
-            {renderPageWords(pageWords, theme, currentIndex, readingMode === 'rsvp' ? currentIndex : undefined)}
+            {renderPageWords(pageWords, theme, layoutState.start, readingMode === 'rsvp' ? currentIndex : undefined)}
           </div>
         )}
       </div>
@@ -571,7 +613,7 @@ export function PaginatedReaderView({
 function renderPageWords(
   pageWords: WordData[],
   theme: Theme,
-  currentIndex: number,
+  pageStartIndex: number,
   highlightIndex?: number
 ) {
   if (pageWords.length === 0) return null;
@@ -579,7 +621,7 @@ function renderPageWords(
   // Group words into paragraphs
   const paragraphs: { word: WordData; globalIdx: number }[][] = [];
   let current: { word: WordData; globalIdx: number }[] = [];
-  let currentGlobalIdx = currentIndex;
+  let currentGlobalIdx = pageStartIndex;
 
   for (const word of pageWords) {
     if (word.isParagraphStart && current.length > 0) {
