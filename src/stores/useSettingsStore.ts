@@ -19,6 +19,7 @@ interface SettingsState {
   rsvpSettings: RsvpSettings;
   readingMode: ReadingMode;
   paginatedFontSize: number;
+  lastBookId: string | null | undefined;
   onboardingCompleted: boolean;
   wpm: number;
 
@@ -33,6 +34,7 @@ interface SettingsState {
   setRsvpSettings: (settings: Partial<RsvpSettings>) => void;
   setReadingMode: (mode: ReadingMode) => void;
   setPaginatedFontSize: (size: number) => void;
+  setLastBookId: (id: string | null) => void;
   setOnboardingCompleted: (completed: boolean) => void;
   setWpm: (wpm: number) => void;
 }
@@ -57,6 +59,7 @@ export const useSettingsStore = create<SettingsState>()(
       rsvpSettings: DEFAULT_RSVP_SETTINGS,
       readingMode: 'rsvp',
       paginatedFontSize: DEFAULT_PAGINATED_FONT_SIZE,
+      lastBookId: undefined,
       onboardingCompleted: false,
       wpm: 300,
 
@@ -75,6 +78,7 @@ export const useSettingsStore = create<SettingsState>()(
       setRsvpSettings: (settings) => set((state) => ({ rsvpSettings: { ...state.rsvpSettings, ...settings } })),
       setReadingMode: (mode) => set({ readingMode: mode }),
       setPaginatedFontSize: (size) => set({ paginatedFontSize: size }),
+      setLastBookId: (id) => set({ lastBookId: id }),
       setOnboardingCompleted: (completed) => set({ onboardingCompleted: completed }),
       setWpm: (wpm) => set({ wpm }),
     }),

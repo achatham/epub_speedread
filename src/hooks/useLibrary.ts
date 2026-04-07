@@ -7,7 +7,9 @@ import { useLibraryStore } from '../stores/useLibraryStore';
 export function useLibrary(
     storageProvider: FirestoreStorage | null,
     currentBookId: string | null,
-    handleSelectBook: (id: string) => void
+    handleSelectBook: (id: string) => void,
+    isSettingsLoading: boolean,
+    lastBookId: string | null | undefined
 ) {
     const { setLibrary, setSessions, setIsLoadingLibrary } = useLibraryStore();
     const hasAutoOpenedRef = useRef(false);
@@ -29,11 +31,21 @@ export function useLibrary(
                 setLibrary(books);
                 setSessions(history);
 
-                // Auto-open most recent book if any, but only once per app session
-                if (books.length > 0 && !currentBookId && !hasAutoOpenedRef.current) {
-                    const mostRecent = books[0];
+                // Auto-open logic, only once per app session
+                if (!isSettingsLoading && books.length > 0 && !currentBookId && !hasAutoOpenedRef.current) {
                     hasAutoOpenedRef.current = true;
-                    handleSelectBook(mostRecent.id);
+                    if (lastBookId === null) {
+                        // User closed on library page, do nothing
+                    } else if (typeof lastBookId === 'string') {
+                        // Try to open the specific book they had open
+                        const target = books.find(b => b.id === lastBookId);
+                        if (target) {
+                            handleSelectBook(target.id);
+                        }
+                    } else if (lastBookId === undefined) {
+                        // Legacy behavior: open most recent
+                        handleSelectBook(books[0].id);
+                    }
                 }
             } catch (err) {
                 console.error('Failed to load library/history', err);
@@ -44,7 +56,7 @@ export function useLibrary(
 
         loadLibrary();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storageProvider]);
+  }, [storageProvider, isSettingsLoading, lastBookId, handleSelectBook]);
 
     const handleUpdateBookTitle = useCallback(async (id: string, newTitle: string) => {
         if (!storageProvider) return;
