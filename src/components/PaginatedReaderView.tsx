@@ -40,8 +40,7 @@ export function PaginatedReaderView({
   } = useReaderStore();
   const { 
     theme, fontFamily, paginatedFontSize: fontSize, 
-    setPaginatedFontSize: onFontSizeChange, 
-    readingMode
+    setPaginatedFontSize: onFontSizeChange
   } = useSettingsStore();
 
   const pressStartTimeRef = useRef<number | null>(null);
@@ -84,7 +83,6 @@ export function PaginatedReaderView({
   } = useReaderLayout({
     currentIndex,
     isPlaying,
-    readingMode,
     words,
     sections,
     areaDims,
@@ -94,8 +92,18 @@ export function PaginatedReaderView({
     setCurrentIndex,
   });
 
+  // Find chapter info early so effects can use it
+  let activeChapterIdx = -1;
+  for (let i = 0; i < sections.length; i++) {
+    if (sections[i].startIndex <= currentIndex) activeChapterIdx = i;
+    else break;
+  }
+  const chapterLabel = sections[activeChapterIdx]?.label || '';
+  const chapterStart = sections[activeChapterIdx]?.startIndex || 0;
+  const nextChapterStart = sections[activeChapterIdx + 1]?.startIndex || words.length;
+
   useLayoutEffect(() => {
-    if (isPlaying && readingMode === 'rsvp') return;
+    if (isPlaying) return;
 
     if (layoutState.end !== null) return;
     if (!areaDims || areaDims.w === 0 || areaDims.h === 0) return;
@@ -121,26 +129,18 @@ export function PaginatedReaderView({
        firstOverflow = 1;
     }
 
-    const endIdx = layoutState.start + firstOverflow;
-    console.log(`Measured layout: words idx ${layoutState.start}-${endIdx} visually fits inside ${areaDims.w}x${areaDims.h}`);
+    // Ensure we do not overflow into the next chapter visually
+    const unboundEndIdx = layoutState.start + firstOverflow;
+    const endIdx = Math.min(unboundEndIdx, nextChapterStart);
+    
     setLayoutState(prev => ({ start: prev.start, end: endIdx }));
-  }, [layoutState, currentIndex, areaDims, words, isPlaying, readingMode, isPageValid, setLayoutState]);
-
-  // Find chapter info
-  let activeChapterIdx = -1;
-  for (let i = 0; i < sections.length; i++) {
-    if (sections[i].startIndex <= currentIndex) activeChapterIdx = i;
-    else break;
-  }
-  const chapterLabel = sections[activeChapterIdx]?.label || '';
+  }, [layoutState, currentIndex, areaDims, words, isPlaying, isPageValid, setLayoutState, nextChapterStart]);
 
   // Progress
   const bookProgress = effectiveTotalWords > 0
     ? Math.min(100, (currentIndex / effectiveTotalWords) * 100)
     : 0;
 
-  const chapterStart = sections[activeChapterIdx]?.startIndex || 0;
-  const nextChapterStart = sections[activeChapterIdx + 1]?.startIndex || words.length;
   const chapterLength = nextChapterStart - chapterStart;
   const chapterProgress = chapterLength > 0
     ? Math.min(100, ((currentIndex - chapterStart) / chapterLength) * 100)
@@ -246,7 +246,7 @@ export function PaginatedReaderView({
 
   return (
     <div
-      className={`flex flex-col h-dvh transition-colors duration-300 ${mainBg} ${mainText} ${(readingMode === 'rsvp' && !isPlaying) ? 'cursor-pointer' : ''}`}
+      className={`flex flex-col h-dvh transition-colors duration-300 ${mainBg} ${mainText} ${!isPlaying ? 'cursor-pointer' : ''}`}
       style={{ fontFamily: fontFamilyStr }}
       data-testid="paginated-reader"
     >
@@ -289,15 +289,15 @@ export function PaginatedReaderView({
       <div
         ref={readingAreaRef}
         className={`flex-1 min-h-0 overflow-hidden border-b ${borderColor} relative
-          ${isPlaying && readingMode === 'rsvp' ? 'flex items-center justify-center' : ''}`}
+          ${isPlaying ? 'flex items-center justify-center' : ''}`}
         data-testid="paginated-reading-area"
         data-is-measuring={isMeasuring}
         onClick={() => {
           if (Date.now() - lastPauseTimeRef.current < 400) return;
-          if (!isPlaying && readingMode === 'rsvp') handleSetIsPlaying(true);
+          if (!isPlaying) handleSetIsPlaying(true);
         }}
       >
-        {isPlaying && readingMode === 'rsvp' && (
+        {isPlaying && (
           <div
             className="fixed inset-0 z-40 bg-transparent cursor-pointer"
             onPointerDown={handlePointerDown}
@@ -307,7 +307,7 @@ export function PaginatedReaderView({
           />
         )}
 
-        {(isPlaying && readingMode === 'rsvp') ? (
+        {isPlaying ? (
           <div className="w-full relative" style={{ minHeight: Math.max(120, currentFontSize * 1.5) }}>
             {!isChapterBreak && (
               <>
@@ -341,7 +341,7 @@ export function PaginatedReaderView({
             className="h-full w-full px-8 pt-8 pb-16 overflow-hidden"
             style={{ fontSize: `${fontSize}px`, lineHeight: `${lineHeight}px`, opacity: 1 }}
           >
-            {renderPageWords(pageWords, theme, layoutState.start, readingMode === 'rsvp' ? currentIndex : undefined)}
+            {renderPageWords(pageWords, theme, layoutState.start, currentIndex)}
           </div>
         )}
       </div>
@@ -473,14 +473,16 @@ function renderPageWords(
 
   return (
     <>
-      {paragraphs.map((para, pIdx) => (
-        <p
-          key={pIdx}
-          className={`mb-[1em] leading-[inherit] ${paraTextColor}`}
-          style={{ margin: 0, marginBottom: '1em' }}
-        >
-          {para.map(({ word, globalIdx }, wIdx) => {
-            const isHighlighted = globalIdx === highlightIndex;
+      {paragraphs.map((para, pIdx) => {
+        const isHeading = para.some(({ word }) => word.isHeading);
+        return (
+          <p
+            key={pIdx}
+            className={`mb-[1em] leading-[inherit] ${paraTextColor} ${isHeading ? 'text-[1.5em] font-bold' : ''}`}
+            style={{ margin: 0, marginBottom: '1em' }}
+          >
+            {para.map(({ word, globalIdx }, wIdx) => {
+              const isHighlighted = globalIdx === highlightIndex;
             return (
               <span 
                 key={globalIdx} 
@@ -492,7 +494,8 @@ function renderPageWords(
             );
           })}
         </p>
-      ))}
+        );
+      })}
     </>
   );
 }

@@ -25,9 +25,6 @@ test('pagination stability: no words are skipped when paging forward and back', 
     (window as any).__loadMockWords(words, sections);
   }, { words: MOCK_WORDS, sections: MOCK_SECTIONS });
 
-  // Switch to paginated mode
-  await page.locator('button[title="Open Menu"]').click();
-  await page.locator('button:has-text("Page")').click();
   await page.locator('[data-testid="paginated-reader"]').waitFor({ state: 'visible' });
 
   // Jump to Chapter 3

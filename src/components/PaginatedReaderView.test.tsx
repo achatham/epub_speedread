@@ -38,7 +38,6 @@ describe('PaginatedReaderView Visual Highlighting', () => {
       isReadingAloud: false,
     });
     useSettingsStore.setState({
-      readingMode: 'paginated',
       paginatedFontSize: 16,
       fontFamily: 'system',
       theme: 'light',

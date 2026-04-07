@@ -6,12 +6,15 @@ import { useLibraryStore } from '../stores/useLibraryStore';
 import { useSettingsStore } from '../stores/useSettingsStore';
 
 export function useReadingSession(storageProvider: FirestoreStorage | null) {
-    const { isPlaying, isHoldPaused, isChapterBreak, currentBookId, currentIndex, words, bookTitle, isReadingAloud } = useReaderStore();
-    const { library, setLibrary, setSessions } = useLibraryStore();
-    const { rsvpSettings, wpm, readingMode } = useSettingsStore();
+    const { isPlaying, isHoldPaused, isChapterBreak, currentIndex, words, bookTitle, isReadingAloud } = useReaderStore();
+    const { library, setLibrary, setSessions, currentBookId } = useLibraryStore();
+    const { rsvpSettings, wpm } = useSettingsStore();
 
     // RSVP Session Refs
     const sessionStartTimeRef = useRef<number | null>(null);
+    const lastRsvpIndexRef = useRef<number>(currentIndex);
+    const sessionBookIdRef = useRef<string | null>(null);
+    const sessionBookTitleRef = useRef<string>('');
     const wordsReadInSessionRef = useRef<number>(0);
     const multipliersSumInSessionRef = useRef<number>(0);
     const sessionStartIndexRef = useRef<number | null>(null);
@@ -26,6 +29,16 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
     const paginatedSessionStartIndexRef = useRef<number | null>(null);
     const lastPaginatedIndexRef = useRef<number>(currentIndex);
     const lastPaginatedSaveTimeRef = useRef<number>(0);
+    const paginatedBookIdRef = useRef<string | null>(null);
+    const paginatedBookTitleRef = useRef<string>('');
+
+    // Keep title refs synced after async book processing
+    useEffect(() => {
+        if (bookTitle) {
+            sessionBookTitleRef.current = bookTitle;
+            paginatedBookTitleRef.current = bookTitle;
+        }
+    }, [bookTitle]);
 
     // Track RSVP Session Start / Stop
     useEffect(() => {
@@ -37,7 +50,9 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
             totalWordsInFullSessionRef.current = 0;
             multipliersSumInSessionRef.current = 0;
             lastSessionSaveTimeRef.current = Date.now();
-        } else if (!isPlaying && sessionStartTimeRef.current !== null && storageProvider && currentBookId) {
+            sessionBookIdRef.current = currentBookId;
+            sessionBookTitleRef.current = bookTitle;
+        } else if (!isPlaying && sessionStartTimeRef.current !== null && storageProvider && sessionBookIdRef.current) {
             // Save Session
             const durationMs = Date.now() - sessionStartTimeRef.current;
             const fullDurationMs = Date.now() - (fullSessionStartTimeRef.current || sessionStartTimeRef.current);
@@ -56,13 +71,13 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
             // Only save if duration > 5 seconds
             if (durationMs > 5000 && wordsReadInSessionRef.current > 0) {
                 storageProvider.logReadingSession({
-                    bookId: currentBookId,
-                    bookTitle,
+                    bookId: sessionBookIdRef.current,
+                    bookTitle: sessionBookTitleRef.current,
                     startTime: sessionStartTimeRef.current,
                     endTime: Date.now(),
                     durationSeconds: Math.round(durationMs / 1000),
                     startWordIndex: sessionStartIndexRef.current || 0,
-                    endWordIndex: currentIndex,
+                    endWordIndex: lastRsvpIndexRef.current,
                     wordsRead: wordsReadInSessionRef.current,
                     type: 'rsvp'
                 })
@@ -70,20 +85,21 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
                         await storageProvider.aggregateSessions();
                         setSessions(await storageProvider.getAggregatedSessions());
 
-                        const bookRecord = library.find(b => b.id === currentBookId);
-                        if (bookRecord) {
+                        const idToUpdate = sessionBookIdRef.current;
+                        const bookRecord = idToUpdate ? library.find(b => b.id === idToUpdate) : undefined;
+                        if (bookRecord && idToUpdate) {
                             const expectedWordsThisSession = multipliersSumInSessionRef.current;
                             const cumulativeWords = (bookRecord.progress.cumulativeWordsRead || 0) + wordsReadInSessionRef.current;
                             const cumulativeExpected = (bookRecord.progress.cumulativeExpectedWords || 0) + expectedWordsThisSession;
                             const cumulativeDuration = (bookRecord.progress.cumulativeDurationSeconds || 0) + Math.round(durationMs / 1000);
 
-                            await storageProvider.updateBookStats(currentBookId, {
+                            await storageProvider.updateBookStats(idToUpdate, {
                                 cumulativeWordsRead: cumulativeWords,
                                 cumulativeExpectedWords: cumulativeExpected,
                                 cumulativeDurationSeconds: cumulativeDuration
                             });
 
-                            setLibrary(prev => prev.map(b => b.id === currentBookId ? {
+                            setLibrary(prev => prev.map(b => b.id === idToUpdate ? {
                                 ...b,
                                 progress: {
                                     ...b.progress,
@@ -102,12 +118,14 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
             wordsReadInSessionRef.current = 0;
             fullSessionStartTimeRef.current = null;
             totalWordsInFullSessionRef.current = 0;
+            sessionBookIdRef.current = null;
         }
     }, [isPlaying, currentBookId, storageProvider, currentIndex, bookTitle, library, setLibrary, setSessions, wpm]);
 
     // Track words read and multipliers
     useEffect(() => {
         if (isPlaying && !isHoldPaused && !isChapterBreak) {
+            lastRsvpIndexRef.current = currentIndex;
             wordsReadInSessionRef.current += 1;
             totalWordsInFullSessionRef.current += 1;
             const currentWord = words[currentIndex]?.text || '';
@@ -116,17 +134,17 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
 
             // Periodic session save every 60 seconds of active reading
             const now = Date.now();
-            if (sessionStartTimeRef.current && now - lastSessionSaveTimeRef.current > 60000 && storageProvider && currentBookId) {
+            if (sessionStartTimeRef.current && now - lastSessionSaveTimeRef.current > 60000 && storageProvider && sessionBookIdRef.current) {
                 const durationMs = now - sessionStartTimeRef.current;
                 if (wordsReadInSessionRef.current > 0) {
                     storageProvider.logReadingSession({
-                        bookId: currentBookId,
-                        bookTitle,
+                        bookId: sessionBookIdRef.current,
+                        bookTitle: sessionBookTitleRef.current,
                         startTime: sessionStartTimeRef.current,
                         endTime: Date.now(),
                         durationSeconds: Math.round(durationMs / 1000),
                         startWordIndex: sessionStartIndexRef.current || 0,
-                        endWordIndex: currentIndex,
+                        endWordIndex: lastRsvpIndexRef.current,
                         wordsRead: wordsReadInSessionRef.current,
                     type: 'rsvp'
                 }).catch(err => console.error("Failed to save periodic RSVP session", err));
@@ -144,7 +162,7 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
 
     // Track Paginated Session Lifecycle
     useEffect(() => {
-        const isPaginatedActive = readingMode === 'paginated' && !isPlaying && !isReadingAloud && currentBookId;
+        const isPaginatedActive = !isPlaying && !isReadingAloud && !!currentBookId;
 
         if (isPaginatedActive && paginatedSessionStartTimeRef.current === null) {
             paginatedSessionStartTimeRef.current = Date.now();
@@ -152,61 +170,129 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
             paginatedSessionStartIndexRef.current = currentIndex;
             lastPaginatedIndexRef.current = currentIndex;
             lastPaginatedSaveTimeRef.current = Date.now();
-        } else if (!isPaginatedActive && paginatedSessionStartTimeRef.current !== null && storageProvider && currentBookId) {
+            paginatedBookIdRef.current = currentBookId;
+            paginatedBookTitleRef.current = bookTitle;
+        } else if (!isPaginatedActive && paginatedSessionStartTimeRef.current !== null && storageProvider && paginatedBookIdRef.current) {
             const durationMs = Date.now() - paginatedSessionStartTimeRef.current;
+            const wordsRead = paginatedWordsReadRef.current;
 
-            if (durationMs > 5000 && paginatedWordsReadRef.current > 0) {
+            if (durationMs > 0 && wordsRead > 0) {
+                const durationSeconds = Math.round(durationMs / 1000);
+                console.log(`[Paginated Session] Finished:
+- Duration: ${durationSeconds}s
+- Words: ${wordsRead}`);
 
+                const savedBookId = paginatedBookIdRef.current;
                 storageProvider.logReadingSession({
-                    bookId: currentBookId,
-                    bookTitle,
+                    bookId: savedBookId,
+                    bookTitle: paginatedBookTitleRef.current,
                     startTime: paginatedSessionStartTimeRef.current,
                     endTime: Date.now(),
-                    durationSeconds: Math.round(durationMs / 1000),
+                    durationSeconds,
                     startWordIndex: paginatedSessionStartIndexRef.current || 0,
-                    endWordIndex: currentIndex,
-                    wordsRead: paginatedWordsReadRef.current,
+                    endWordIndex: lastPaginatedIndexRef.current,
+                    wordsRead: wordsRead,
                     type: 'paginated'
                 }).then(async () => {
                     await storageProvider.aggregateSessions();
                     setSessions(await storageProvider.getAggregatedSessions());
+                    
+                    const bookRecord = library.find(b => b.id === savedBookId);
+                    if (bookRecord) {
+                        const cumulativeWords = (bookRecord.progress.cumulativeWordsRead || 0) + wordsRead;
+                        const cumulativeExpected = (bookRecord.progress.cumulativeExpectedWords || 0) + wordsRead;
+                        const cumulativeDuration = (bookRecord.progress.cumulativeDurationSeconds || 0) + Math.round(durationMs / 1000);
+
+                        await storageProvider.updateBookStats(savedBookId, {
+                            cumulativeWordsRead: cumulativeWords,
+                            cumulativeExpectedWords: cumulativeExpected,
+                            cumulativeDurationSeconds: cumulativeDuration
+                        });
+
+                        setLibrary(prev => prev.map(b => b.id === savedBookId ? {
+                            ...b,
+                            progress: {
+                                ...b.progress,
+                                cumulativeWordsRead: cumulativeWords,
+                                cumulativeExpectedWords: cumulativeExpected,
+                                cumulativeDurationSeconds: cumulativeDuration
+                            }
+                        } : b));
+                    }
                 }).catch(err => console.error("Failed to save paginated session", err));
             }
             paginatedSessionStartTimeRef.current = null;
             paginatedWordsReadRef.current = 0;
+            paginatedBookIdRef.current = null;
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [readingMode, isPlaying, isReadingAloud, currentBookId, storageProvider, bookTitle, setSessions]);
+    }, [isPlaying, isReadingAloud, currentBookId, storageProvider, bookTitle, setSessions]);
 
     // Track Paginated Words Read
     useEffect(() => {
-        const isPaginatedActive = readingMode === 'paginated' && !isPlaying && !isReadingAloud && currentBookId;
+        const isPaginatedActive = !isPlaying && !isReadingAloud && !!currentBookId;
         if (!isPaginatedActive) return;
 
+        let didTurnPage = false;
         if (currentIndex > lastPaginatedIndexRef.current) {
             const delta = currentIndex - lastPaginatedIndexRef.current;
             // Sanity check: if they jump more than 2000 words (approx 6-7 pages), it's probably a seek, not a page turn
             if (delta < 2000) {
                 paginatedWordsReadRef.current += delta;
+                didTurnPage = true;
             }
         }
         lastPaginatedIndexRef.current = currentIndex;
 
-        // Periodic save for paginated mode
+        // Periodic save for paginated mode OR on page turn
         const now = Date.now();
-        if (paginatedSessionStartTimeRef.current && now - lastPaginatedSaveTimeRef.current > 60000 && storageProvider && currentBookId) {
+        const timeSinceLastSave = now - lastPaginatedSaveTimeRef.current;
+        if (paginatedSessionStartTimeRef.current && (didTurnPage || timeSinceLastSave > 60000) && storageProvider && paginatedBookIdRef.current) {
             const durationMs = now - paginatedSessionStartTimeRef.current;
-            if (paginatedWordsReadRef.current > 0) {
+            const wordsRead = paginatedWordsReadRef.current;
+            if (wordsRead > 0) {
+                const durationSeconds = Math.round(durationMs / 1000);
+                console.log(`[Paginated Session] Periodic Form Finished:
+- Duration: ${durationSeconds}s
+- Words: ${wordsRead}`);
+                
+                const savedBookId = paginatedBookIdRef.current;
                 storageProvider.logReadingSession({
-                    bookId: currentBookId,
-                    bookTitle,
+                    bookId: savedBookId,
+                    bookTitle: paginatedBookTitleRef.current,
                     startTime: paginatedSessionStartTimeRef.current,
                     endTime: Date.now(),
-                    durationSeconds: Math.round(durationMs / 1000),
+                    durationSeconds,
                     startWordIndex: paginatedSessionStartIndexRef.current || 0,
-                    endWordIndex: currentIndex,
-                    wordsRead: paginatedWordsReadRef.current,
+                    endWordIndex: lastPaginatedIndexRef.current,
+                    wordsRead: wordsRead,
                     type: 'paginated'
+                }).then(async () => {
+                    await storageProvider.aggregateSessions();
+                    setSessions(await storageProvider.getAggregatedSessions());
+
+                    const bookRecord = library.find(b => b.id === savedBookId);
+                    if (bookRecord) {
+                        const cumulativeWords = (bookRecord.progress.cumulativeWordsRead || 0) + wordsRead;
+                        const cumulativeExpected = (bookRecord.progress.cumulativeExpectedWords || 0) + wordsRead;
+                        const cumulativeDuration = (bookRecord.progress.cumulativeDurationSeconds || 0) + Math.round(durationMs / 1000);
+
+                        await storageProvider.updateBookStats(savedBookId, {
+                            cumulativeWordsRead: cumulativeWords,
+                            cumulativeExpectedWords: cumulativeExpected,
+                            cumulativeDurationSeconds: cumulativeDuration
+                        });
+
+                        setLibrary(prev => prev.map(b => b.id === savedBookId ? {
+                            ...b,
+                            progress: {
+                                ...b.progress,
+                                cumulativeWordsRead: cumulativeWords,
+                                cumulativeExpectedWords: cumulativeExpected,
+                                cumulativeDurationSeconds: cumulativeDuration
+                            }
+                        } : b));
+                    }
                 }).catch(err => console.error("Failed to save periodic paginated session", err));
 
                 paginatedSessionStartTimeRef.current = now;
@@ -215,7 +301,7 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
                 paginatedWordsReadRef.current = 0;
             }
         }
-    }, [currentIndex, readingMode, isPlaying, isReadingAloud, currentBookId, storageProvider, bookTitle]);
+    }, [currentIndex, isPlaying, isReadingAloud, currentBookId, storageProvider, bookTitle, library, setLibrary, setSessions]);
 
     return {};
 }

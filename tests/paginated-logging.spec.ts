@@ -37,30 +37,28 @@ test('paginated mode logs a session when turning pages', async ({ page }) => {
     };
   }, { words: MOCK_WORDS, sections: MOCK_SECTIONS });
 
-  // Switch to paginated mode
-  await page.locator('button[title="Open Menu"]').click();
-  await page.locator('button:has-text("Page")').click();
+
   await expect(page.locator('[data-testid="paginated-reader"]')).toBeVisible();
 
-  // "Turn" some pages
+  // "Turn" a page - this MUST trigger a session save immediately per new specifications
   await page.locator('button[aria-label="Next page"]').click();
   await page.waitForTimeout(500);
+  
   await page.locator('button[aria-label="Next page"]').click();
   await page.waitForTimeout(500);
 
-  // Wait to exceed 5s session threshold
-  await page.waitForTimeout(5500);
+  // After 2 clicks, Next button should STILL be enabled
+  await expect(page.locator('button[aria-label="Next page"]')).toBeEnabled();
 
-  // Switch modes to trigger session save (Close Book seems to destroy context too fast for polling)
-  console.log('NODE: Switching to RSVP mode to trigger save...');
-  await page.locator('button[title="Open Menu"]').click();
+  // Clicking prev should also work!
+  await page.locator('button[aria-label="Previous page"]').click();
   await page.waitForTimeout(500);
-  await page.locator('button:has-text("RSVP")').click();
+  await expect(page.locator('button[aria-label="Next page"]')).toBeEnabled();
 
-  // Verify session was logged in Node context
+  // Verify session was logged in Node context JUST FROM TURNING THE PAGE
   await expect.poll(() => loggedSession, {
-    message: 'Session should be logged after mode switch',
-    timeout: 10000
+    message: 'Session should be logged instantaneously on page turn without needing mode switches',
+    timeout: 5000
   }).toBeTruthy();
 
   expect(loggedSession.type).toBe('paginated');

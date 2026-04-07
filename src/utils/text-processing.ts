@@ -5,6 +5,7 @@ export interface WordData {
   text: string;
   isParagraphStart: boolean;
   isSentenceStart: boolean;
+  isHeading?: boolean;
 }
 
 const BLOCK_TAGS = new Set([
@@ -67,6 +68,7 @@ export function extractWordsFromDoc(doc: Document): WordData[] {
   // The state of whether the NEXT flushed word should be a paragraph start.
   // Initially true.
   let markNextAsParagraphStart = true;
+  let inHeading = false;
 
   function flush() {
     if (!currentTextBuffer.trim()) {
@@ -94,7 +96,8 @@ export function extractWordsFromDoc(doc: Document): WordData[] {
       words.push({
         text: w,
         isParagraphStart: markNextAsParagraphStart && index === 0,
-        isSentenceStart: false // Post-process
+        isSentenceStart: false, // Post-process
+        isHeading: inHeading ? true : undefined
       });
     });
 
@@ -112,6 +115,7 @@ export function extractWordsFromDoc(doc: Document): WordData[] {
       const tagName = (node as Element).tagName.toUpperCase();
       const isBlock = BLOCK_TAGS.has(tagName);
       const isBr = tagName === 'BR';
+      const isHeadingTag = tagName.length === 2 && tagName.startsWith('H') && tagName >= 'H1' && tagName <= 'H6';
 
       if (isBlock || isBr) {
         // Before entering a block or hitting BR, flush whatever inline text preceded it
@@ -119,6 +123,7 @@ export function extractWordsFromDoc(doc: Document): WordData[] {
         flush();
         // Since we are hitting a block boundary, the next thing IS a paragraph start
         markNextAsParagraphStart = true;
+        if (isHeadingTag) inHeading = true;
       }
 
       node.childNodes.forEach(child => traverse(child));
@@ -128,6 +133,7 @@ export function extractWordsFromDoc(doc: Document): WordData[] {
         flush();
         // And content AFTER a block is also a new paragraph usually
         markNextAsParagraphStart = true;
+        if (isHeadingTag) inHeading = false;
       }
     }
   }
