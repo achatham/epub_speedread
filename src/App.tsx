@@ -318,7 +318,6 @@ function App() {
           if (s.ttsSpeed) settings.setTtsSpeed(s.ttsSpeed);
           if (s.autoLandscape !== undefined) settings.setAutoLandscape(s.autoLandscape);
           if (s.rsvp) settings.setRsvpSettings({ ...settings.rsvpSettings, ...s.rsvp });
-          if (s.readingMode) settings.setReadingMode(s.readingMode);
           if (s.paginatedFontSize) settings.setPaginatedFontSize(s.paginatedFontSize);
 
           if (s.onboardingCompleted) {

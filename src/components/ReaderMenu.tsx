@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   Menu, X, Minus, Plus, Settings, Settings2, BarChart2,
   Sun, Moon, Sunset, Volume2, Sparkles, SkipBack,
-  ChevronLeft, Loader2, Square, LogOut, Zap, BookOpen
+  ChevronLeft, Loader2, Square, LogOut
 } from 'lucide-react';
 import type { NavigationType } from '../utils/navigation';
 import { useSettingsStore } from '../stores/useSettingsStore';
@@ -29,7 +29,7 @@ export function ReaderMenu({
   const [activeTab, setActiveTab] = useState<'main' | 'toc' | 'nav'>('main');
   const activeChapterRef = useRef<HTMLButtonElement>(null);
 
-  const { wpm, setWpm, theme, toggleTheme, readingMode, setReadingMode } = useSettingsStore();
+  const { wpm, setWpm, theme, toggleTheme } = useSettingsStore();
   const { bookTitle, sections, setCurrentIndex, isReadingAloud, isSynthesizing, furthestIndex, words, currentIndex } = useReaderStore();
   const { setIsSettingsOpen, setIsBookSettingsOpen, setIsStatsOpen, setIsAskAiOpen } = useUIStore();
 
@@ -165,37 +165,6 @@ export function ReaderMenu({
                   onClick={() => { setIsAskAiOpen(true); setIsOpen(false); }}
                   hoverClass={itemHover}
                 />
-              </div>
-
-              {/* Reading Mode Toggle */}
-              <div className="flex flex-col gap-2">
-                <span className="text-[10px] uppercase font-bold tracking-widest opacity-50">Reading Mode</span>
-                <div className={`flex rounded-xl border overflow-hidden ${theme === 'bedtime' ? 'border-zinc-800' : 'border-zinc-200 dark:border-zinc-700'}`}>
-                  <button
-                    onClick={() => { setReadingMode('rsvp'); setIsOpen(false); }}
-                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold transition-colors
-                      ${readingMode === 'rsvp'
-                        ? (theme === 'bedtime' ? 'bg-amber-700 text-stone-100' : 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900')
-                        : (theme === 'bedtime' ? 'text-stone-400 hover:bg-zinc-900' : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800')
-                      }`}
-                    title="Speed reading (RSVP)"
-                  >
-                    <Zap size={14} />
-                    RSVP
-                  </button>
-                  <button
-                    onClick={() => { setReadingMode('paginated'); setIsOpen(false); }}
-                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold transition-colors
-                      ${readingMode === 'paginated'
-                        ? (theme === 'bedtime' ? 'bg-amber-700 text-stone-100' : 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900')
-                        : (theme === 'bedtime' ? 'text-stone-400 hover:bg-zinc-900' : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800')
-                      }`}
-                    title="Paginated reading"
-                  >
-                    <BookOpen size={14} />
-                    Page
-                  </button>
-                </div>
               </div>
 
               {/* Sub-menu Triggers */}

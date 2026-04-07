@@ -19,12 +19,6 @@ test('paginated mode renders reading area and controls', async ({ page }) => {
     (window as any).__loadMockWords(words, sections);
   }, { words: MOCK_WORDS, sections: MOCK_SECTIONS });
 
-  // Open menu and switch to paginated mode
-  await page.locator('button[title="Open Menu"]').click();
-  await expect(page.locator('button:has-text("RSVP")')).toBeVisible();
-  await expect(page.locator('button:has-text("Page")')).toBeVisible();
-  await page.locator('button:has-text("Page")').click();
-  // Menu closes automatically on mode switch
 
   // Paginated reader should now be visible
   const reader = page.locator('[data-testid="paginated-reader"]');
@@ -49,8 +43,6 @@ test('reading area is bounded — text does not overlap controls', async ({ page
     (window as any).__loadMockWords(words, sections);
   }, { words: MOCK_WORDS, sections: MOCK_SECTIONS });
 
-  await page.locator('button[title="Open Menu"]').click();
-  await page.locator('button:has-text("Page")').click();
   await page.locator('[data-testid="paginated-reader"]').waitFor({ state: 'visible' });
 
   const readingArea = page.locator('[data-testid="paginated-reading-area"]');
@@ -75,8 +67,6 @@ test('page navigation advances and retreats word index', async ({ page }) => {
     (window as any).__loadMockWords(words, sections);
   }, { words: MOCK_WORDS, sections: MOCK_SECTIONS });
 
-  await page.locator('button[title="Open Menu"]').click();
-  await page.locator('button:has-text("Page")').click();
   await page.locator('[data-testid="paginated-reader"]').waitFor({ state: 'visible' });
 
   const readingArea = page.locator('[data-testid="paginated-reading-area"]');
@@ -114,8 +104,6 @@ test('font size controls change displayed size', async ({ page }) => {
     (window as any).__loadMockWords(words, sections);
   }, { words: MOCK_WORDS, sections: MOCK_SECTIONS });
 
-  await page.locator('button[title="Open Menu"]').click();
-  await page.locator('button:has-text("Page")').click();
   await page.locator('[data-testid="paginated-reader"]').waitFor({ state: 'visible' });
 
   const readingArea = page.locator('[data-testid="paginated-reading-area"]');
@@ -148,8 +136,6 @@ test('keyboard navigation works in paginated mode', async ({ page }) => {
     (window as any).__loadMockWords(words, sections);
   }, { words: MOCK_WORDS, sections: MOCK_SECTIONS });
 
-  await page.locator('button[title="Open Menu"]').click();
-  await page.locator('button:has-text("Page")').click();
   await page.locator('[data-testid="paginated-reader"]').waitFor({ state: 'visible' });
 
   const readingArea = page.locator('[data-testid="paginated-reading-area"]');
@@ -173,27 +159,7 @@ test('keyboard navigation works in paginated mode', async ({ page }) => {
   expect(backText).toBe(firstText);
 });
 
-test('mode toggle in menu switches between RSVP and paginated', async ({ page }) => {
-  await page.goto('/');
-  await page.waitForFunction(() => typeof (window as any).__loadMockWords === 'function');
-  await page.evaluate(({ words, sections }: any) => {
-    (window as any).__loadMockWords(words, sections);
-  }, { words: MOCK_WORDS, sections: MOCK_SECTIONS });
-
-  // Initially in RSVP mode — FAB visible
-  await expect(page.locator('button[title="Open Menu"]')).toBeVisible();
-
-  // Switch to paginated (menu auto-closes)
-  await page.locator('button[title="Open Menu"]').click();
-  await page.locator('button:has-text("Page")').click();
-  await page.locator('[data-testid="paginated-reader"]').waitFor({ state: 'visible' });
-
-  // Switch back to RSVP (menu auto-closes)
-  await page.locator('button[title="Open Menu"]').click();
-  await page.locator('button:has-text("RSVP")').click();
-  await expect(page.locator('button[title="Open Menu"]')).toBeVisible();
-});
-
+// Only one consolidated mode now
 test('paginated mode screenshot', async ({ page }) => {
   await page.goto('/');
   await page.waitForFunction(() => typeof (window as any).__loadMockWords === 'function');
@@ -225,8 +191,7 @@ test('paginated mode screenshot', async ({ page }) => {
     (window as any).__loadMockWords(words, [{ label: 'Chapter One', startIndex: 0 }]);
   }, storyWordObjs);
 
-  await page.locator('button[title="Open Menu"]').click();
-  await page.locator('button:has-text("Page")').click();
+
 
   const reader = page.locator('[data-testid="paginated-reader"]');
   await expect(reader).toBeVisible();
@@ -289,9 +254,7 @@ The hallway smelt of boiled cabbage and old rag mats. At one end of it a coloure
     (window as any).__loadMockWords(words, [{ label: 'Chapter One', startIndex: 0 }]);
   }, storyWords);
 
-  // Switch to paginated mode
-  await page.locator('button[title="Open Menu"]').click();
-  await page.locator('button:has-text("Page")').click();
+
 
   const reader = page.locator('[data-testid="paginated-reader"]');
   await expect(reader).toBeVisible();

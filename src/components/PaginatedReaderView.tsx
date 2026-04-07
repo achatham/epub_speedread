@@ -120,7 +120,6 @@ export function PaginatedReaderView({
     }
 
     const endIdx = layoutState.start + firstOverflow;
-    console.log(`[PaginatedReaderView] Measured layout: words idx ${layoutState.start}-${endIdx} visually fits inside ${areaDims.w}x${areaDims.h}`);
     setLayoutState(prev => ({ start: prev.start, end: endIdx }));
   }, [layoutState, currentIndex, areaDims, words, isPlaying, isPageValid, setLayoutState]);
 
