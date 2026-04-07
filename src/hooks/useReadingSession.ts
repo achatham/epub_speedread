@@ -175,6 +175,7 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
             paginatedSessionStartTimeRef.current = null;
             paginatedWordsReadRef.current = 0;
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [readingMode, isPlaying, isReadingAloud, currentBookId, storageProvider, bookTitle, setSessions]);
 
     // Track Paginated Words Read
