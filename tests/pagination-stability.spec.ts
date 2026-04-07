@@ -38,6 +38,8 @@ test('pagination stability: no words are skipped when paging forward and back', 
   // Helper to get current word range
   const getRange = async () => {
     const readingArea = page.locator('[data-testid="paginated-reading-area"]');
+    // Wait for layout measurement to be complete
+    await expect(readingArea).toHaveAttribute('data-is-measuring', 'false');
     const spans = readingArea.locator('span[data-word-idx]');
     const count = await spans.count();
     if (count === 0) return { start: -1, end: -1 };

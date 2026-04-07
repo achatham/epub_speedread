@@ -113,7 +113,7 @@ export interface ProgressTrendPoint {
   index: number;
   time: number;
   hasActivity: boolean;
-  type?: 'reading' | 'listening';
+  type?: 'reading' | 'listening' | 'rsvp' | 'paginated';
 }
 
 export function getBookProgressTrendData(

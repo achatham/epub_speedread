@@ -291,6 +291,7 @@ export function PaginatedReaderView({
         className={`flex-1 min-h-0 overflow-hidden border-b ${borderColor} relative
           ${isPlaying && readingMode === 'rsvp' ? 'flex items-center justify-center' : ''}`}
         data-testid="paginated-reading-area"
+        data-is-measuring={isMeasuring}
         onClick={() => {
           if (Date.now() - lastPauseTimeRef.current < 400) return;
           if (!isPlaying && readingMode === 'rsvp') handleSetIsPlaying(true);
