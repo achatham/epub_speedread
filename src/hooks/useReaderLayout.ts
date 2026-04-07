@@ -5,7 +5,6 @@ import { computePageEndIndex } from '../utils/layout';
 interface UseReaderLayoutProps {
   currentIndex: number;
   isPlaying: boolean;
-  readingMode: 'paginated' | 'rsvp';
   words: WordData[];
   sections: { startIndex: number; label: string }[];
   areaDims: { w: number; h: number } | null;
@@ -18,7 +17,6 @@ interface UseReaderLayoutProps {
 export function useReaderLayout({
   currentIndex,
   isPlaying,
-  readingMode,
   words,
   sections,
   areaDims,
@@ -53,9 +51,6 @@ export function useReaderLayout({
   // Synchronous reset for layout coordination
   useLayoutEffect(() => {
     if (!isPlaying) {
-      if (readingMode === 'paginated' && layoutState.start !== currentIndex) {
-        setLayoutState({ start: currentIndex, end: null });
-      } else if (readingMode === 'rsvp') {
         let activeChapterIdxLocal = -1;
         for (let i = 0; i < sections.length; i++) {
           if (sections[i].startIndex <= currentIndex) activeChapterIdxLocal = i;
@@ -88,10 +83,9 @@ export function useReaderLayout({
         if (layoutState.start !== desiredStart && (justPaused || expectedIndexRef.current !== currentIndex)) {
            setLayoutState({ start: desiredStart, end: null });
         }
-      }
     }
     prevIsPlayingRef.current = isPlaying;
-  }, [isPlaying, readingMode, layoutState.start, currentIndex, sections, areaDims, lineHeight, fontSize, fontFamilyStr, words]);
+  }, [isPlaying, layoutState.start, currentIndex, sections, areaDims, lineHeight, fontSize, fontFamilyStr, words]);
 
   const navigateNextPage = useCallback(() => {
     if (layoutState.end !== null && layoutState.end < words.length) {
