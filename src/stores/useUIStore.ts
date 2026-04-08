@@ -8,6 +8,7 @@ interface UIState {
   isTtsDebugOpen: boolean;
   isOnboardingOpen: boolean;
   isBookSettingsOpen: boolean;
+  isLogsOpen: boolean;
   
   aiTab: 'ask' | 'illustrate';
   aiQuestion: string;
@@ -30,6 +31,7 @@ interface UIState {
   setIsTtsDebugOpen: (open: boolean) => void;
   setIsOnboardingOpen: (open: boolean) => void;
   setIsBookSettingsOpen: (open: boolean) => void;
+  setIsLogsOpen: (open: boolean) => void;
 
   setAiTab: (tab: 'ask' | 'illustrate') => void;
   setAiQuestion: (q: string) => void;
@@ -54,6 +56,7 @@ export const useUIStore = create<UIState>((set) => ({
   isTtsDebugOpen: false,
   isOnboardingOpen: false,
   isBookSettingsOpen: false,
+  isLogsOpen: false,
 
   aiTab: 'ask',
   aiQuestion: '',
@@ -76,6 +79,7 @@ export const useUIStore = create<UIState>((set) => ({
   setIsTtsDebugOpen: (open) => set({ isTtsDebugOpen: open }),
   setIsOnboardingOpen: (open) => set({ isOnboardingOpen: open }),
   setIsBookSettingsOpen: (open) => set({ isBookSettingsOpen: open }),
+  setIsLogsOpen: (open) => set({ isLogsOpen: open }),
 
   setAiTab: (tab) => set({ aiTab: tab }),
   setAiQuestion: (q) => set({ aiQuestion: q }),

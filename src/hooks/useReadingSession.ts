@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { FirestoreStorage } from '../utils/storage';
 import { calculateRsvpMultiplier } from '../utils/text-processing';
 import { useReaderStore } from '../stores/useReaderStore';
@@ -31,6 +31,40 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
     const lastPaginatedSaveTimeRef = useRef<number>(0);
     const paginatedBookIdRef = useRef<string | null>(null);
     const paginatedBookTitleRef = useRef<string>('');
+
+    const [isDocumentVisible, setIsDocumentVisible] = useState(document.visibilityState === 'visible');
+    const lastInteractionTimeRef = useRef<number>(Date.now());
+    const paginatedAccumulatedDurationMsRef = useRef<number>(0);
+
+    const IDLE_BUFFER_MS = 300000; // 5 minutes
+
+    const getEffectivePaginatedDurationMs = () => {
+        if (paginatedSessionStartTimeRef.current === null) return paginatedAccumulatedDurationMsRef.current;
+        const now = Date.now();
+        const cappedEndTime = Math.min(now, lastInteractionTimeRef.current + IDLE_BUFFER_MS);
+        const segmentDuration = Math.max(0, cappedEndTime - paginatedSessionStartTimeRef.current);
+        return paginatedAccumulatedDurationMsRef.current + segmentDuration;
+    };
+
+    // Track Document Visibility
+    useEffect(() => {
+        const handler = () => setIsDocumentVisible(document.visibilityState === 'visible');
+        document.addEventListener('visibilitychange', handler);
+        return () => document.removeEventListener('visibilitychange', handler);
+    }, []);
+
+    // Track Global Interactions
+    useEffect(() => {
+        const handler = () => {
+            lastInteractionTimeRef.current = Date.now();
+        };
+        window.addEventListener('pointerdown', handler, true);
+        window.addEventListener('keydown', handler, true);
+        return () => {
+            window.removeEventListener('pointerdown', handler, true);
+            window.removeEventListener('keydown', handler, true);
+        };
+    }, []);
 
     // Keep title refs synced after async book processing
     useEffect(() => {
@@ -162,22 +196,35 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
 
     // Track Paginated Session Lifecycle
     useEffect(() => {
-        const isPaginatedActive = !isPlaying && !isReadingAloud && !!currentBookId;
+        const isPaginatedMode = !isPlaying && !isReadingAloud && !!currentBookId;
+        const isPaginatedTrulyActive = isPaginatedMode && isDocumentVisible;
 
-        if (isPaginatedActive && paginatedSessionStartTimeRef.current === null) {
+        if (isPaginatedTrulyActive && paginatedSessionStartTimeRef.current === null) {
+            // Starting or Resuming active segment
             paginatedSessionStartTimeRef.current = Date.now();
-            paginatedWordsReadRef.current = 0;
-            paginatedSessionStartIndexRef.current = currentIndex;
-            lastPaginatedIndexRef.current = currentIndex;
-            lastPaginatedSaveTimeRef.current = Date.now();
-            paginatedBookIdRef.current = currentBookId;
-            paginatedBookTitleRef.current = bookTitle;
-        } else if (!isPaginatedActive && paginatedSessionStartTimeRef.current !== null && storageProvider && paginatedBookIdRef.current) {
-            const durationMs = Date.now() - paginatedSessionStartTimeRef.current;
-            const wordsRead = paginatedWordsReadRef.current;
+            lastInteractionTimeRef.current = Date.now();
 
-            if (durationMs > 0 && wordsRead > 0) {
-                const durationSeconds = Math.round(durationMs / 1000);
+            // If this is a fresh start (not just a visibility resume), reset stats
+            if (paginatedBookIdRef.current !== currentBookId) {
+                paginatedWordsReadRef.current = 0;
+                paginatedSessionStartIndexRef.current = currentIndex;
+                lastPaginatedIndexRef.current = currentIndex;
+                lastPaginatedSaveTimeRef.current = Date.now();
+                paginatedBookIdRef.current = currentBookId;
+                paginatedBookTitleRef.current = bookTitle;
+                paginatedAccumulatedDurationMsRef.current = 0;
+            }
+        } else if ((!isPaginatedTrulyActive || (paginatedBookIdRef.current !== currentBookId)) && paginatedSessionStartTimeRef.current !== null) {
+            // Pausing or Stopping active segment
+            const segmentDurationMs = Math.max(0, Math.min(Date.now(), lastInteractionTimeRef.current + IDLE_BUFFER_MS) - paginatedSessionStartTimeRef.current);
+            paginatedAccumulatedDurationMsRef.current += segmentDurationMs;
+
+            // If mode/book changed, log what we have and reset
+            const isFinishingSession = !isPaginatedMode || (paginatedBookIdRef.current !== currentBookId);
+            if (isFinishingSession && storageProvider && paginatedBookIdRef.current && paginatedWordsReadRef.current > 0) {
+                const wordsRead = paginatedWordsReadRef.current;
+                const totalDurationMs = paginatedAccumulatedDurationMsRef.current;
+                const durationSeconds = Math.round(totalDurationMs / 1000);
                 console.log(`[Paginated Session] Finished:
 - Duration: ${durationSeconds}s
 - Words: ${wordsRead}`);
@@ -186,7 +233,7 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
                 storageProvider.logReadingSession({
                     bookId: savedBookId,
                     bookTitle: paginatedBookTitleRef.current,
-                    startTime: paginatedSessionStartTimeRef.current,
+                    startTime: Date.now() - totalDurationMs, // Approximate
                     endTime: Date.now(),
                     durationSeconds,
                     startWordIndex: paginatedSessionStartIndexRef.current || 0,
@@ -201,7 +248,7 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
                     if (bookRecord) {
                         const cumulativeWords = (bookRecord.progress.cumulativeWordsRead || 0) + wordsRead;
                         const cumulativeExpected = (bookRecord.progress.cumulativeExpectedWords || 0) + wordsRead;
-                        const cumulativeDuration = (bookRecord.progress.cumulativeDurationSeconds || 0) + Math.round(durationMs / 1000);
+                        const cumulativeDuration = (bookRecord.progress.cumulativeDurationSeconds || 0) + Math.round(totalDurationMs / 1000);
 
                         await storageProvider.updateBookStats(savedBookId, {
                             cumulativeWordsRead: cumulativeWords,
@@ -220,26 +267,39 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
                         } : b));
                     }
                 }).catch(err => console.error("Failed to save paginated session", err));
+
+                // Reset stats as the session is officially finished
+                paginatedWordsReadRef.current = 0;
+                paginatedBookIdRef.current = null;
+                paginatedAccumulatedDurationMsRef.current = 0;
+            } else if (isFinishingSession) {
+                // Mode/Book changed but not enough words to log, still reset
+                paginatedWordsReadRef.current = 0;
+                paginatedBookIdRef.current = null;
+                paginatedAccumulatedDurationMsRef.current = 0;
             }
+
             paginatedSessionStartTimeRef.current = null;
-            paginatedWordsReadRef.current = 0;
-            paginatedBookIdRef.current = null;
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isPlaying, isReadingAloud, currentBookId, storageProvider, bookTitle, setSessions]);
+    }, [isPlaying, isReadingAloud, currentBookId, storageProvider, bookTitle, setSessions, isDocumentVisible]);
 
     // Track Paginated Words Read
     useEffect(() => {
-        const isPaginatedActive = !isPlaying && !isReadingAloud && !!currentBookId;
+        const isPaginatedActive = !isPlaying && !isReadingAloud && !!currentBookId && isDocumentVisible;
         if (!isPaginatedActive) return;
 
         let didTurnPage = false;
-        if (currentIndex > lastPaginatedIndexRef.current) {
-            const delta = currentIndex - lastPaginatedIndexRef.current;
-            // Sanity check: if they jump more than 2000 words (approx 6-7 pages), it's probably a seek, not a page turn
-            if (delta < 2000) {
-                paginatedWordsReadRef.current += delta;
-                didTurnPage = true;
+        if (currentIndex !== lastPaginatedIndexRef.current) {
+            lastInteractionTimeRef.current = Date.now();
+
+            if (currentIndex > lastPaginatedIndexRef.current) {
+                const delta = currentIndex - lastPaginatedIndexRef.current;
+                // Sanity check: if they jump more than 2000 words (approx 6-7 pages), it's probably a seek, not a page turn
+                if (delta < 2000) {
+                    paginatedWordsReadRef.current += delta;
+                    didTurnPage = true;
+                }
             }
         }
         lastPaginatedIndexRef.current = currentIndex;
@@ -248,7 +308,7 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
         const now = Date.now();
         const timeSinceLastSave = now - lastPaginatedSaveTimeRef.current;
         if (paginatedSessionStartTimeRef.current && (didTurnPage || timeSinceLastSave > 60000) && storageProvider && paginatedBookIdRef.current) {
-            const durationMs = now - paginatedSessionStartTimeRef.current;
+            const durationMs = getEffectivePaginatedDurationMs();
             const wordsRead = paginatedWordsReadRef.current;
             if (wordsRead > 0) {
                 const durationSeconds = Math.round(durationMs / 1000);
@@ -260,7 +320,7 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
                 storageProvider.logReadingSession({
                     bookId: savedBookId,
                     bookTitle: paginatedBookTitleRef.current,
-                    startTime: paginatedSessionStartTimeRef.current,
+                    startTime: Date.now() - durationMs,
                     endTime: Date.now(),
                     durationSeconds,
                     startWordIndex: paginatedSessionStartIndexRef.current || 0,
@@ -299,9 +359,10 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
                 lastPaginatedSaveTimeRef.current = now;
                 paginatedSessionStartIndexRef.current = currentIndex;
                 paginatedWordsReadRef.current = 0;
+                paginatedAccumulatedDurationMsRef.current = 0;
             }
         }
-    }, [currentIndex, isPlaying, isReadingAloud, currentBookId, storageProvider, bookTitle, library, setLibrary, setSessions]);
+    }, [currentIndex, isPlaying, isReadingAloud, currentBookId, storageProvider, bookTitle, library, setLibrary, setSessions, isDocumentVisible]);
 
     return {};
 }
