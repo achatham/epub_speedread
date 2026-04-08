@@ -1,0 +1,53 @@
+
+Running 4 tests using 4 workers
+
+  ✓  3 [chromium] › tests\eink-mode.spec.ts:43:3 › E-Ink High Contrast Modes › should render pure B&W in Light Mode (3.3s)
+  ✓  4 [chromium] › tests\eink-mode.spec.ts:14:3 › E-Ink High Contrast Modes › should render inverted B&W in Dark Mode (3.1s)
+  ✘  1 [chromium] › tests\eink-mode.spec.ts:70:3 › E-Ink High Contrast Modes › should render High Contrast Paginated Mode (30.1s)
+  ✘  2 [chromium] › tests\eink-mode.spec.ts:96:3 › E-Ink High Contrast Modes › should render High Contrast RSVP Mode (30.1s)
+
+
+  1) [chromium] › tests\eink-mode.spec.ts:70:3 › E-Ink High Contrast Modes › should render High Contrast Paginated Mode 
+
+    [31mTest timeout of 30000ms exceeded.[39m
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+    [2m  - waiting for getByText('THEME', { exact: true })[22m
+
+
+      89 |     // Toggle theme
+      90 |     await page.getByRole('button', { name: 'Open Menu' }).click();
+    > 91 |     await page.getByText('THEME', { exact: true }).click();
+         |                                                    ^
+      92 |     await page.waitForTimeout(500); // Wait for transition
+      93 |     await page.screenshot({ path: 'tests/screenshots/eink-paginated-dark.png' });
+      94 |   });
+        at C:\Users\andre\src\epub_speedread\epub_speedread\tests\eink-mode.spec.ts:91:52
+
+    Error Context: test-results\eink-mode-E-Ink-High-Contr-0451e-igh-Contrast-Paginated-Mode-chromium\error-context.md
+
+  2) [chromium] › tests\eink-mode.spec.ts:96:3 › E-Ink High Contrast Modes › should render High Contrast RSVP Mode 
+
+    [31mTest timeout of 30000ms exceeded.[39m
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+    [2m  - waiting for getByText('THEME', { exact: true })[22m
+
+
+      115 |     // Toggle theme
+      116 |     await page.getByRole('button', { name: 'Open Menu' }).click();
+    > 117 |     await page.getByText('THEME', { exact: true }).click();
+          |                                                    ^
+      118 |     await page.waitForTimeout(500);
+      119 |     await page.screenshot({ path: 'tests/screenshots/eink-rsvp-dark.png' });
+      120 |   });
+        at C:\Users\andre\src\epub_speedread\epub_speedread\tests\eink-mode.spec.ts:117:52
+
+    Error Context: test-results\eink-mode-E-Ink-High-Contr-0ad60-der-High-Contrast-RSVP-Mode-chromium\error-context.md
+
+  2 failed
+    [chromium] › tests\eink-mode.spec.ts:70:3 › E-Ink High Contrast Modes › should render High Contrast Paginated Mode 
+    [chromium] › tests\eink-mode.spec.ts:96:3 › E-Ink High Contrast Modes › should render High Contrast RSVP Mode 
+  2 passed (33.9s)

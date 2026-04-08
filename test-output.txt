@@ -1,0 +1,27 @@
+
+Running 2 tests using 2 workers
+
+[1A[2K[1/2] [chromium] › tests\eink-mode.spec.ts:42:3 › E-Ink High Contrast Modes › should render pure B&W in Light Mode
+[1A[2K[2/2] [chromium] › tests\eink-mode.spec.ts:7:3 › E-Ink High Contrast Modes › should render inverted B&W in Dark Mode
+[1A[2K  1) [chromium] › tests\eink-mode.spec.ts:7:3 › E-Ink High Contrast Modes › should render inverted B&W in Dark Mode 
+
+    Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoContain[2m([22m[32mexpected[39m[2m) // indexOf[22m
+
+    Expected substring: [32m"dark"[39m
+    Received string:    [31m"eink"[39m
+
+      37 |     const htmlClasses = await page.evaluate(() => document.documentElement.className);
+      38 |     expect(htmlClasses).toContain('eink');
+    > 39 |     expect(htmlClasses).toContain('dark');
+         |                         ^
+      40 |   });
+      41 |
+      42 |   test('should render pure B&W in Light Mode', async ({ page }) => {
+        at C:\Users\andre\src\epub_speedread\epub_speedread\tests\eink-mode.spec.ts:39:25
+
+    Error Context: test-results\eink-mode-E-Ink-High-Contr-589f0-r-inverted-B-W-in-Dark-Mode-chromium\error-context.md
+
+
+[1A[2K  1 failed
+    [chromium] › tests\eink-mode.spec.ts:7:3 › E-Ink High Contrast Modes › should render inverted B&W in Dark Mode 
+  1 passed (56.1s)

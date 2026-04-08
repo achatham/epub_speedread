@@ -35,3 +35,127 @@ body {
 #root {
   width: 100%;
 }
+
+/* E-Ink High Contrast Overrides (Light Mode) */
+html.eink:not(.dark) {
+  /* Provide a pure B&W environment */
+  background-color: #FFFFFF !important;
+  color: #000000 !important;
+}
+
+html.eink:not(.dark) body, html.eink:not(.dark) #root {
+  background-color: #FFFFFF !important;
+  color: #000000 !important;
+}
+
+html.eink:not(.dark) * {
+  border-color: #000000 !important;
+  box-shadow: none !important;
+}
+
+/* Target all text elements */
+html.eink:not(.dark) *:not(svg):not(path):not(circle):not(rect):not(polygon):not(line):not(polyline):not(g) {
+  color: #000000 !important;
+}
+
+/* Fix any backgrounds that should be white (cards, popovers, hovering, light grays) */
+html.eink:not(.dark) .bg-white,
+html.eink:not(.dark) .bg-zinc-50,
+html.eink:not(.dark) .bg-zinc-100,
+html.eink:not(.dark) .bg-zinc-200,
+html.eink:not(.dark) .bg-zinc-300,
+html.eink:not(.dark) .bg-gray-100,
+html.eink:not(.dark) .bg-gray-200 {
+  background-color: #FFFFFF !important;
+}
+
+/* Force dark buttons and progress bars to be pure black */
+html.eink:not(.dark) .bg-zinc-700,
+html.eink:not(.dark) .bg-zinc-800,
+html.eink:not(.dark) .bg-zinc-900,
+html.eink:not(.dark) .bg-zinc-950,
+html.eink:not(.dark) .bg-brand,
+html.eink:not(.dark) .bg-blue-500,
+html.eink:not(.dark) .bg-blue-600,
+html.eink:not(.dark) .bg-black,
+html.eink:not(.dark) [role="progressbar"],
+html.eink:not(.dark) .animate-progress {
+  background-color: #000000 !important;
+  color: #FFFFFF !important;
+}
+
+/* Force text inside those dark backgrounds to be white */
+html.eink:not(.dark) .bg-zinc-700 *:not(svg):not(path):not(circle):not(rect):not(polygon),
+html.eink:not(.dark) .bg-zinc-800 *:not(svg):not(path):not(circle):not(rect):not(polygon),
+html.eink:not(.dark) .bg-zinc-900 *:not(svg):not(path):not(circle):not(rect):not(polygon),
+html.eink:not(.dark) .bg-zinc-950 *:not(svg):not(path):not(circle):not(rect):not(polygon),
+html.eink:not(.dark) .bg-brand *:not(svg):not(path):not(circle):not(rect):not(polygon),
+html.eink:not(.dark) .bg-blue-500 *:not(svg):not(path):not(circle):not(rect):not(polygon),
+html.eink:not(.dark) .bg-blue-600 *:not(svg):not(path):not(circle):not(rect):not(polygon),
+html.eink:not(.dark) .bg-black *:not(svg):not(path):not(circle):not(rect):not(polygon),
+html.eink:not(.dark) [role="progressbar"] *:not(svg):not(path):not(circle):not(rect):not(polygon),
+html.eink:not(.dark) .animate-progress *:not(svg):not(path):not(circle):not(rect):not(polygon) {
+  color: #FFFFFF !important;
+}
+
+/* E-Ink High Contrast Overrides (Dark Mode) */
+html.eink.dark {
+  /* Provide an inverted pure B&W environment */
+  background-color: #000000 !important;
+  color: #FFFFFF !important;
+}
+
+html.eink.dark body, html.eink.dark #root {
+  background-color: #000000 !important;
+  color: #FFFFFF !important;
+}
+
+html.eink.dark * {
+  border-color: #FFFFFF !important;
+  box-shadow: none !important;
+}
+
+/* Target all text elements */
+html.eink.dark *:not(svg):not(path):not(circle):not(rect):not(polygon):not(line):not(polyline):not(g) {
+  color: #FFFFFF !important;
+}
+
+/* Fix any backgrounds that should be white (cards, popovers, hovering, light grays) */
+html.eink.dark .bg-white,
+html.eink.dark .bg-zinc-50,
+html.eink.dark .bg-zinc-100,
+html.eink.dark .bg-zinc-200,
+html.eink.dark .bg-zinc-300,
+html.eink.dark .bg-gray-100,
+html.eink.dark .bg-gray-200 {
+  background-color: #000000 !important;
+}
+
+/* Force dark buttons and progress bars to be pure black */
+html.eink.dark .bg-zinc-700,
+html.eink.dark .bg-zinc-800,
+html.eink.dark .bg-zinc-900,
+html.eink.dark .bg-zinc-950,
+html.eink.dark .bg-brand,
+html.eink.dark .bg-blue-500,
+html.eink.dark .bg-blue-600,
+html.eink.dark .bg-black,
+html.eink.dark [role="progressbar"],
+html.eink.dark .animate-progress {
+  background-color: #FFFFFF !important;
+  color: #000000 !important;
+}
+
+/* Force text inside those dark backgrounds to be white */
+html.eink.dark .bg-zinc-700 *:not(svg):not(path):not(circle):not(rect):not(polygon),
+html.eink.dark .bg-zinc-800 *:not(svg):not(path):not(circle):not(rect):not(polygon),
+html.eink.dark .bg-zinc-900 *:not(svg):not(path):not(circle):not(rect):not(polygon),
+html.eink.dark .bg-zinc-950 *:not(svg):not(path):not(circle):not(rect):not(polygon),
+html.eink.dark .bg-brand *:not(svg):not(path):not(circle):not(rect):not(polygon),
+html.eink.dark .bg-blue-500 *:not(svg):not(path):not(circle):not(rect):not(polygon),
+html.eink.dark .bg-blue-600 *:not(svg):not(path):not(circle):not(rect):not(polygon),
+html.eink.dark .bg-black *:not(svg):not(path):not(circle):not(rect):not(polygon),
+html.eink.dark [role="progressbar"] *:not(svg):not(path):not(circle):not(rect):not(polygon),
+html.eink.dark .animate-progress *:not(svg):not(path):not(circle):not(rect):not(polygon) {
+  color: #000000 !important;
+}

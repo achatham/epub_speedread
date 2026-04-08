@@ -25,6 +25,24 @@
           if (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches) {
             theme = 'dark';
           }
+
+          var isEink = /Onyx|BOOX |NoteArai|EInkBro/i.test(navigator.userAgent);
+          if (isEink) {
+            document.documentElement.classList.add('eink');
+            var bg = (theme === 'dark' || theme === 'bedtime') ? '#000' : '#fff';
+            if (bg === '#000') {
+              document.documentElement.classList.add('dark');
+            } else {
+              document.documentElement.classList.remove('dark');
+            }
+            document.documentElement.style.backgroundColor = bg;
+            document.querySelector('meta[name="theme-color"]').setAttribute('content', bg === '#000' ? '#000000' : '#ffffff');
+            document.addEventListener('DOMContentLoaded', function() {
+              document.body.style.backgroundColor = bg;
+            });
+            return;
+          }
+
           if (theme === 'dark' || theme === 'bedtime') {
             document.documentElement.classList.add('dark');
             var bg = theme === 'bedtime' ? '#000' : '#18181b';
