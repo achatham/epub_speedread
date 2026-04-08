@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useEffect, useRef, useMemo, useState, useCallback } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { ReaderMenu } from './ReaderMenu';
 import type { WordData } from '../utils/text-processing';
@@ -11,7 +11,6 @@ interface PaginatedReaderViewProps {
   currentIndex: number;
   setCurrentIndex: (index: number) => void;
   effectiveTotalWords: number;
-  realEndIndex: number | null;
   furthestIndex: number | null;
   wpm: number;
   onWpmChange: (wpm: number) => void;
@@ -59,12 +58,37 @@ export function PaginatedReaderView({
   readerMode,
   setReaderMode
 }: PaginatedReaderViewProps) {
-  const WORDS_PER_PAGE = 300;
   const containerRef = useRef<HTMLDivElement>(null);
   const currentWordRef = useRef<HTMLSpanElement>(null);
+  const [pageSize, setPageSize] = useState(300); // Default fallback
 
-  const pageStart = Math.floor(currentIndex / WORDS_PER_PAGE) * WORDS_PER_PAGE;
-  const pageEnd = Math.min(words.length, pageStart + WORDS_PER_PAGE);
+  // Estimate page size based on container dimensions
+  const updatePageSize = useCallback(() => {
+    if (!containerRef.current) return;
+
+    const { width, height } = containerRef.current.getBoundingClientRect();
+    const fontSize = parseFloat(getComputedStyle(containerRef.current).fontSize);
+    const lineHeight = parseFloat(getComputedStyle(containerRef.current).lineHeight);
+
+    // Average word width is roughly 4.5 * average character width
+    // Average char width is roughly 0.5 * fontSize for many fonts
+    const charsPerLine = width / (fontSize * 0.5);
+    const wordsPerLine = charsPerLine / 5.5; // Average word length + space
+    const linesPerPage = height / lineHeight;
+
+    const estimatedWords = Math.floor(wordsPerLine * linesPerPage);
+    // Sanity check: between 100 and 1000 words
+    setPageSize(Math.max(100, Math.min(1000, estimatedWords)));
+  }, [fontFamily, theme]);
+
+  useEffect(() => {
+    updatePageSize();
+    window.addEventListener('resize', updatePageSize);
+    return () => window.removeEventListener('resize', updatePageSize);
+  }, [updatePageSize]);
+
+  const pageStart = Math.floor(currentIndex / pageSize) * pageSize;
+  const pageEnd = Math.min(words.length, pageStart + pageSize);
   const pageWords = useMemo(() => words.slice(pageStart, pageEnd), [words, pageStart, pageEnd]);
 
   // Find current chapter
@@ -78,12 +102,12 @@ export function PaginatedReaderView({
   }
 
   const handlePrevPage = useCallback(() => {
-    setCurrentIndex(Math.max(0, pageStart - WORDS_PER_PAGE));
-  }, [pageStart, setCurrentIndex]);
+    setCurrentIndex(Math.max(0, pageStart - pageSize));
+  }, [pageStart, pageSize, setCurrentIndex]);
 
   const handleNextPage = useCallback(() => {
-    setCurrentIndex(Math.min(words.length - 1, pageStart + WORDS_PER_PAGE));
-  }, [pageStart, words.length, setCurrentIndex]);
+    setCurrentIndex(Math.min(words.length - 1, pageStart + pageSize));
+  }, [pageStart, words.length, pageSize, setCurrentIndex]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -100,7 +124,8 @@ export function PaginatedReaderView({
 
   useEffect(() => {
     if (currentWordRef.current && containerRef.current) {
-        currentWordRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Use 'auto' instead of 'smooth' to avoid ghosting on E-ink devices
+        currentWordRef.current.scrollIntoView({ behavior: 'auto', block: 'center' });
     }
   }, [currentIndex]);
 
@@ -140,7 +165,7 @@ export function PaginatedReaderView({
           </div>
         </div>
         <div className="text-xs opacity-50 tabular-nums">
-           Page {Math.floor(currentIndex / WORDS_PER_PAGE) + 1} of {Math.ceil(effectiveTotalWords / WORDS_PER_PAGE)}
+           Page {Math.floor(currentIndex / pageSize) + 1} of {Math.ceil(effectiveTotalWords / pageSize)}
         </div>
       </div>
 
@@ -188,12 +213,12 @@ export function PaginatedReaderView({
                const rect = e.currentTarget.getBoundingClientRect();
                const x = e.clientX - rect.left;
                const percentage = x / rect.width;
-               setCurrentIndex(Math.floor(percentage * words.length));
+               setCurrentIndex(Math.min(effectiveTotalWords - 1, Math.floor(percentage * effectiveTotalWords)));
              }}
            >
               <div
                 className={`h-full ${theme === 'bedtime' ? 'bg-amber-700' : 'bg-zinc-900 dark:bg-zinc-100'} transition-all`}
-                style={{ width: `${(currentIndex / words.length) * 100}%` }}
+                style={{ width: `${(currentIndex / effectiveTotalWords) * 100}%` }}
               />
            </div>
         </div>
