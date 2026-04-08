@@ -6,9 +6,21 @@ import { useLibraryStore } from '../stores/useLibraryStore';
 import { useSettingsStore } from '../stores/useSettingsStore';
 
 export function useReadingSession(storageProvider: FirestoreStorage | null) {
-    const { isPlaying, isHoldPaused, isChapterBreak, currentIndex, words, bookTitle, isReadingAloud } = useReaderStore();
-    const { library, setLibrary, setSessions, currentBookId } = useLibraryStore();
-    const { rsvpSettings, wpm } = useSettingsStore();
+    const isPlaying = useReaderStore(state => state.isPlaying);
+    const isHoldPaused = useReaderStore(state => state.isHoldPaused);
+    const isChapterBreak = useReaderStore(state => state.isChapterBreak);
+    const currentIndex = useReaderStore(state => state.currentIndex);
+    const words = useReaderStore(state => state.words);
+    const bookTitle = useReaderStore(state => state.bookTitle);
+    const isReadingAloud = useReaderStore(state => state.isReadingAloud);
+
+    const library = useLibraryStore(state => state.library);
+    const setLibrary = useLibraryStore(state => state.setLibrary);
+    const setSessions = useLibraryStore(state => state.setSessions);
+    const currentBookId = useLibraryStore(state => state.currentBookId);
+
+    const rsvpSettings = useSettingsStore(state => state.rsvpSettings);
+    const wpm = useSettingsStore(state => state.wpm);
 
     // RSVP Session Refs
     const sessionStartTimeRef = useRef<number | null>(null);

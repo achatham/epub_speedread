@@ -26,9 +26,21 @@ export function AuthenticatedApp({
     handleSelectBook, handleDeleteBook, handleToggleArchive, handleFileUpload, fileInputRef,
     onFileInputClick, handleLoadDemoBook, setShowAbout, storageProvider, handleCloseBook, navigate, audioPlayerRef, handleSetIsPlaying
 }: AuthenticatedAppProps) {
-    const { isChapterBreak, words, sections, currentIndex, bookTitle, setIsSynthesizing, setIsReadingAloud, setIsPlaying, setCurrentIndex } = useReaderStore();
-    const { currentBookId, setSessions } = useLibraryStore();
-    const { wpm, ttsSpeed } = useSettingsStore();
+    const isChapterBreak = useReaderStore(state => state.isChapterBreak);
+    const words = useReaderStore(state => state.words);
+    const sections = useReaderStore(state => state.sections);
+    const currentIndex = useReaderStore(state => state.currentIndex);
+    const bookTitle = useReaderStore(state => state.bookTitle);
+    const setIsSynthesizing = useReaderStore(state => state.setIsSynthesizing);
+    const setIsReadingAloud = useReaderStore(state => state.setIsReadingAloud);
+    const setIsPlaying = useReaderStore(state => state.setIsPlaying);
+    const setCurrentIndex = useReaderStore(state => state.setCurrentIndex);
+
+    const currentBookId = useLibraryStore(state => state.currentBookId);
+    const setSessions = useLibraryStore(state => state.setSessions);
+
+    const wpm = useSettingsStore(state => state.wpm);
+    const ttsSpeed = useSettingsStore(state => state.ttsSpeed);
 
     if (!currentBookId) {
         return (

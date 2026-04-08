@@ -11,7 +11,9 @@ export function useLibrary(
     isSettingsLoading: boolean,
     lastBookId: string | null | undefined
 ) {
-    const { setLibrary, setSessions, setIsLoadingLibrary } = useLibraryStore();
+    const setLibrary = useLibraryStore((state) => state.setLibrary);
+    const setSessions = useLibraryStore((state) => state.setSessions);
+    const setIsLoadingLibrary = useLibraryStore((state) => state.setIsLoadingLibrary);
     const hasAutoOpenedRef = useRef(false);
 
     // Initial Data Load
