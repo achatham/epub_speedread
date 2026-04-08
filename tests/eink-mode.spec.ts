@@ -33,7 +33,7 @@ test.describe('E-Ink High Contrast Modes', () => {
 
     await expect(page.getByText('Moby Dick')).toBeVisible();
 
-    await page.screenshot({ path: 'tests/screenshots/eink-dark-mode-library.png' });
+    await expect(page).toHaveScreenshot(['screenshots', 'eink-dark-mode-library.png']);
     
     const htmlClasses = await page.evaluate(() => document.documentElement.className);
     expect(htmlClasses).toContain('eink');
@@ -60,7 +60,7 @@ test.describe('E-Ink High Contrast Modes', () => {
     }, mockBooks);
 
     await expect(page.getByText('Moby Dick')).toBeVisible();
-    await page.screenshot({ path: 'tests/screenshots/eink-light-mode-library.png' });
+    await expect(page).toHaveScreenshot(['screenshots', 'eink-light-mode-library.png']);
 
     const htmlClasses = await page.evaluate(() => document.documentElement.className);
     expect(htmlClasses).toContain('eink');
@@ -84,7 +84,7 @@ test.describe('E-Ink High Contrast Modes', () => {
     await expect(page.getByText('Call me Ishmael.')).toBeVisible();
     
     // Switch to dark mode while in reader just to check contrast toggling
-    await page.screenshot({ path: 'tests/screenshots/eink-paginated-light.png' });
+    await expect(page).toHaveScreenshot(['screenshots', 'eink-paginated-light.png']);
     
     // Toggle theme
     await page.getByRole('button', { name: 'Open Menu' }).click();
@@ -92,7 +92,7 @@ test.describe('E-Ink High Contrast Modes', () => {
     // Close the menu before screenshot
     await page.mouse.click(10, 10);
     await page.waitForTimeout(500); // Wait for transition and menu close animation
-    await page.screenshot({ path: 'tests/screenshots/eink-paginated-dark.png' });
+    await expect(page).toHaveScreenshot(['screenshots', 'eink-paginated-dark.png']);
   });
 
   test('should render High Contrast RSVP Mode (Light)', async ({ page }) => {
@@ -119,7 +119,7 @@ test.describe('E-Ink High Contrast Modes', () => {
     const rsvpContainer = page.locator('.flex.w-full.items-baseline');
     await expect(rsvpContainer).toHaveText(/Call/);
 
-    await page.screenshot({ path: 'tests/screenshots/eink-rsvp-light.png' });
+    await expect(page).toHaveScreenshot(['screenshots', 'eink-rsvp-light.png']);
   });
 
   test('should render High Contrast RSVP Mode (Dark)', async ({ page }) => {
@@ -146,6 +146,6 @@ test.describe('E-Ink High Contrast Modes', () => {
     const rsvpContainer = page.locator('.flex.w-full.items-baseline');
     await expect(rsvpContainer).toHaveText(/Call/);
 
-    await page.screenshot({ path: 'tests/screenshots/eink-rsvp-dark.png' });
+    await expect(page).toHaveScreenshot(['screenshots', 'eink-rsvp-dark.png']);
   });
 });

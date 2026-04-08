@@ -32,7 +32,7 @@ test.describe('Mobile Orientation Layout', () => {
     // Verify we are in Library View
     await expect(page.getByRole('heading', { name: 'Library' })).toBeVisible();
 
-    await page.screenshot({ path: 'tests/screenshots/library-portrait.png' });
+    await expect(page).toHaveScreenshot(['screenshots', 'library-portrait.png']);
   });
 
   test('Library View - Landscape', async ({ page }) => {
@@ -52,7 +52,7 @@ test.describe('Mobile Orientation Layout', () => {
 
     await expect(page.getByRole('heading', { name: 'Library' })).toBeVisible();
 
-    await page.screenshot({ path: 'tests/screenshots/library-landscape.png' });
+    await expect(page).toHaveScreenshot(['screenshots', 'library-landscape.png']);
   });
 
   test('Reader View - Portrait', async ({ page }) => {
@@ -80,7 +80,7 @@ test.describe('Mobile Orientation Layout', () => {
     // Verify we are in Reader View by checking something else visible in portrait
     await expect(page.locator('button[title="Open Menu"]')).toBeVisible();
 
-    await page.screenshot({ path: 'tests/screenshots/reader-portrait.png' });
+    await expect(page).toHaveScreenshot(['screenshots', 'reader-portrait.png']);
   });
 
   test('Reader View - Landscape', async ({ page }) => {
@@ -104,7 +104,7 @@ test.describe('Mobile Orientation Layout', () => {
 
     await expect(page.locator('text=Chapter 1')).toBeVisible();
 
-    await page.screenshot({ path: 'tests/screenshots/reader-landscape.png' });
+    await expect(page).toHaveScreenshot(['screenshots', 'reader-landscape.png']);
   });
 
   test('Active Reading - Portrait', async ({ page }) => {
@@ -129,7 +129,7 @@ test.describe('Mobile Orientation Layout', () => {
     // Ensure the interface has cleaned up (Menu button should be gone in active mode)
     await expect(page.locator('button[title="Open Menu"]')).not.toBeVisible();
 
-    await page.screenshot({ path: 'tests/screenshots/active-reading-portrait.png' });
+    await expect(page).toHaveScreenshot(['screenshots', 'active-reading-portrait.png']);
   });
 
   test('Active Reading - Landscape', async ({ page }) => {
@@ -149,6 +149,6 @@ test.describe('Mobile Orientation Layout', () => {
     await expect(page.getByText('Active')).toBeVisible();
     await expect(page.locator('button[title="Open Menu"]')).not.toBeVisible();
 
-    await page.screenshot({ path: 'tests/screenshots/active-reading-landscape.png' });
+    await expect(page).toHaveScreenshot(['screenshots', 'active-reading-landscape.png']);
   });
 });

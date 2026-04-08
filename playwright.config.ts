@@ -7,6 +7,12 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   reporter: 'line',
+  expect: {
+    toHaveScreenshot: {
+      maxDiffPixelRatio: 0.05,
+    },
+  },
+  snapshotPathTemplate: '{testDir}/{arg}{ext}',
   use: {
     trace: 'on-first-retry',
     baseURL: 'http://localhost:5173',

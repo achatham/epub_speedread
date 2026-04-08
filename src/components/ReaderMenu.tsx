@@ -35,6 +35,21 @@ export function ReaderMenu({
 
   const effectiveTotalWords = words.length;
 
+  const nextChapterStart = sections[activeChapterIdx + 1]?.startIndex ?? words.length;
+  const wordsLeftChapter = Math.max(0, nextChapterStart - currentIndex);
+  const wordsLeftBook = Math.max(0, effectiveTotalWords - currentIndex);
+
+  const minutesLeftChapter = wordsLeftChapter / wpm;
+  const minutesLeftBook = wordsLeftBook / wpm;
+
+  const formatTimeLeft = (minutes: number) => {
+    if (minutes < 1) return '< 1 min';
+    const hrs = Math.floor(minutes / 60);
+    const mins = Math.floor(minutes % 60);
+    if (hrs > 0) return `${hrs}h ${mins}m`;
+    return `${mins} min`;
+  };
+
   // Reset to main tab when menu opens
   useEffect(() => {
     if (isOpen) {
@@ -122,6 +137,10 @@ export function ReaderMenu({
                   >
                     <Plus size={20} />
                   </button>
+                </div>
+                <div className="flex justify-between px-1 text-[11px] opacity-60 font-medium">
+                  <span>{formatTimeLeft(minutesLeftChapter)} remaining in chapter</span>
+                  <span>{formatTimeLeft(minutesLeftBook)} remaining in book</span>
                 </div>
               </div>
 

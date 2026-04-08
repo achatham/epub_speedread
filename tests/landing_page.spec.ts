@@ -21,5 +21,5 @@ test('verify landing page shows about content below login', async ({ page }) => 
   await expect(githubLink).toHaveAttribute('href', 'https://github.com/achatham/epub_speedread');
 
   // 6. Take screenshot
-  await page.screenshot({ path: 'tests/screenshots/landing-page.png', fullPage: true });
+  await expect(page).toHaveScreenshot(['screenshots', 'landing-page.png'], { fullPage: true });
 });

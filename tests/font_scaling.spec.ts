@@ -43,5 +43,5 @@ test('font size should remain stable for "accessibility;" within tolerance', asy
   expect(fontSizeLongWord).toBe(fontSizeNormal);
 
   // 7. Take a screenshot for visual verification of layout
-  await page.screenshot({ path: 'tests/layout-verification.png' });
+  await expect(page).toHaveScreenshot('layout-verification.png');
 });

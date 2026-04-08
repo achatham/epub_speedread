@@ -75,7 +75,7 @@ test('verify demo book cta styling', async ({ page }) => {
 
     
 
-      await page.screenshot({ path: 'tests/screenshots/demo-book-cta.png' });
+      await expect(page).toHaveScreenshot(['screenshots', 'demo-book-cta.png']);
 
     
 

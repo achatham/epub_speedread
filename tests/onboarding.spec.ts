@@ -25,7 +25,7 @@ test('verify onboarding modal appears for new users', async ({ page }) => {
   await expect(page.locator('text=Smart Completion')).toBeVisible();
 
   // Take screenshot of step 1
-  await page.screenshot({ path: 'tests/screenshots/onboarding-step-1.png' });
+  await expect(page).toHaveScreenshot(['screenshots', 'onboarding-step-1.png']);
 
   // Click "Get Started" to go to step 2
   await page.getByRole('button', { name: 'Get Started' }).click();
@@ -35,7 +35,7 @@ test('verify onboarding modal appears for new users', async ({ page }) => {
   await expect(page.locator('text=Is it free?')).toBeVisible();
 
   // Take screenshot of step 2
-  await page.screenshot({ path: 'tests/screenshots/onboarding-step-2.png' });
+  await expect(page).toHaveScreenshot(['screenshots', 'onboarding-step-2.png']);
 
   // Verify "Save & Continue" is disabled initially (empty key)
   const saveBtn = page.getByRole('button', { name: 'Save & Continue' });

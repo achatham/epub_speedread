@@ -199,7 +199,7 @@ test('paginated mode screenshot', async ({ page }) => {
   // Wait for layout to settle
   await page.waitForTimeout(500);
 
-  await page.screenshot({ path: 'tests/paginated-reader.png', fullPage: false });
+  await expect(page).toHaveScreenshot('paginated-reader.png', { fullPage: false });
 });
 
 test('RSVP paused view has bounded reading area', async ({ page }) => {
@@ -226,7 +226,7 @@ test('RSVP paused view has bounded reading area', async ({ page }) => {
 
   // The context text area is the center flex-1 div
   // Take a screenshot to visually verify
-  await page.screenshot({ path: 'tests/rsvp-paused-bounded.png' });
+  await expect(page).toHaveScreenshot('rsvp-paused-bounded.png');
 });
 
 test('page layout accurately computes end index with margin spacing without overflowing', async ({ page }) => {

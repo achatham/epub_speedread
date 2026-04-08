@@ -56,7 +56,7 @@ test('verify library with multiple books', async ({ page }) => {
   await expect(page.getByText('Archived Book')).not.toBeVisible();
 
   // Take screenshot of active books
-  await page.screenshot({ path: 'tests/screenshots/library-multi-books.png' });
+  await expect(page).toHaveScreenshot(['screenshots', 'library-multi-books.png']);
 
   // Switch to Archived tab
   await page.getByRole('button', { name: 'Archived' }).click();
@@ -64,5 +64,5 @@ test('verify library with multiple books', async ({ page }) => {
   await expect(page.getByText('The Great Gatsby')).not.toBeVisible();
 
   // Take screenshot of archived books
-  await page.screenshot({ path: 'tests/screenshots/library-archived-books.png' });
+  await expect(page).toHaveScreenshot(['screenshots', 'library-archived-books.png']);
 });

@@ -31,7 +31,7 @@ test('upload anon epub, render chapter titles bold and bound appropriately', asy
   await page.waitForTimeout(2000);
 
   // Take a screenshot of Chapter 1
-  await page.screenshot({ path: 'tests/screenshots/chapter-1-rendered-epub.png' });
+  await expect(page).toHaveScreenshot(['screenshots', 'chapter-1-rendered-epub.png']);
 
   // Verify the title is bold and correctly bounded
   const readingAreaText = page.locator('[data-testid="paginated-reading-area"]');
@@ -47,5 +47,5 @@ test('upload anon epub, render chapter titles bold and bound appropriately', asy
   }
 
   // Take a screenshot inside the chapter 
-  await page.screenshot({ path: 'tests/screenshots/chapter-middle-rendered-epub.png' });
+  await expect(page).toHaveScreenshot(['screenshots', 'chapter-middle-rendered-epub.png']);
 });
