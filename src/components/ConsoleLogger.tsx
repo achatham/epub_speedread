@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useUIStore } from '../stores/useUIStore';
 
 interface LogEntry {
   id: number;
@@ -9,7 +10,8 @@ interface LogEntry {
 
 export const ConsoleLogger: React.FC = () => {
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [isOpen, setIsOpen] = useState(false);
+  const isLogsOpen = useUIStore(state => state.isLogsOpen);
+  const setIsLogsOpen = useUIStore(state => state.setIsLogsOpen);
 
   useEffect(() => {
     const originalLog = console.log;
@@ -80,15 +82,8 @@ export const ConsoleLogger: React.FC = () => {
     };
   }, []);
 
-  if (!isOpen) {
-    return (
-      <button 
-        onClick={() => setIsOpen(true)}
-        className="fixed bottom-4 left-4 z-[9999] bg-black/50 text-white p-2 rounded-full text-[10px] opacity-20 hover:opacity-100 transition-opacity"
-      >
-        Logs
-      </button>
-    );
+  if (!isLogsOpen) {
+    return null;
   }
 
   return (
@@ -97,7 +92,7 @@ export const ConsoleLogger: React.FC = () => {
         <h3 className="font-bold">Debug Logs</h3>
         <div className="flex gap-2">
           <button onClick={() => setLogs([])} className="px-2 py-1 bg-zinc-200 dark:bg-zinc-800 rounded">Clear</button>
-          <button onClick={() => setIsOpen(false)} className="px-2 py-1 bg-zinc-200 dark:bg-zinc-800 rounded">Close</button>
+          <button onClick={() => setIsLogsOpen(false)} className="px-2 py-1 bg-zinc-200 dark:bg-zinc-800 rounded">Close</button>
         </div>
       </div>
       <div className="flex-1 overflow-y-auto space-y-2 border border-zinc-200 dark:border-zinc-800 p-2 rounded">
