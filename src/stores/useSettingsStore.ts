@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { DEFAULT_RSVP_SETTINGS, DEFAULT_PAGINATED_FONT_SIZE } from '../constants';
-import type { RsvpSettings } from '../utils/storage';
+import type { RsvpSettings, ReadingMode } from '../utils/storage';
 import { getGeminiApiKey, setGeminiApiKey as saveGeminiApiKey } from '../utils/gemini';
 import { getDeepgramApiKey, setDeepgramApiKey as saveDeepgramApiKey } from '../utils/deepgram';
 
@@ -18,6 +18,7 @@ interface SettingsState {
   fontFamily: FontFamily;
   rsvpSettings: RsvpSettings;
   paginatedFontSize: number;
+  readingMode: ReadingMode;
   lastBookId: string | null | undefined;
   onboardingCompleted: boolean;
   wpm: number;
@@ -32,6 +33,7 @@ interface SettingsState {
   setFontFamily: (family: FontFamily) => void;
   setRsvpSettings: (settings: Partial<RsvpSettings>) => void;
   setPaginatedFontSize: (size: number) => void;
+  setReadingMode: (mode: ReadingMode) => void;
   setLastBookId: (id: string | null) => void;
   setOnboardingCompleted: (completed: boolean) => void;
   setWpm: (wpm: number) => void;
@@ -56,6 +58,7 @@ export const useSettingsStore = create<SettingsState>()(
       fontFamily: 'system',
       rsvpSettings: DEFAULT_RSVP_SETTINGS,
       paginatedFontSize: DEFAULT_PAGINATED_FONT_SIZE,
+      readingMode: 'rsvp',
       lastBookId: undefined,
       onboardingCompleted: false,
       wpm: 300,
@@ -74,6 +77,7 @@ export const useSettingsStore = create<SettingsState>()(
       setFontFamily: (family) => set({ fontFamily: family }),
       setRsvpSettings: (settings) => set((state) => ({ rsvpSettings: { ...state.rsvpSettings, ...settings } })),
       setPaginatedFontSize: (size) => set({ paginatedFontSize: size }),
+      setReadingMode: (mode) => set({ readingMode: mode }),
       setLastBookId: (id) => set({ lastBookId: id }),
       setOnboardingCompleted: (completed) => set({ onboardingCompleted: completed }),
       setWpm: (wpm) => set({ wpm }),
