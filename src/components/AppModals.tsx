@@ -65,6 +65,7 @@ export function AppModals({
                 onSignIn={handleSignIn}
                 onSignOut={handleSignOut}
                 onSave={() => ui.setIsSettingsOpen(false)}
+                onViewLogs={() => { ui.setIsLogsOpen(true); ui.setIsSettingsOpen(false); }}
             />
 
             <OnboardingModal

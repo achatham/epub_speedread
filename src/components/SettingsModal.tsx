@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Minus, Plus, Type, LogIn, LogOut, Cloud, Settings2 } from 'lucide-react';
+import { X, Minus, Plus, Type, LogIn, LogOut, Cloud, Settings2, Terminal } from 'lucide-react';
 import type { User } from 'firebase/auth';
 import { type RsvpSettings } from '../utils/storage';
 import { type FontFamily } from '../stores/useSettingsStore';
@@ -25,6 +25,7 @@ interface SettingsModalProps {
   user?: User | null;
   onSignIn?: () => void;
   onSignOut?: () => void;
+  onViewLogs?: () => void;
 }
 
 export function SettingsModal({
@@ -47,7 +48,8 @@ export function SettingsModal({
   onSave,
   user,
   onSignIn,
-  onSignOut
+  onSignOut,
+  onViewLogs
 }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<'general' | 'rsvp'>('general');
 
@@ -228,6 +230,21 @@ export function SettingsModal({
                   </label>
                 </div>
               </div>
+
+              {onViewLogs && (
+                <div className="landscape:col-span-2">
+                  <label className="block text-sm font-medium mb-3 opacity-70 flex items-center gap-2">
+                    <Terminal size={16} />
+                    Debug
+                  </label>
+                  <button
+                    onClick={onViewLogs}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+                  >
+                    View System Logs
+                  </button>
+                </div>
+              )}
 
             </div>
           ) : (
