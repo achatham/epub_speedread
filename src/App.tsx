@@ -395,15 +395,31 @@ function App() {
   const onFileInputClick = (e: React.MouseEvent<HTMLInputElement>) => { (e.target as HTMLInputElement).value = ''; };
 
   const handleCloseBook = async () => {
+    console.log("[App] handleCloseBook called");
     handleSetIsPlaying(false);
-    if (currentBookId && storageProvider) {
-      await storageProvider.updateBookProgress(currentBookId, currentIndex);
-      setLibrary(await storageProvider.getAllBooks());
-    }
-    setWords([]); setSections([]); setCurrentIndex(0); setBookTitle('');
-    setCurrentBookId(null); lastLoadedBookIdRef.current = null;
+
+    const bookIdToSave = currentBookId;
+    const indexToSave = currentIndex;
+
+    // Reset UI state immediately
+    setWords([]);
+    setSections([]);
+    setCurrentIndex(0);
+    setBookTitle('');
+    setCurrentBookId(null);
+    lastLoadedBookIdRef.current = null;
     setLastBookId(null);
-    setRealEndIndex(null); setFurthestIndex(null);
+    setRealEndIndex(null);
+    setFurthestIndex(null);
+
+    // Persist progress in the background
+    if (bookIdToSave && storageProvider) {
+      storageProvider.updateBookProgress(bookIdToSave, indexToSave)
+        .then(async () => {
+          setLibrary(await storageProvider.getAllBooks());
+        })
+        .catch(err => console.error("[App] Failed to update progress during close:", err));
+    }
 
     if (document.fullscreenElement) {
       document.exitFullscreen().catch(() => { });

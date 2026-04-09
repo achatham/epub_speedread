@@ -176,6 +176,7 @@ export function PaginatedReaderView({
   const mainText = theme === 'bedtime' ? 'text-stone-400' : 'text-zinc-900 dark:text-zinc-100';
   const borderColor = theme === 'bedtime' ? 'border-zinc-900' : 'border-zinc-200 dark:border-zinc-800';
   const mutedText = theme === 'bedtime' ? 'text-stone-600' : 'text-zinc-400 dark:text-zinc-500';
+  const itemHover = theme === 'bedtime' ? 'hover:bg-zinc-900' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800';
 
   const handlePointerDown = (e: React.PointerEvent) => {
     e.stopPropagation();
@@ -256,7 +257,20 @@ export function PaginatedReaderView({
       {/* ── Header bar ─────────────────────────────────────────── */}
       {!isPlaying && (
         <div className={`flex items-center justify-between px-4 py-2 border-b shrink-0 ${borderColor}`}>
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center gap-4 min-w-0">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                console.log("[PaginatedReaderView] Library button clicked");
+                onCloseBook();
+              }}
+              className={`flex items-center gap-1 px-2 py-1 rounded-md transition-colors ${itemHover} ${mutedText}`}
+              title="Return to Library"
+            >
+              <ChevronLeft size={18} />
+              <span className="text-sm font-medium">Library</span>
+            </button>
+
             <span className={`text-xs uppercase tracking-widest font-semibold opacity-40 truncate max-w-[180px]`}>
               {bookTitle}
             </span>
