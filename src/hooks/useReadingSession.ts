@@ -43,6 +43,7 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
     const lastPaginatedSaveTimeRef = useRef<number>(0);
     const paginatedBookIdRef = useRef<string | null>(null);
     const paginatedBookTitleRef = useRef<string>('');
+    const paginatedMaxIndexReachedRef = useRef<number>(currentIndex);
 
     const [isDocumentVisible, setIsDocumentVisible] = useState(document.visibilityState === 'visible');
     const lastInteractionTimeRef = useRef<number>(Date.now());
@@ -221,6 +222,7 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
                 paginatedWordsReadRef.current = 0;
                 paginatedSessionStartIndexRef.current = currentIndex;
                 lastPaginatedIndexRef.current = currentIndex;
+                paginatedMaxIndexReachedRef.current = currentIndex;
                 lastPaginatedSaveTimeRef.current = Date.now();
                 paginatedBookIdRef.current = currentBookId;
                 paginatedBookTitleRef.current = bookTitle;
@@ -305,13 +307,14 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
         if (currentIndex !== lastPaginatedIndexRef.current) {
             lastInteractionTimeRef.current = Date.now();
 
-            if (currentIndex > lastPaginatedIndexRef.current) {
-                const delta = currentIndex - lastPaginatedIndexRef.current;
+            if (currentIndex > paginatedMaxIndexReachedRef.current) {
+                const delta = currentIndex - paginatedMaxIndexReachedRef.current;
                 // Sanity check: if they jump more than 2000 words (approx 6-7 pages), it's probably a seek, not a page turn
                 if (delta < 2000) {
                     paginatedWordsReadRef.current += delta;
                     didTurnPage = true;
                 }
+                paginatedMaxIndexReachedRef.current = currentIndex;
             }
         }
         lastPaginatedIndexRef.current = currentIndex;
