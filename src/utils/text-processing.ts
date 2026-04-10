@@ -15,9 +15,20 @@ const BLOCK_TAGS = new Set([
 ]);
 
 const CLOSING_CHARS = '\'\\"\’”»›\\)\\]\\}';
+const OPENING_CHARS = '\'\\"\‘“«‹\\(\\[\\{';
 const PERIOD_REGEX = new RegExp(`[.!?][${CLOSING_CHARS}]*$`);
 const COMMA_REGEX = new RegExp(`[,;:][${CLOSING_CHARS}]*$`);
 const TRAILING_PAUSE_CHARS_REGEX = new RegExp(`["”’\'»›\\)\\]\\}]$`);
+
+const ABBREVIATIONS = [
+  'Mr', 'Mrs', 'Ms', 'Dr', 'Prof', 'Sr', 'Jr', 'St', 'Rd', 'Ave', 'Blvd',
+  'Capt', 'Col', 'Gen', 'Lt', 'Sgt', 'Rev', 'Hon', 'Gov', 'Mt', 'Inc', 'Ltd', 'Co'
+];
+const ABBREVIATION_REGEX = new RegExp(`^[${OPENING_CHARS}]*(${ABBREVIATIONS.join('|')})\\.[${CLOSING_CHARS}]*$`, 'i');
+
+export function isAbbreviation(word: string): boolean {
+  return ABBREVIATION_REGEX.test(word);
+}
 
 export function calculateRsvpMultiplier(
   word: string,
@@ -25,7 +36,10 @@ export function calculateRsvpMultiplier(
 ): number {
   let multiplier = 1;
 
-  if (PERIOD_REGEX.test(word) || word === '—' || word === '–') {
+  if (isAbbreviation(word)) {
+    // Abbreviations don't get punctuation pauses
+    multiplier = 1;
+  } else if (PERIOD_REGEX.test(word) || word === '—' || word === '–') {
     multiplier = settings.periodMultiplier;
   } else if (COMMA_REGEX.test(word)) {
     multiplier = settings.commaMultiplier;
@@ -155,7 +169,7 @@ export function extractWordsFromDoc(doc: Document): WordData[] {
     // Simple regex for sentence ending punctuation. 
     // Ends with . ! ? followed by optional quotes/parens
     // e.g. "end." "end!)"
-    if (/[.!?]['")\]]*$/.test(prevWord)) {
+    if (/[.!?]['")\]]*$/.test(prevWord) && !isAbbreviation(prevWord)) {
       words[i].isSentenceStart = true;
     } else if (words[i].isParagraphStart) {
       // Paragraph start is implicitly a sentence start
@@ -200,7 +214,7 @@ export function extractWordsFromText(text: string): WordData[] {
     }
 
     const prevWord = allWords[i - 1].text;
-    if (/[.!?]['")\]]*$/.test(prevWord)) {
+    if (/[.!?]['")\]]*$/.test(prevWord) && !isAbbreviation(prevWord)) {
       allWords[i].isSentenceStart = true;
     }
   }
