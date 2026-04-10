@@ -7,6 +7,7 @@ interface ReaderState {
   words: WordData[];
   sections: { label: string; startIndex: number }[];
   currentIndex: number;
+  visibleEndIndex: number | null;
   realEndIndex: number | null;
   furthestIndex: number | null;
   
@@ -21,6 +22,7 @@ interface ReaderState {
   setWords: (words: WordData[]) => void;
   setSections: (sections: { label: string; startIndex: number }[]) => void;
   setCurrentIndex: (index: number | ((prev: number) => number)) => void;
+  setVisibleEndIndex: (index: number | null) => void;
   setRealEndIndex: (index: number | null) => void;
   setFurthestIndex: (index: number | null) => void;
 
@@ -39,6 +41,7 @@ export const useReaderStore = create<ReaderState>((set) => ({
   words: [],
   sections: [],
   currentIndex: 0,
+  visibleEndIndex: null,
   realEndIndex: null,
   furthestIndex: null,
 
@@ -55,6 +58,7 @@ export const useReaderStore = create<ReaderState>((set) => ({
   setCurrentIndex: (index) => set((state) => ({ 
     currentIndex: typeof index === 'function' ? index(state.currentIndex) : index 
   })),
+  setVisibleEndIndex: (index) => set({ visibleEndIndex: index }),
   setRealEndIndex: (index) => set({ realEndIndex: index }),
   setFurthestIndex: (index) => set({ furthestIndex: index }),
 
@@ -70,6 +74,7 @@ export const useReaderStore = create<ReaderState>((set) => ({
     words: [],
     sections: [],
     currentIndex: 0,
+    visibleEndIndex: null,
     realEndIndex: null,
     furthestIndex: null,
     isPlaying: false,

@@ -10,6 +10,7 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
     const isHoldPaused = useReaderStore(state => state.isHoldPaused);
     const isChapterBreak = useReaderStore(state => state.isChapterBreak);
     const currentIndex = useReaderStore(state => state.currentIndex);
+    const visibleEndIndex = useReaderStore(state => state.visibleEndIndex);
     const words = useReaderStore(state => state.words);
     const bookTitle = useReaderStore(state => state.bookTitle);
     const isReadingAloud = useReaderStore(state => state.isReadingAloud);
@@ -40,6 +41,7 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
     const paginatedWordsReadRef = useRef<number>(0);
     const paginatedSessionStartIndexRef = useRef<number | null>(null);
     const lastPaginatedIndexRef = useRef<number>(currentIndex);
+    const paginatedMaxIndexReachedRef = useRef<number>(currentIndex);
     const lastPaginatedSaveTimeRef = useRef<number>(0);
     const paginatedBookIdRef = useRef<string | null>(null);
     const paginatedBookTitleRef = useRef<string>('');
@@ -231,6 +233,12 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
             const segmentDurationMs = Math.max(0, Math.min(Date.now(), lastInteractionTimeRef.current + IDLE_BUFFER_MS) - paginatedSessionStartTimeRef.current);
             paginatedAccumulatedDurationMsRef.current += segmentDurationMs;
 
+            // Update words read from the final visible page if any
+            if (paginatedMaxIndexReachedRef.current > lastPaginatedIndexRef.current) {
+                paginatedWordsReadRef.current += (paginatedMaxIndexReachedRef.current - lastPaginatedIndexRef.current);
+                lastPaginatedIndexRef.current = paginatedMaxIndexReachedRef.current;
+            }
+
             // If mode/book changed, log what we have and reset
             const isFinishingSession = !isPaginatedMode || (paginatedBookIdRef.current !== currentBookId);
             if (isFinishingSession && storageProvider && paginatedBookIdRef.current && paginatedWordsReadRef.current > 0) {
@@ -301,6 +309,14 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
         const isPaginatedActive = !isPlaying && !isReadingAloud && !!currentBookId && isDocumentVisible;
         if (!isPaginatedActive) return;
 
+        // Track max index seen on this page
+        if (visibleEndIndex !== null && visibleEndIndex > paginatedMaxIndexReachedRef.current) {
+            // Only update if it's within a reasonable range of current index to avoid jumps
+            if (visibleEndIndex - currentIndex < 2000) {
+                paginatedMaxIndexReachedRef.current = visibleEndIndex;
+            }
+        }
+
         let didTurnPage = false;
         if (currentIndex !== lastPaginatedIndexRef.current) {
             lastInteractionTimeRef.current = Date.now();
@@ -313,6 +329,10 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
                     didTurnPage = true;
                 }
             }
+
+            // Reset max index reached to current index on ANY navigation (forward or backward)
+            // to prevent over-counting previous "visible" words.
+            paginatedMaxIndexReachedRef.current = currentIndex;
         }
         lastPaginatedIndexRef.current = currentIndex;
 
@@ -320,6 +340,12 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
         const now = Date.now();
         const timeSinceLastSave = now - lastPaginatedSaveTimeRef.current;
         if (paginatedSessionStartTimeRef.current && (didTurnPage || timeSinceLastSave > 60000) && storageProvider && paginatedBookIdRef.current) {
+            // If it's a periodic save (not a page turn), we might have unlogged words from the current page
+            if (!didTurnPage && paginatedMaxIndexReachedRef.current > lastPaginatedIndexRef.current) {
+                paginatedWordsReadRef.current += (paginatedMaxIndexReachedRef.current - lastPaginatedIndexRef.current);
+                lastPaginatedIndexRef.current = paginatedMaxIndexReachedRef.current;
+            }
+
             const durationMs = getEffectivePaginatedDurationMs();
             const wordsRead = paginatedWordsReadRef.current;
             if (wordsRead > 0) {
@@ -374,7 +400,7 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
                 paginatedAccumulatedDurationMsRef.current = 0;
             }
         }
-    }, [currentIndex, isPlaying, isReadingAloud, currentBookId, storageProvider, bookTitle, library, setLibrary, setSessions, isDocumentVisible]);
+    }, [currentIndex, visibleEndIndex, isPlaying, isReadingAloud, currentBookId, storageProvider, bookTitle, library, setLibrary, setSessions, isDocumentVisible]);
 
     return {};
 }
