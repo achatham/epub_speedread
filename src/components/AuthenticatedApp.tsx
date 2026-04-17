@@ -36,7 +36,7 @@ export function AuthenticatedApp({
     const setIsPlaying = useReaderStore(state => state.setIsPlaying);
     const setCurrentIndex = useReaderStore(state => state.setCurrentIndex);
 
-    const currentBookId = useLibraryStore(state => state.currentBookId);
+    const currentBookId = useReaderStore(state => state.currentBookId);
     const setSessions = useLibraryStore(state => state.setSessions);
 
     const wpm = useSettingsStore(state => state.wpm);

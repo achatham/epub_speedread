@@ -17,7 +17,7 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
     const library = useLibraryStore(state => state.library);
     const setLibrary = useLibraryStore(state => state.setLibrary);
     const setSessions = useLibraryStore(state => state.setSessions);
-    const currentBookId = useLibraryStore(state => state.currentBookId);
+    const currentBookId = useReaderStore(state => state.currentBookId);
 
     const rsvpSettings = useSettingsStore(state => state.rsvpSettings);
     const wpm = useSettingsStore(state => state.wpm);

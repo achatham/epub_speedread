@@ -26,11 +26,11 @@ describe('useReadingSession Paginated Word Counting', () => {
             words: Array(1000).fill({ text: 'word' }),
             bookTitle: 'Test Book',
             isReadingAloud: false,
+            currentBookId: 'test-book-id',
         });
 
         useLibraryStore.setState({
             library: [{ id: 'test-book-id', meta: { title: 'Test Book' }, progress: { cumulativeWordsRead: 0, cumulativeExpectedWords: 0, cumulativeDurationSeconds: 0 } } as any],
-            currentBookId: 'test-book-id',
         });
 
         useSettingsStore.setState({

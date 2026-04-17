@@ -31,6 +31,7 @@ function App() {
   const lastBookId = useSettingsStore(state => state.lastBookId);
   const ttsSpeed = useSettingsStore(state => state.ttsSpeed);
   const rsvpSettings = useSettingsStore(state => state.rsvpSettings);
+  const wpm = useSettingsStore(state => state.wpm);
   
   const setOnboardingCompleted = useSettingsStore(state => state.setOnboardingCompleted);
   const setTheme = useSettingsStore(state => state.setTheme);
@@ -46,6 +47,7 @@ function App() {
   const setPaginatedFontSize = useSettingsStore(state => state.setPaginatedFontSize);
 
   // Reader Store
+  const currentBookId = useReaderStore(state => state.currentBookId);
   const isPlaying = useReaderStore(state => state.isPlaying);
   const isReadingAloud = useReaderStore(state => state.isReadingAloud);
   const isSynthesizing = useReaderStore(state => state.isSynthesizing);
@@ -54,6 +56,7 @@ function App() {
   const words = useReaderStore(state => state.words);
   const furthestIndex = useReaderStore(state => state.furthestIndex);
   
+  const setCurrentBookId = useReaderStore(state => state.setCurrentBookId);
   const setWords = useReaderStore(state => state.setWords);
   const setSections = useReaderStore(state => state.setSections);
   const setCurrentIndex = useReaderStore(state => state.setCurrentIndex);
@@ -62,11 +65,9 @@ function App() {
   const setFurthestIndex = useReaderStore(state => state.setFurthestIndex);
 
   // Library Store
-  const currentBookId = useLibraryStore(state => state.currentBookId);
   const isLoadingLibrary = useLibraryStore(state => state.isLoadingLibrary);
   const library = useLibraryStore(state => state.library);
   
-  const setCurrentBookId = useLibraryStore(state => state.setCurrentBookId);
   const setLibrary = useLibraryStore(state => state.setLibrary);
   const setSessions = useLibraryStore(state => state.setSessions);
 
@@ -92,6 +93,31 @@ function App() {
 
   // Synchronizers that watch Zustand stores and sync with backend
   useSettingsSync(storageProvider, onboardingCompleted);
+
+  // Persist WPM changes per book
+  useEffect(() => {
+    if (!storageProvider || !currentBookId) return;
+
+    const timer = setTimeout(() => {
+      console.log(`[App] Persisting WPM ${wpm} for book ${currentBookId}`);
+      storageProvider.updateBookWpm(currentBookId, wpm)
+        .catch(err => console.error("Failed to persist WPM:", err));
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [wpm, currentBookId, storageProvider]);
+
+  // Persist vanityWpmRatio changes per book
+  useEffect(() => {
+    if (!storageProvider || !currentBookId) return;
+
+    const timer = setTimeout(() => {
+      storageProvider.updateBookStats(currentBookId, { vanityWpmRatio: rsvpSettings.vanityWpmRatio })
+        .catch(err => console.error("Failed to persist vanityWpmRatio:", err));
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [rsvpSettings.vanityWpmRatio, currentBookId, storageProvider]);
 
   const {
     handleSetIsPlaying,
@@ -193,7 +219,7 @@ function App() {
   };
 
   const handleSelectBook = useCallback(async (id: string) => {
-    useLibraryStore.getState().setCurrentBookId(id);
+    useReaderStore.getState().setCurrentBookId(id);
     useSettingsStore.getState().setLastBookId(id);
     if (useSettingsStore.getState().autoLandscape) {
       if (!document.fullscreenElement) {
@@ -292,7 +318,7 @@ function App() {
       setSections(mockSections || [{ label: 'Mock Chapter', startIndex: 0 }]);
       if (mockSessions) setSessions(mockSessions);
       setCurrentIndex(0);
-      setCurrentBookId('mock');
+      setCurrentBookId('mock-book-id');
       // Note: We need a way to set reader's bookId if needed, but App.tsx uses currentBookId from library store for processing
       handleSetIsPlaying(false);
       setUser((u: any) => u || (MOCK_USER as any));
@@ -452,6 +478,11 @@ function App() {
         storageProvider.updateBookWpm(bookRecord.id, targetWpm).catch(e => console.error("Failed to recover WPM:", e));
       }
       setWpm(targetWpm);
+
+      // Initialize vanityWpmRatio from book settings
+      if (bookRecord.settings.vanityWpmRatio !== undefined) {
+        setRsvpSettings({ vanityWpmRatio: bookRecord.settings.vanityWpmRatio });
+      }
 
       setRealEndIndex(result.realEndIndex);
       setFurthestIndex(bookRecord.progress.furthestWordIndex ?? bookRecord.progress.wordIndex);

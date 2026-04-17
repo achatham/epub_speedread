@@ -129,7 +129,7 @@ export function AppModals({
                 onClose={() => ui.setIsStatsOpen(false)}
                 sessions={library.sessions}
                 books={library.library}
-                activeBookId={library.currentBookId}
+                activeBookId={reader.currentBookId}
                 theme={settings.theme}
                 onUpdateBookFinishedDate={handleUpdateBookFinishedDate}
             />
@@ -138,7 +138,7 @@ export function AppModals({
                 isOpen={ui.isBookSettingsOpen}
                 onClose={() => ui.setIsBookSettingsOpen(false)}
                 currentTitle={reader.bookTitle}
-                onUpdateTitle={(title) => library.currentBookId ? handleUpdateBookTitle(library.currentBookId, title) : Promise.resolve()}
+                onUpdateTitle={(title) => reader.currentBookId ? handleUpdateBookTitle(reader.currentBookId, title) : Promise.resolve()}
                 onRecomputeRealEnd={handleRecomputeRealEnd}
                 isProcessing={isRecomputingEnd}
                 currentIndex={reader.currentIndex}
