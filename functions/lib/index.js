@@ -79,7 +79,9 @@ exports.exportHistory = (0, https_1.onRequest)({ cors: true, maxInstances: 10 },
             .orderBy("startTime", "desc")
             .get();
         const wordsReadByModality = {};
+        const durationSecondsByModality = {};
         const estimatedPagesReadByModality = {};
+        let totalTimeReadSeconds = 0;
         const activeBookIds = new Set();
         const sessions = sessionsSnapshot.docs.map(doc => {
             const data = doc.data();
@@ -88,11 +90,14 @@ exports.exportHistory = (0, https_1.onRequest)({ cors: true, maxInstances: 10 },
             activeBookIds.add(data.bookId);
             wordsReadByModality[type] = (wordsReadByModality[type] || 0) + wordsRead;
             estimatedPagesReadByModality[type] = Math.round((wordsReadByModality[type] / WORDS_PER_PAGE) * 10) / 10;
+            const durationSeconds = data.durationSeconds || 0;
+            totalTimeReadSeconds += durationSeconds;
+            durationSecondsByModality[type] = (durationSecondsByModality[type] || 0) + durationSeconds;
             return {
                 bookTitle: data.bookTitle,
                 type: type,
                 wordsRead: wordsRead,
-                durationSeconds: data.durationSeconds || 0,
+                durationSeconds: durationSeconds,
                 startTime: data.startTime,
                 endTime: data.endTime,
             };
@@ -129,6 +134,8 @@ exports.exportHistory = (0, https_1.onRequest)({ cors: true, maxInstances: 10 },
             timeframeDays: 30,
             summary: {
                 booksReadCount: books.length,
+                totalTimeReadSeconds,
+                durationSecondsByModality,
                 estimatedPagesReadByModality,
                 wordsReadByModality
             },
