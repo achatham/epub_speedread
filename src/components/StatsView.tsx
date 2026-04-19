@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { X, Clock, BookOpen, BarChart2, TrendingUp, Volume2, Library } from 'lucide-react';
+import { X, Clock, BookOpen, BarChart2, TrendingUp, Volume2, Library, Zap } from 'lucide-react';
 import type { ReadingSession, BookRecord } from '../utils/storage';
 import { getSessionKey, calculateFinishedBooks } from '../utils/stats';
 import { BookProgressChart } from './stats/BookProgressChart';
@@ -341,9 +341,9 @@ export function StatsView({
                             {session.type === 'listening' ? (
                                 <Volume2 size={14} className="text-purple-500 shrink-0" />
                             ) : session.type === 'paginated' ? (
-                                <Library size={14} className="text-blue-500 shrink-0" />
+                                <BookOpen size={14} className="text-blue-500 shrink-0" />
                             ) : (
-                                <BookOpen size={14} className="text-red-500 shrink-0" />
+                                <Zap size={14} className="text-red-500 shrink-0" />
                             )}
                             <span className="truncate">{session.bookTitle}</span>
                           </div>

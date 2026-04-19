@@ -520,7 +520,7 @@ function App() {
   }, [storageProvider, geminiApiKey]);
 
   useEffect(() => {
-    if (currentBookId && currentBookId !== 'mock' && storageProvider) {
+    if (currentBookId && currentBookId !== 'mock-book-id' && storageProvider) {
       if (currentBookId === lastLoadedBookIdRef.current) {
         // Book already loaded, don't re-process to avoid resetting currentIndex
         return;
