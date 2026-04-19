@@ -21,6 +21,8 @@ interface SettingsModalProps {
   setFontFamily: React.Dispatch<React.SetStateAction<FontFamily>>;
   rsvpSettings: RsvpSettings;
   setRsvpSettings: (settings: RsvpSettings) => void;
+  apiSyncToken?: string;
+  setApiSyncToken: (token: string) => void;
   onSave: () => void;
   user?: User | null;
   onSignIn?: () => void;
@@ -45,6 +47,8 @@ export function SettingsModal({
   setFontFamily,
   rsvpSettings,
   setRsvpSettings,
+  apiSyncToken,
+  setApiSyncToken,
   onSave,
   user,
   onSignIn,
@@ -230,6 +234,43 @@ export function SettingsModal({
                   </label>
                 </div>
               </div>
+
+              {user && (
+                <div className="landscape:col-span-2">
+                  <label className="block text-sm font-medium mb-3 opacity-70 flex items-center gap-2">
+                    <Terminal size={16} />
+                    Agent API Token
+                  </label>
+                  <div className="p-4 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 flex flex-col gap-3">
+                    <p className="text-xs opacity-70">
+                      Use this token in external scripts (like Heavy Agent) to fetch your last 30 days of reading history formatted as clean JSON.
+                    </p>
+                    <div className="flex gap-2 items-center">
+                      <input 
+                        type="text" 
+                        readOnly 
+                        className="flex-1 p-2 text-xs font-mono bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-md outline-none" 
+                        value={apiSyncToken || "Not generated yet"} 
+                        onClick={e => (e.target as HTMLInputElement).select()}
+                      />
+                      <button 
+                        onClick={() => {
+                          const secret = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+                          setApiSyncToken(`${user.uid}-${secret}`);
+                        }}
+                        className="px-3 py-2 text-xs font-medium bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-md hover:opacity-90 whitespace-nowrap"
+                      >
+                        {apiSyncToken ? "Regenerate" : "Generate Token"}
+                      </button>
+                    </div>
+                    {apiSyncToken && (
+                      <p className="text-[10px] opacity-50 mt-1 font-mono break-all">
+                        curl "https://us-central1-epub-speed-reader-82342.cloudfunctions.net/exportHistory?token={apiSyncToken}"
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {onViewLogs && (
                 <div className="landscape:col-span-2">

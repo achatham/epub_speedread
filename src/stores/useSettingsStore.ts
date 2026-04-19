@@ -22,6 +22,7 @@ interface SettingsState {
   lastBookId: string | null | undefined;
   onboardingCompleted: boolean;
   wpm: number;
+  apiSyncToken?: string;
 
   setTtsSpeed: (speed: number) => void;
   setGeminiApiKey: (key: string) => void;
@@ -37,6 +38,7 @@ interface SettingsState {
   setLastBookId: (id: string | null) => void;
   setOnboardingCompleted: (completed: boolean) => void;
   setWpm: (wpm: number) => void;
+  setApiSyncToken: (token: string) => void;
 }
 
 const getInitialTheme = (): Theme => {
@@ -62,6 +64,7 @@ export const useSettingsStore = create<SettingsState>()(
       lastBookId: undefined,
       onboardingCompleted: false,
       wpm: 300,
+      apiSyncToken: undefined,
 
       setTtsSpeed: (speed) => set({ ttsSpeed: speed }),
       setGeminiApiKey: (key) => { set({ geminiApiKey: key }); saveGeminiApiKey(key); },
@@ -81,6 +84,7 @@ export const useSettingsStore = create<SettingsState>()(
       setLastBookId: (id) => set({ lastBookId: id }),
       setOnboardingCompleted: (completed) => set({ onboardingCompleted: completed }),
       setWpm: (wpm) => set({ wpm }),
+      setApiSyncToken: (token) => set({ apiSyncToken: token }),
     }),
     {
       name: 'user_settings',

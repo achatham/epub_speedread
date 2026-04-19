@@ -57,6 +57,11 @@ export function AppModals({
                 setTtsSpeed={settings.setTtsSpeed}
                 autoLandscape={settings.autoLandscape}
                 setAutoLandscape={settings.setAutoLandscape}
+                apiSyncToken={settings.apiSyncToken}
+                setApiSyncToken={(token) => {
+                    settings.setApiSyncToken(token);
+                    storageProvider?.updateSettings({ apiSyncToken: token }).catch(console.error);
+                }}
                 fontFamily={settings.fontFamily}
                 setFontFamily={settings.setFontFamily as any}
                 rsvpSettings={settings.rsvpSettings}

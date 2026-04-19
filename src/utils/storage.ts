@@ -33,6 +33,7 @@ export interface UserSettings {
   lastBookId?: string | null;
   lastUpdated: number;
   lastAggregationTime?: number;
+  apiSyncToken?: string;
 }
 
 export interface BookRecord {
