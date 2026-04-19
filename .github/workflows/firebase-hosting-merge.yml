@@ -18,3 +18,14 @@ jobs:
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_EPUB_SPEED_READER_82342 }}
           channelId: live
           projectId: epub-speed-reader-82342
+
+      - name: Build Cloud Functions
+        run: cd functions && npm ci && npm run build
+      
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_EPUB_SPEED_READER_82342 }}'
+
+      - name: Deploy Cloud Functions
+        run: npx firebase-tools deploy --only functions --project epub-speed-reader-82342 --force
