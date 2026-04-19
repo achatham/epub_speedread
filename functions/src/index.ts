@@ -1,11 +1,11 @@
-import * as functions from "firebase-functions";
+import { onRequest } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 
 admin.initializeApp();
 
 const WORDS_PER_PAGE = 250;
 
-export const exportHistory = functions.https.onRequest(async (req, res) => {
+export const exportHistory = onRequest({ cors: true, maxInstances: 10 }, async (req, res) => {
   // CORS configuration
   res.set("Access-Control-Allow-Origin", "*");
   res.set("Access-Control-Allow-Methods", "GET");
