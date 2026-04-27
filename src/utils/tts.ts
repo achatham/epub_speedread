@@ -1,4 +1,5 @@
-import { getDeepgramApiKey } from './deepgram';
+import { getGeminiApiKey } from './gemini';
+import { getTtsPrompt } from './ttsPrompt';
 import { chunkTextByCharLimit, chunkWordsByCharLimit, type WordData } from './text-processing';
 import type { AudioChunk } from './storage';
 
@@ -9,9 +10,9 @@ export interface AudioController {
 }
 
 export async function synthesizeSpeech(text: string, speed: number = 1.0): Promise<AudioController | null> {
-    const apiKey = getDeepgramApiKey();
+    const apiKey = getGeminiApiKey();
     if (!apiKey) {
-        console.error("No Deepgram API key found for TTS");
+        console.error("No Gemini API key found for TTS");
         return null;
     }
 
@@ -22,38 +23,42 @@ export async function synthesizeSpeech(text: string, speed: number = 1.0): Promi
 
     // Start processing in background
     processChunks(text, apiKey, audioCtx, controller, speed).catch(err => {
-        console.error("Deepgram TTS processing error", err);
+        console.error("Gemini TTS processing error", err);
         controller.stop();
     });
 
     return controller;
 }
 
-export async function synthesizeChapterAudio(wordsOrText: WordData[] | string, _speed: number, apiKey: string): Promise<AudioChunk[]> {
-    const chunks = typeof wordsOrText === 'string'
+export async function* synthesizeChapterAudio(wordsOrText: WordData[] | string, _speed: number, apiKey: string, initialWordIndex: number = 0, globalChapterStart: number = 0): AsyncGenerator<AudioChunk, void, unknown> {
+    const allChunks = typeof wordsOrText === 'string'
         ? chunkTextByCharLimit(wordsOrText, 1900)
         : chunkWordsByCharLimit(wordsOrText, 1900);
 
-    if (chunks.length === 0) return [];
+    if (allChunks.length === 0) return;
+
+    const chunks = allChunks.filter(chunk => {
+        const chunkEndIndex = globalChapterStart + chunk.startIndex + chunk.wordCount;
+        return chunkEndIndex > initialWordIndex;
+    });
+
+    if (chunks.length === 0) return;
 
     const controller = { state: { isStopped: false } };
-    const results: AudioChunk[] = [];
 
     // Fetch chunks sequentially to avoid 429 rate limits
     for (let i = 0; i < chunks.length; i++) {
         if (controller.state.isStopped) break;
         const chunk = chunks[i];
-        const audio = await fetchDeepgramAudio(apiKey, chunk.text, i, controller, _speed);
+        const audio = await fetchGeminiAudio(apiKey, chunk.text, i, controller, _speed);
         if (audio) {
-            results.push({
+            yield {
                 audio,
                 startIndex: chunk.startIndex,
                 wordCount: chunk.wordCount
-            });
+            };
         }
     }
-
-    return results;
 }
 
 async function getAudioContext(): Promise<AudioContext | null> {
@@ -86,46 +91,67 @@ function createAudioController(audioCtx: AudioContext): AudioController & { stat
     };
 }
 
-async function fetchDeepgramAudio(apiKey: string, text: string, index: number, controller: any, speed: number = 1.0): Promise<ArrayBuffer | null> {
+async function fetchGeminiAudio(apiKey: string, text: string, index: number, controller: any, speed: number = 1.0): Promise<ArrayBuffer | null> {
     if (controller.state.isStopped) return null;
 
-    let cleanText = text
+    const cleanText = text
         .replace(/[#*`_~]/g, '')
         .replace(/\b\[([^\]]+)\]\(([^)]+)\)\b/g, '$1')
         .replace(/\n+/g, '. ');
 
     if (!cleanText.trim()) return null;
 
-    // Safety check: Deepgram REST API has a 2000 character limit
-    if (cleanText.length > 2000) {
-        console.warn(`Chunk ${index} too long (${cleanText.length} chars), truncating to 2000.`);
-        cleanText = cleanText.substring(0, 2000);
-    }
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key=${apiKey}`;
+    const promptText = getTtsPrompt(cleanText, speed);
 
-    const deepgramSpeed = Math.min(speed, 1.5);
-    const url = `https://api.deepgram.com/v1/speak?model=aura-2-asteria-en&speed=${deepgramSpeed}`;
+    const body = {
+        contents: [{
+            parts: [{ text: promptText }]
+        }],
+        generationConfig: {
+            responseModalities: ["AUDIO"],
+            speechConfig: {
+                voiceConfig: {
+                    prebuiltVoiceConfig: {
+                        voiceName: "Aoede" // Using a nice default voice
+                    }
+                }
+            }
+        }
+    };
 
     try {
         const response = await fetch(url, {
             method: "POST",
             headers: {
-                "Authorization": `Token ${apiKey}`,
                 "Content-Type": "application/json"
             },
-            body: JSON.stringify({ text: cleanText })
+            body: JSON.stringify(body)
         });
 
         if (!response.ok) {
             const errorText = await response.text();
-            throw new Error(`Deepgram API error: ${response.status} ${errorText}`);
+            throw new Error(`Gemini API error: ${response.status} ${errorText}`);
         }
 
         if (controller.state.isStopped) return null;
 
-        const buffer = await response.arrayBuffer();
-        return buffer;
+        const data = await response.json();
+        const part = data.candidates?.[0]?.content?.parts?.[0];
+        if (part?.inlineData?.data) {
+            const binaryString = atob(part.inlineData.data);
+            const len = binaryString.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            return bytes.buffer;
+        } else {
+            console.error(`No audio data returned from Gemini for chunk ${index}.`);
+            return null;
+        }
     } catch (e) {
-        console.error(`Error fetching Deepgram audio for chunk ${index}`, e);
+        console.error(`Error fetching Gemini audio for chunk ${index}`, e);
         return null;
     }
 }
@@ -142,7 +168,7 @@ async function processChunks(fullText: string, apiKey: string, audioCtx: AudioCo
 
         try {
             const chunk = chunks[i];
-            const audioData = await fetchDeepgramAudio(apiKey, chunk.text, i, controller, speed);
+            const audioData = await fetchGeminiAudio(apiKey, chunk.text, i, controller, speed);
 
             if (controller.state.isStopped) break;
             if (audioData) {
@@ -201,16 +227,25 @@ async function processChunks(fullText: string, apiKey: string, audioCtx: AudioCo
 }
 
 export async function decodeAudioData(audioCtx: AudioContext, audioData: ArrayBuffer): Promise<AudioBuffer> {
-    return await audioCtx.decodeAudioData(audioData);
+    const int16Array = new Int16Array(audioData);
+    const sampleRate = 24000;
+    const audioBuffer = audioCtx.createBuffer(1, int16Array.length, sampleRate);
+    const channelData = audioBuffer.getChannelData(0);
+
+    for (let i = 0; i < int16Array.length; i++) {
+        channelData[i] = int16Array[i] / 32768.0;
+    }
+
+    return audioBuffer;
 }
 
-export function playDecodedChunk(audioCtx: AudioContext, audioBuffer: AudioBuffer, startTime: number, speed: number = 1.0): number {
+export function playDecodedChunk(audioCtx: AudioContext, audioBuffer: AudioBuffer, startTime: number, _speed: number = 1.0): number {
     const source = audioCtx.createBufferSource();
     source.buffer = audioBuffer;
 
-    // If speed > 1.5, we use local resampling for the remaining speedup
-    // Deepgram handled up to 1.5x
-    const localResamplingRate = speed > 1.5 ? speed / 1.5 : 1.0;
+    // We requested Gemini to read at the set speed multiplier via the prompt.
+    // If we wanted to adjust further locally we could, but let's trust the prompt.
+    const localResamplingRate = 1.0;
     source.playbackRate.value = localResamplingRate;
 
     source.connect(audioCtx.destination);

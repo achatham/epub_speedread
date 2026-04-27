@@ -49,8 +49,6 @@ export function AppModals({
                 onClose={() => ui.setIsSettingsOpen(false)}
                 apiKey={settings.geminiApiKey}
                 setApiKey={settings.setGeminiApiKey}
-                deepgramApiKey={settings.deepgramApiKey}
-                setDeepgramApiKey={settings.setDeepgramApiKey}
                 syncApiKey={settings.syncApiKey}
                 setSyncApiKey={settings.setSyncApiKey}
                 ttsSpeed={settings.ttsSpeed}

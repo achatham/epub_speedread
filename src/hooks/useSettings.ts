@@ -5,7 +5,7 @@ import { useSettingsStore } from '../stores/useSettingsStore';
 export function useSettingsSync(storageProvider: FirestoreStorage | null, onboardingCompleted: boolean) {
     const {
         ttsSpeed, autoLandscape, theme, fontFamily,
-        syncApiKey, geminiApiKey, deepgramApiKey, rsvpSettings,
+        syncApiKey, geminiApiKey, rsvpSettings,
         readingMode, paginatedFontSize, lastBookId
     } = useSettingsStore();
 
@@ -29,7 +29,6 @@ export function useSettingsSync(storageProvider: FirestoreStorage | null, onboar
                 fontFamily,
                 syncApiKey,
                 geminiApiKey: syncApiKey ? geminiApiKey : undefined,
-                deepgramApiKey: syncApiKey ? deepgramApiKey : undefined,
                 rsvp: rsvpSettings,
                 onboardingCompleted,
                 readingMode,
@@ -38,5 +37,5 @@ export function useSettingsSync(storageProvider: FirestoreStorage | null, onboar
             });
         }, 1000);
         return () => clearTimeout(timer);
-    }, [ttsSpeed, autoLandscape, theme, fontFamily, syncApiKey, geminiApiKey, deepgramApiKey, rsvpSettings, storageProvider, onboardingCompleted, readingMode, paginatedFontSize, lastBookId]);
+    }, [ttsSpeed, autoLandscape, theme, fontFamily, syncApiKey, geminiApiKey, rsvpSettings, storageProvider, onboardingCompleted, readingMode, paginatedFontSize, lastBookId]);
 }

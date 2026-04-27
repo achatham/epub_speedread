@@ -9,8 +9,6 @@ interface SettingsModalProps {
   onClose: () => void;
   apiKey: string;
   setApiKey: (key: string) => void;
-  deepgramApiKey: string;
-  setDeepgramApiKey: (key: string) => void;
   syncApiKey: boolean;
   setSyncApiKey: (sync: boolean) => void;
   ttsSpeed: number;
@@ -35,8 +33,6 @@ export function SettingsModal({
   onClose,
   apiKey,
   setApiKey,
-  deepgramApiKey,
-  setDeepgramApiKey,
   syncApiKey,
   setSyncApiKey,
   ttsSpeed,
@@ -207,17 +203,6 @@ export function SettingsModal({
                     onChange={(e) => setApiKey(e.target.value)}
                     className="w-full p-2.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-transparent focus:ring-2 focus:ring-zinc-500 outline-none transition-all"
                     placeholder="Enter your Gemini API key"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="deepgram-api-key" className="block text-sm font-medium mb-1.5 opacity-70">Deepgram API Key (for TTS)</label>
-                  <input
-                    id="deepgram-api-key"
-                    type="password"
-                    value={deepgramApiKey}
-                    onChange={(e) => setDeepgramApiKey(e.target.value)}
-                    className="w-full p-2.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-transparent focus:ring-2 focus:ring-zinc-500 outline-none transition-all"
-                    placeholder="Enter your Deepgram API key"
                   />
                 </div>
                 <div className="mt-3 flex items-start gap-3">

@@ -27,7 +27,6 @@ function App() {
   const onboardingCompleted = useSettingsStore(state => state.onboardingCompleted);
   const theme = useSettingsStore(state => state.theme);
   const geminiApiKey = useSettingsStore(state => state.geminiApiKey);
-  const deepgramApiKey = useSettingsStore(state => state.deepgramApiKey);
   const lastBookId = useSettingsStore(state => state.lastBookId);
   const ttsSpeed = useSettingsStore(state => state.ttsSpeed);
   const rsvpSettings = useSettingsStore(state => state.rsvpSettings);
@@ -37,7 +36,6 @@ function App() {
   const setTheme = useSettingsStore(state => state.setTheme);
   const setAutoLandscape = useSettingsStore(state => state.setAutoLandscape);
   const setGeminiApiKey = useSettingsStore(state => state.setGeminiApiKey);
-  const setDeepgramApiKey = useSettingsStore(state => state.setDeepgramApiKey);
   const setLastBookId = useSettingsStore(state => state.setLastBookId);
   const setWpm = useSettingsStore(state => state.setWpm);
   const setTtsSpeed = useSettingsStore(state => state.setTtsSpeed);
@@ -352,7 +350,7 @@ function App() {
   // Initialize Player
   useEffect(() => {
     if (storageProvider) {
-      audioPlayerRef.current = new AudioBookPlayer(storageProvider, geminiApiKey, deepgramApiKey);
+      audioPlayerRef.current = new AudioBookPlayer(storageProvider, geminiApiKey);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageProvider]);
@@ -361,9 +359,8 @@ function App() {
   useEffect(() => {
     if (audioPlayerRef.current) {
       audioPlayerRef.current.updateGeminiApiKey(geminiApiKey);
-      audioPlayerRef.current.updateDeepgramApiKey(deepgramApiKey);
     }
-  }, [geminiApiKey, deepgramApiKey]);
+  }, [geminiApiKey]);
 
 
   // --- Load Data ---
@@ -381,9 +378,6 @@ function App() {
           if (s.syncApiKey !== false) {
             if (s.geminiApiKey) {
               setGeminiApiKey(s.geminiApiKey);
-            }
-            if (s.deepgramApiKey) {
-              setDeepgramApiKey(s.deepgramApiKey);
             }
           }
           if (s.theme) setTheme(s.theme as any);

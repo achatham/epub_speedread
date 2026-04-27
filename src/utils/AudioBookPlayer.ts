@@ -30,7 +30,7 @@ export class AudioBookPlayer {
     wordCount: number
   }[] = [];
 
-  private deepgramApiKey: string;
+  private geminiApiKey: string;
 
   // Track state internally to prevent race conditions
   private _isSynthesizing = false;
@@ -38,22 +38,17 @@ export class AudioBookPlayer {
 
   constructor(
     _storage: FirestoreStorage,
-    _geminiApiKey: string,
-    deepgramApiKey: string
+    geminiApiKey: string
   ) {
-    this.deepgramApiKey = deepgramApiKey;
+    this.geminiApiKey = geminiApiKey;
   }
 
   get isActive() {
     return this._isSynthesizing || this._isPlaying;
   }
 
-  updateGeminiApiKey(_key: string) {
-    // No longer used for TTS
-  }
-
-  updateDeepgramApiKey(key: string) {
-    this.deepgramApiKey = key;
+  updateGeminiApiKey(key: string) {
+    this.geminiApiKey = key;
   }
 
   async playChapter(
@@ -74,23 +69,18 @@ export class AudioBookPlayer {
 
     try {
       // 1. Synthesize (No caching as requested)
-      if (!this.deepgramApiKey) {
-        throw new Error("Deepgram API Key required for TTS");
+      if (!this.geminiApiKey) {
+        throw new Error("Gemini API Key required for TTS");
       }
 
-      const chunks = await synthesizeChapterAudio(chapterWords, speed, this.deepgramApiKey);
+      const chunkGenerator = synthesizeChapterAudio(chapterWords, speed, this.geminiApiKey, currentWordIndex, globalStartIndex);
 
       if (this.stopRequested) return; // Check cancel
 
       this.updateState(false, true, callbacks);
 
       // 2. Playback
-      if (chunks && chunks.length > 0) {
-        await this.playAudioChunks(chunks, globalStartIndex, currentWordIndex, speed, callbacks);
-      } else {
-        // No audio generated?
-        this.stop();
-      }
+      await this.playAudioChunks(chunkGenerator, globalStartIndex, currentWordIndex, speed, callbacks);
 
     } catch (e: any) {
       console.error("AudioPlayer Error:", e);
@@ -100,14 +90,14 @@ export class AudioBookPlayer {
   }
 
   private async playAudioChunks(
-    chunks: AudioChunk[],
+    chunkGenerator: AsyncGenerator<AudioChunk, void, unknown>,
     globalChapterStart: number,
     initialWordIndex: number,
     speed: number,
     callbacks: PlayerCallbacks
   ) {
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    // Deepgram Aura uses 48kHz
+    // Gemini Audio is typical 24kHz or similar, the AudioContext will resample.
     this.audioCtx = new AudioContextClass();
 
     console.log(`[AudioPlayer] Starting playback. Chapter Start: ${globalChapterStart}, Current UI Index: ${initialWordIndex}`);
@@ -117,73 +107,59 @@ export class AudioBookPlayer {
 
     let nextStartTime = this.audioCtx.currentTime;
     let hasStarted = false;
-
-    // Filter chunks to start from where the user is
-    const relevantChunks = chunks.filter(chunk => {
-      const chunkEndIndex = globalChapterStart + chunk.startIndex + chunk.wordCount;
-      const isRelevant = chunkEndIndex > initialWordIndex;
-      if (!isRelevant) {
-        console.log(`[AudioPlayer] Skipping chunk (${chunk.startIndex}-${chunk.startIndex + chunk.wordCount}) - already passed.`);
-      }
-      return isRelevant;
-    });
-
-    if (relevantChunks.length === 0) {
-      console.log(`[AudioPlayer] No relevant chunks found after index ${initialWordIndex}.`);
-      this.stop();
-      return;
-    }
-
-    console.log(`[AudioPlayer] Playing ${relevantChunks.length} chunks starting from global index ${globalChapterStart + relevantChunks[0].startIndex}`);
+    let isScheduling = true;
 
     this.scheduledChunks = [];
 
     // Lazy decoding and scheduling loop
     // We want to decode and schedule chunks ahead of time, but not all at once to avoid locking up
     const scheduleChunks = async () => {
-      for (const chunk of relevantChunks) {
-        if (this.stopRequested || !this.audioCtx) break;
+      try {
+        for await (const chunk of chunkGenerator) {
+          if (this.stopRequested || !this.audioCtx) break;
 
-        if (this.audioCtx.state === 'suspended') {
-          await this.audioCtx.resume();
+          if (this.audioCtx.state === 'suspended') {
+            await this.audioCtx.resume();
+          }
+
+          // Decode
+          const audioBuffer = await decodeAudioData(this.audioCtx, chunk.audio);
+
+          if (this.stopRequested || !this.audioCtx) break;
+
+          if (nextStartTime < this.audioCtx.currentTime) {
+            nextStartTime = this.audioCtx.currentTime;
+          }
+
+          // Schedule
+          const duration = playDecodedChunk(this.audioCtx, audioBuffer, nextStartTime, speed);
+
+          this.scheduledChunks.push({
+            startTime: nextStartTime,
+            endTime: nextStartTime + duration,
+            globalStartIndex: globalChapterStart + chunk.startIndex,
+            wordCount: chunk.wordCount
+          });
+
+          nextStartTime += duration;
+          hasStarted = true;
         }
-
-        // Decode
-        const audioBuffer = await decodeAudioData(this.audioCtx, chunk.audio);
-
-        if (this.stopRequested || !this.audioCtx) break;
-
-        if (nextStartTime < this.audioCtx.currentTime) {
-          nextStartTime = this.audioCtx.currentTime;
-        }
-
-        // Schedule
-        const duration = playDecodedChunk(this.audioCtx, audioBuffer, nextStartTime, speed);
-
-        this.scheduledChunks.push({
-          startTime: nextStartTime,
-          endTime: nextStartTime + duration,
-          globalStartIndex: globalChapterStart + chunk.startIndex,
-          wordCount: chunk.wordCount
-        });
-
-        nextStartTime += duration;
-        hasStarted = true;
-
-        // Give the main thread a break every few chunks if there are many
-        // to prevent "locking up" the UI
-        if (this.scheduledChunks.length % 3 === 0) {
-          await new Promise(resolve => setTimeout(resolve, 10));
+      } finally {
+        isScheduling = false;
+        if (!hasStarted && !this.stopRequested) {
+          // If no chunks were generated at all
+          this.stop();
         }
       }
     };
 
-    // Start scheduling (don't await the whole thing if we want to start playing fast, 
-    // but here we await it to keep the original flow for now, just with thread breaks)
-    await scheduleChunks();
+    // Start scheduling asynchronously so we don't block the monitor interval
+    scheduleChunks().catch(e => {
+        console.error("Error in scheduleChunks", e);
+        this.stop();
+    });
 
     // Monitor for completion and granular progress
-    const totalPlaybackEndTime = nextStartTime;
     this.monitorInterval = window.setInterval(() => {
       if (this.stopRequested || !this.audioCtx) {
         this.cleanup();
@@ -207,10 +183,10 @@ export class AudioBookPlayer {
       }
 
       // 2. Check for natural completion
-      if (hasStarted && now >= totalPlaybackEndTime) {
+      if (hasStarted && !isScheduling && now >= nextStartTime) {
         this.stop();
       }
-    }, 5000);
+    }, 1000);
   }
 
   stop() {

@@ -20,7 +20,6 @@ export type ReadingMode = 'rsvp' | 'paginated';
 
 export interface UserSettings {
   geminiApiKey?: string;
-  deepgramApiKey?: string;
   syncApiKey?: boolean;
   theme?: string;
   fontFamily?: string;
