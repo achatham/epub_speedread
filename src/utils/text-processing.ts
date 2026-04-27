@@ -6,6 +6,7 @@ export interface WordData {
   isParagraphStart: boolean;
   isSentenceStart: boolean;
   isHeading?: boolean;
+  isDivider?: boolean;
 }
 
 const BLOCK_TAGS = new Set([
@@ -34,6 +35,10 @@ export function calculateRsvpMultiplier(
   word: string,
   settings: RsvpSettings
 ): number {
+  if (word === '* * *') {
+    return settings.periodMultiplier * 3; // Long pause for section dividers
+  }
+
   let multiplier = 1;
 
   if (isAbbreviation(word)) {
@@ -82,6 +87,7 @@ export function extractWordsFromDoc(doc: Document): WordData[] {
   // The state of whether the NEXT flushed word should be a paragraph start.
   // Initially true.
   let markNextAsParagraphStart = true;
+  let markNextAsDivider = false;
   let inHeading = false;
 
   function flush() {
@@ -106,6 +112,17 @@ export function extractWordsFromDoc(doc: Document): WordData[] {
       .split(' ')
       .filter(w => w.length > 0);
 
+    if (markNextAsDivider) {
+      words.push({
+        text: '* * *',
+        isParagraphStart: true,
+        isSentenceStart: true,
+        isDivider: true
+      });
+      markNextAsParagraphStart = true;
+      markNextAsDivider = false;
+    }
+
     rawWords.forEach((w, index) => {
       words.push({
         text: w,
@@ -126,7 +143,8 @@ export function extractWordsFromDoc(doc: Document): WordData[] {
     if (node.nodeType === Node.TEXT_NODE) {
       currentTextBuffer += node.textContent || '';
     } else if (node.nodeType === Node.ELEMENT_NODE) {
-      const tagName = (node as Element).tagName.toUpperCase();
+      const element = node as Element;
+      const tagName = element.tagName.toUpperCase();
       const isBlock = BLOCK_TAGS.has(tagName);
       const isBr = tagName === 'BR';
       const isHeadingTag = tagName.length === 2 && tagName.startsWith('H') && tagName >= 'H1' && tagName <= 'H6';
@@ -138,6 +156,12 @@ export function extractWordsFromDoc(doc: Document): WordData[] {
         // Since we are hitting a block boundary, the next thing IS a paragraph start
         markNextAsParagraphStart = true;
         if (isHeadingTag) inHeading = true;
+      }
+
+      const isHr = tagName === 'HR';
+      const className = typeof (element as any).className === 'string' ? (element as any).className : '';
+      if (isHr || /(extract|space|blank|divider|break|separator|asterisk)/i.test(className)) {
+        markNextAsDivider = true;
       }
 
       node.childNodes.forEach(child => traverse(child));

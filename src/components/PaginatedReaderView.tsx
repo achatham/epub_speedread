@@ -492,6 +492,23 @@ function renderPageWords(
     <>
       {paragraphs.map((para, pIdx) => {
         const isHeading = para.some(({ word }) => word.isHeading);
+        const isDivider = para.length === 1 && para[0].word.isDivider;
+
+        if (isDivider) {
+          const { globalIdx } = para[0];
+          const isHighlighted = globalIdx === highlightIndex;
+          return (
+            <div key={pIdx} className="w-full flex justify-center my-8 opacity-40">
+              <span 
+                data-word-idx={globalIdx}
+                className={`tracking-[0.5em] ${isHighlighted ? 'underline decoration-red-500/50 dark:decoration-red-400/50 decoration-2 underline-offset-4' : ''}`}
+              >
+                * * *
+              </span>
+            </div>
+          );
+        }
+
         return (
           <p
             key={pIdx}
