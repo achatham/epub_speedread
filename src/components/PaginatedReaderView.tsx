@@ -369,14 +369,7 @@ export function PaginatedReaderView({
           {/* Chapter Progress bar - only in paused/paginated state */}
           {!isPlaying && (
             <div
-              className={`w-full h-1 rounded-sm relative cursor-pointer ${theme === 'bedtime' ? 'bg-zinc-900/50' : 'bg-zinc-200/50 dark:bg-zinc-800/50'}`}
-              onClick={(e) => {
-                const rect = e.currentTarget.getBoundingClientRect();
-                const pct = (e.clientX - rect.left) / rect.width;
-                const newIdx = Math.floor(chapterStart + (pct * chapterLength));
-                setCurrentIndex(Math.min(nextChapterStart - 1, Math.max(chapterStart, newIdx)));
-              }}
-              title="Chapter Progress"
+              className={`w-full h-1 rounded-sm relative ${theme === 'bedtime' ? 'bg-zinc-900/50' : 'bg-zinc-200/50 dark:bg-zinc-800/50'}`}
             >
               <div
                 className={`h-full rounded-sm transition-all duration-300 ${theme === 'bedtime' ? 'bg-amber-600/60' : 'bg-red-500/50'}`}
@@ -387,13 +380,7 @@ export function PaginatedReaderView({
 
           {/* Book Progress bar */}
           <div
-            className={`w-full h-1 rounded-sm relative cursor-pointer ${theme === 'bedtime' ? 'bg-zinc-900' : 'bg-zinc-200 dark:bg-zinc-800'}`}
-            onClick={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
-              const pct = (e.clientX - rect.left) / rect.width;
-              setCurrentIndex(Math.floor(pct * words.length));
-            }}
-            title="Book Progress"
+            className={`w-full h-1 rounded-sm relative ${theme === 'bedtime' ? 'bg-zinc-900' : 'bg-zinc-200 dark:bg-zinc-800'}`}
           >
             <div
               className={`h-full rounded-sm transition-all duration-300 ${theme === 'bedtime' ? 'bg-stone-500' : 'bg-zinc-900 dark:bg-zinc-100'}`}
