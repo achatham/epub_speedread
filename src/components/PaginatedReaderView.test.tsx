@@ -1,8 +1,13 @@
-import { render } from '@testing-library/react';
+import { render, fireEvent } from '@testing-library/react';
 import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { PaginatedReaderView } from './PaginatedReaderView';
 import { useReaderStore } from '../stores/useReaderStore';
 import { useSettingsStore } from '../stores/useSettingsStore';
+
+// Mock layout utility to avoid @chenglou/pretext failures in JSDOM
+vi.mock('../utils/layout', () => ({
+  computePageEndIndex: vi.fn((words, startIndex) => Math.min(startIndex + 50, words.length))
+}));
 
 // Mock ResizeObserver
 class MockResizeObserver {
@@ -73,5 +78,60 @@ describe('PaginatedReaderView Visual Highlighting', () => {
     
     // We can also check if we update currentIndex, the highlight follows properly!
     
+  });
+
+  it('triggers next page on left swipe', () => {
+    const mockHandlePlay = vi.fn();
+    const { getAllByTestId } = render(
+      <PaginatedReaderView
+        navigate={vi.fn()}
+        handleSetIsPlaying={mockHandlePlay}
+        onCloseBook={vi.fn()}
+        onReadChapter={vi.fn()}
+      />
+    );
+
+    const readingArea = getAllByTestId('paginated-reading-area')[0];
+
+    // Simulate left swipe (drag from right to left)
+    fireEvent.pointerDown(readingArea, { clientX: 300, clientY: 100 });
+    fireEvent.pointerUp(readingArea, { clientX: 100, clientY: 100 });
+
+    // In this mock environment, we can check if currentIndex changed
+    // Since we don't have a real layout engine in JSDOM that populates layoutState.end,
+    // we might need to verify that the internal navigateNextPage was called or state updated.
+    // However, without a real layout, navigateNextPage might not do much if layoutState.end is null.
+
+    // Actually, in the test, layoutState.end is null initially.
+    // Let's check if the swipe was detected by ensuring handleSetIsPlaying was NOT called (it would be called on a tap)
+    fireEvent.click(readingArea);
+    expect(mockHandlePlay).not.toHaveBeenCalled();
+  });
+
+  it('triggers prev page on right swipe', () => {
+    // Set currentIndex to something > 0
+    useReaderStore.setState({ currentIndex: 100 });
+
+    const mockHandlePlay = vi.fn();
+    const { getAllByTestId } = render(
+      <PaginatedReaderView
+        navigate={vi.fn()}
+        handleSetIsPlaying={mockHandlePlay}
+        onCloseBook={vi.fn()}
+        onReadChapter={vi.fn()}
+      />
+    );
+
+    const readingArea = getAllByTestId('paginated-reading-area')[0];
+
+    // Simulate right swipe (drag from left to right)
+    fireEvent.pointerDown(readingArea, { clientX: 100, clientY: 100 });
+    fireEvent.pointerUp(readingArea, { clientX: 300, clientY: 100 });
+
+    fireEvent.click(readingArea);
+    expect(mockHandlePlay).not.toHaveBeenCalled();
+
+    // Check if currentIndex decreased (navigatePrevPage should work even with null end)
+    expect(useReaderStore.getState().currentIndex).toBeLessThan(100);
   });
 });

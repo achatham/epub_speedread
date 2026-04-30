@@ -45,6 +45,9 @@ export function PaginatedReaderView({
 
   const pressStartTimeRef = useRef<number | null>(null);
   const lastPauseTimeRef = useRef<number>(0);
+  const swipeStartXRef = useRef<number | null>(null);
+  const swipeStartYRef = useRef<number | null>(null);
+  const isSwipingRef = useRef<boolean>(false);
 
   const effectiveTotalWords = words.length;
 
@@ -209,6 +212,37 @@ export function PaginatedReaderView({
     }
   };
 
+  const handlePaginatedPointerDown = (e: React.PointerEvent) => {
+    if (isPlaying) return;
+    swipeStartXRef.current = e.clientX;
+    swipeStartYRef.current = e.clientY;
+    isSwipingRef.current = false;
+  };
+
+  const handlePaginatedPointerUp = (e: React.PointerEvent) => {
+    if (isPlaying || swipeStartXRef.current === null || swipeStartYRef.current === null) return;
+
+    const deltaX = e.clientX - swipeStartXRef.current;
+    const deltaY = e.clientY - swipeStartYRef.current;
+
+    swipeStartXRef.current = null;
+    swipeStartYRef.current = null;
+
+    if (Math.abs(deltaX) > 50 && Math.abs(deltaX) > Math.abs(deltaY)) {
+      isSwipingRef.current = true;
+      if (deltaX > 0) {
+        navigatePrevPage();
+      } else {
+        navigateNextPage();
+      }
+    }
+  };
+
+  const handlePaginatedPointerCancel = () => {
+    swipeStartXRef.current = null;
+    swipeStartYRef.current = null;
+  };
+
   // RSVP Dynamic Font Size
   const vw = window.innerWidth;
   const vh = window.innerHeight;
@@ -309,7 +343,14 @@ export function PaginatedReaderView({
           ${isPlaying ? 'flex items-center justify-center' : ''}`}
         data-testid="paginated-reading-area"
         data-is-measuring={isMeasuring}
+        onPointerDown={handlePaginatedPointerDown}
+        onPointerUp={handlePaginatedPointerUp}
+        onPointerCancel={handlePaginatedPointerCancel}
         onClick={() => {
+          if (isSwipingRef.current) {
+            isSwipingRef.current = false;
+            return;
+          }
           if (Date.now() - lastPauseTimeRef.current < 400) return;
           if (!isPlaying) handleSetIsPlaying(true);
         }}
