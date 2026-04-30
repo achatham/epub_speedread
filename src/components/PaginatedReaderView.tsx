@@ -407,17 +407,15 @@ export function PaginatedReaderView({
       {/* ── Footer / controls ──────────────────────────────────── */}
       <div className={`shrink-0 px-4 pt-3 pb-8 flex flex-col gap-2`}>
         <div className="flex flex-col gap-1.5">
-          {/* Chapter Progress bar - only in paused/paginated state */}
-          {!isPlaying && (
+          {/* Chapter Progress bar */}
+          <div
+            className={`w-full h-1 rounded-sm relative ${theme === 'bedtime' ? 'bg-zinc-900/50' : 'bg-zinc-200/50 dark:bg-zinc-800/50'}`}
+          >
             <div
-              className={`w-full h-1 rounded-sm relative ${theme === 'bedtime' ? 'bg-zinc-900/50' : 'bg-zinc-200/50 dark:bg-zinc-800/50'}`}
-            >
-              <div
-                className={`h-full rounded-sm transition-all duration-300 ${theme === 'bedtime' ? 'bg-amber-600/60' : 'bg-red-500/50'}`}
-                style={{ width: `${chapterProgress}%` }}
-              />
-            </div>
-          )}
+              className={`h-full rounded-sm transition-all duration-300 ${theme === 'bedtime' ? 'bg-amber-600/60' : 'bg-red-500/50'}`}
+              style={{ width: `${chapterProgress}%` }}
+            />
+          </div>
 
           {/* Book Progress bar */}
           <div
