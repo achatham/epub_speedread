@@ -184,6 +184,11 @@ export function PaginatedReaderView({
   const handlePointerDown = (e: React.PointerEvent) => {
     e.stopPropagation();
     if (e.button !== 0 && e.pointerType === 'mouse') return;
+    // Capture the pointer so the matching up/cancel reliably fires on this
+    // element even if the finger drifts. Combined with touch-action:none on the
+    // overlay, this stops the browser from claiming the gesture (and firing a
+    // spurious pointercancel that would resume playback mid-hold).
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* not supported */ }
     pressStartTimeRef.current = Date.now();
     setIsHoldPaused(true);
   };
@@ -358,6 +363,7 @@ export function PaginatedReaderView({
         {isPlaying && (
           <div
             className="fixed inset-0 z-40 bg-transparent cursor-pointer"
+            style={{ touchAction: 'none' }}
             onPointerDown={handlePointerDown}
             onPointerUp={handlePointerUp}
             onPointerCancel={handlePointerCancel}

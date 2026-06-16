@@ -84,14 +84,14 @@ export function usePlayback(audioPlayerRef: React.MutableRefObject<AudioBookPlay
         });
     }, [words.length, setCurrentIndex, setIsPlaying]);
 
-    // Track playback time
+    // The WPM-ramp baseline. It is set when playback starts/resumes and cleared
+    // only on a full stop (handleSetIsPlaying(false)). A momentary hold-pause
+    // must NOT reset it — otherwise the ramp restarts from half-speed every time
+    // the reader briefly holds the screen, which reads as "it keeps slowing
+    // down" on resume.
     useEffect(() => {
-        if (isPlaying && !isHoldPaused && playbackStartTime) {
-            // Do nothing, already tracking
-        } else if (isPlaying && !isHoldPaused && !playbackStartTime) {
+        if (isPlaying && !isHoldPaused && !playbackStartTime) {
             setPlaybackStartTime(Date.now());
-        } else if (playbackStartTime) {
-            setPlaybackStartTime(null);
         }
     }, [isHoldPaused, isPlaying, playbackStartTime]);
 
