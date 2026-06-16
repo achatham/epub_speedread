@@ -36,6 +36,32 @@ The project is hosted on **Firebase Hosting**.
 
 The project uses **Playwright** for End-to-End (E2E) testing.
 
+### Running E2E tests in Docker (canonical)
+
+E2E tests run in a container so the environment is reproducible — this is the
+**canonical** way to run them, and screenshot baselines (`tests/screenshots/`)
+are generated in this container. Running `npx playwright test` directly on the
+host renders fonts differently and will fail the screenshot comparisons.
+
+The tests don't need the Firebase emulator: they run in "mock mode" (see
+`MOCK_STORAGE` in `src/hooks/useAuth.ts` and the `window.__loadMockWords` /
+`__setLibrary` hooks the specs drive), so the container only needs Node +
+browsers.
+
+```bash
+# Build the image (only needed after app/dependency changes — tests/ is mounted)
+docker compose build e2e
+
+# Run the whole suite
+docker compose run --rm e2e            # or: npm run test:e2e:docker
+
+# Run a single spec
+docker compose run --rm e2e tests/onboarding.spec.ts
+
+# Regenerate screenshot baselines (writes back to the host via the tests/ mount)
+docker compose run --rm e2e --update-snapshots
+```
+
 ### Running Tests
 
 When iterating on a specific problem, try to run only the specific tests in 

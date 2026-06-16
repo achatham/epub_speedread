@@ -17,8 +17,12 @@ npm run build
 echo "3. Running Unit Tests (Vitest)..."
 npm run test
 
-echo "4. Running E2E Tests (Playwright)..."
-# Playwright config starts the webServer automatically
-npx playwright test
+echo "4. Running E2E Tests (Playwright in Docker)..."
+# E2E tests run in a container (see Dockerfile / docker-compose.yml) so the
+# environment — and especially screenshot baselines — is reproducible. Running
+# `npx playwright test` directly on the host renders fonts differently and will
+# fail the screenshot comparisons.
+docker compose build e2e
+docker compose run --rm e2e
 
 echo -e "${GREEN}Verification successful! All checks passed.${NC}"

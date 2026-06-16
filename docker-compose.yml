@@ -1,0 +1,23 @@
+# Run the Playwright e2e suite in a container:
+#
+#   docker compose run --rm e2e
+#
+# Or a single spec:
+#
+#   docker compose run --rm e2e tests/onboarding.spec.ts
+services:
+  e2e:
+    build: .
+    # Chromium needs a large /dev/shm; host IPC avoids crashes in headless runs.
+    ipc: host
+    init: true
+    volumes:
+      # Mount the test sources so spec edits don't require a rebuild and so
+      # `--update-snapshots` writes regenerated baselines back to the host.
+      # (Screenshot baselines are environment-specific; this container is the
+      # canonical environment for them — regenerate with:
+      #   docker compose run --rm e2e --update-snapshots)
+      - ./tests:/app/tests
+      # Surface reports/artifacts back on the host (uid 1000 == ubuntu user).
+      - ./test-results:/app/test-results
+      - ./playwright-report:/app/playwright-report
