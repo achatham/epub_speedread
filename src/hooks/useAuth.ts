@@ -30,6 +30,7 @@ const MOCK_STORAGE = {
     updateBookTotalWords: async () => { },
     updateBookArchived: async () => { },
     aggregateSessions: async () => { },
+    pruneImplausibleSessions: async () => 0,
     getChapterAudio: async () => null,
     saveChapterAudio: async () => { },
     getIllustrations: async () => [],

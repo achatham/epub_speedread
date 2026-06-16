@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getIncrementalAggregationPlan, getHistoryRangeData, getBookProgressTrendData, calculateFinishedBooks } from './stats';
+import { getIncrementalAggregationPlan, getHistoryRangeData, getBookProgressTrendData, calculateFinishedBooks, isImplausiblySlowSession } from './stats';
 import type { ReadingSession, BookRecord } from './storage';
 
 // Mock crypto.randomUUID
@@ -330,5 +330,46 @@ describe('calculateFinishedBooks', () => {
 
         expect(results).toHaveLength(0);
         expect(booksToUpdate).toHaveLength(0);
+    });
+});
+
+describe('isImplausiblySlowSession', () => {
+    const base: ReadingSession = {
+        id: 's',
+        bookId: 'b',
+        bookTitle: 'B',
+        startTime: 0,
+        endTime: 0,
+        startWordIndex: 0,
+        endWordIndex: 0,
+        wordsRead: 0,
+        durationSeconds: 0,
+        type: 'paginated',
+    };
+
+    it('flags one page read over thousands of minutes', () => {
+        // ~300 words over 2737 minutes -> ~0.11 WPM
+        const s = { ...base, wordsRead: 300, durationSeconds: 2737 * 60 };
+        expect(isImplausiblySlowSession(s)).toBe(true);
+    });
+
+    it('does not flag normal reading speeds', () => {
+        const s = { ...base, wordsRead: 300, durationSeconds: 60 }; // 300 WPM
+        expect(isImplausiblySlowSession(s)).toBe(false);
+    });
+
+    it('does not flag a slow-but-human session above the threshold', () => {
+        const s = { ...base, wordsRead: 30, durationSeconds: 60 }; // 30 WPM
+        expect(isImplausiblySlowSession(s)).toBe(false);
+    });
+
+    it('ignores sessions with no words or no duration', () => {
+        expect(isImplausiblySlowSession({ ...base, wordsRead: 0, durationSeconds: 5000 })).toBe(false);
+        expect(isImplausiblySlowSession({ ...base, wordsRead: 100, durationSeconds: 0 })).toBe(false);
+    });
+
+    it('falls back to word index span when wordsRead is missing', () => {
+        const s = { ...base, wordsRead: 0, startWordIndex: 0, endWordIndex: 5, durationSeconds: 3600 };
+        expect(isImplausiblySlowSession(s)).toBe(true); // 5 words / 60 min
     });
 });

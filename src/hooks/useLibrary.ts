@@ -25,10 +25,13 @@ export function useLibrary(
 
         const loadLibrary = async () => {
             try {
-                const [books, history] = await Promise.all([
+                // Prune implausibly slow sessions (e.g. stale entries showing a
+                // single page read over many hours) before reading history back.
+                const [books] = await Promise.all([
                     storageProvider.getAllBooks(),
-                    storageProvider.getAggregatedSessions()
+                    storageProvider.pruneImplausibleSessions()
                 ]);
+                const history = await storageProvider.getAggregatedSessions();
 
                 setLibrary(books);
                 setSessions(history);
