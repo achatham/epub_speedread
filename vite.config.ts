@@ -68,6 +68,9 @@ export default defineConfig({
   ],
   test: {
     environment: 'jsdom',
+    // vitest's jsdom env doesn't expose a working localStorage/sessionStorage,
+    // so a polyfill is installed in the setup file.
+    setupFiles: ['./src/test/setup.ts'],
     exclude: [...configDefaults.exclude, 'tests/**'],
   },
 })

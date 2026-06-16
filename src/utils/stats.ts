@@ -32,6 +32,22 @@ export function calculateFinishedBooks(books: BookRecord[], sessions: ReadingSes
   return { results, booksToUpdate };
 }
 
+// Effective reading speed below this is physically implausible for any human
+// (e.g. a stale entry showing one page read over many hours). Such entries are
+// the result of old timing bugs and should be pruned rather than displayed.
+export const MIN_PLAUSIBLE_WPM = 1;
+
+export function getSessionWordsRead(s: ReadingSession): number {
+  return s.wordsRead || Math.max(0, s.endWordIndex - s.startWordIndex);
+}
+
+export function isImplausiblySlowSession(s: ReadingSession): boolean {
+  const words = getSessionWordsRead(s);
+  if (words <= 0 || s.durationSeconds <= 0) return false;
+  const effectiveWpm = (words / s.durationSeconds) * 60;
+  return effectiveWpm < MIN_PLAUSIBLE_WPM;
+}
+
 export function getDayKey(startTime: number): string {
   const d = new Date(startTime);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;

@@ -2,7 +2,7 @@ import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { db as firestore, storage as firebaseStorage } from './firebase';
 import { collection, doc, setDoc, getDocs, deleteDoc, getDoc, updateDoc, runTransaction, query, where, orderBy, getDocFromCache, getDocsFromCache } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { getIncrementalAggregationPlan } from './stats';
+import { getIncrementalAggregationPlan, isImplausiblySlowSession, getSessionWordsRead } from './stats';
 
 export interface RsvpSettings {
   periodMultiplier: number;
@@ -575,6 +575,83 @@ export class FirestoreStorage {
     
     // Note: We avoid eagerly recalculating cumulative progress attributes here 
     // to strictly preserve the visual progress index during debug purges.
+  }
+
+  /**
+   * Deletes reading sessions whose effective speed is physically implausible
+   * (e.g. an old entry showing a single page "read" over many hours, caused by
+   * historical timing bugs). Both raw and aggregated session docs are scanned.
+   * For each affected book, the aggregated sessions and cumulative stats are
+   * rebuilt from the remaining (plausible) raw sessions so totals stay correct.
+   * Returns the number of session documents removed.
+   */
+  async pruneImplausibleSessions(): Promise<number> {
+    if (!firestore) return 0;
+
+    try {
+      const [rawSnap, aggSnap] = await Promise.all([
+        getDocs(this.sessionsCollection),
+        getDocs(this.aggregatedSessionsCollection),
+      ]);
+
+      const implausibleRaw = rawSnap.docs.filter(d => isImplausiblySlowSession(d.data() as ReadingSession));
+      const implausibleAgg = aggSnap.docs.filter(d => isImplausiblySlowSession(d.data() as ReadingSession));
+
+      if (implausibleRaw.length === 0 && implausibleAgg.length === 0) return 0;
+
+      const affectedBookIds = new Set<string>();
+      implausibleRaw.forEach(d => affectedBookIds.add((d.data() as ReadingSession).bookId));
+      implausibleAgg.forEach(d => affectedBookIds.add((d.data() as ReadingSession).bookId));
+
+      const implausibleRawIds = new Set(implausibleRaw.map(d => d.id));
+      let deletedCount = 0;
+
+      // Rebuild each affected book independently to keep transactions small.
+      for (const bookId of affectedBookIds) {
+        const bookRawDocs = rawSnap.docs.filter(d => (d.data() as ReadingSession).bookId === bookId);
+        const rawToDelete = bookRawDocs.filter(d => implausibleRawIds.has(d.id));
+        const remainingRaw = bookRawDocs
+          .filter(d => !implausibleRawIds.has(d.id))
+          .map(d => d.data() as ReadingSession);
+        const oldAggDocs = aggSnap.docs.filter(d => (d.data() as ReadingSession).bookId === bookId);
+
+        // Recompute cumulative stats from the surviving raw sessions.
+        let cumulativeWords = 0;
+        let cumulativeDuration = 0;
+        for (const s of remainingRaw) {
+          cumulativeWords += getSessionWordsRead(s);
+          cumulativeDuration += s.durationSeconds;
+        }
+        const { createSessions } = getIncrementalAggregationPlan([], remainingRaw);
+
+        await runTransaction(firestore!, async (transaction) => {
+          const bookRef = doc(this.booksCollection, bookId);
+          const bookSnap = await transaction.get(bookRef);
+
+          for (const d of rawToDelete) transaction.delete(d.ref);
+          for (const d of oldAggDocs) transaction.delete(d.ref);
+          for (const s of createSessions) {
+            transaction.set(doc(this.aggregatedSessionsCollection, s.id), s);
+          }
+
+          if (bookSnap.exists()) {
+            transaction.update(bookRef, {
+              'progress.cumulativeWordsRead': cumulativeWords,
+              'progress.cumulativeExpectedWords': cumulativeWords,
+              'progress.cumulativeDurationSeconds': cumulativeDuration,
+            });
+          }
+        });
+
+        deletedCount += rawToDelete.length + oldAggDocs.length;
+      }
+
+      console.log(`[Storage] Pruned implausibly slow sessions across ${affectedBookIds.size} book(s); removed ${deletedCount} session doc(s).`);
+      return deletedCount;
+    } catch (e) {
+      console.error("Failed to prune implausible sessions", e);
+      return 0;
+    }
   }
 
   async saveChapterAudio(bookId: string, chapterIndex: number, speed: number, chunks: AudioChunk[]): Promise<void> {
