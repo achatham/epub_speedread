@@ -179,7 +179,7 @@ export function LibraryView({
                     )}
                   </div>
                   <h3 className="font-semibold text-sm line-clamp-1 flex-1">{book.meta.title}</h3>
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex gap-1">
                     <button
                       onClick={(e) => { e.stopPropagation(); onToggleArchive(book.id, !book.archived); }}
                       className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg transition-all"
