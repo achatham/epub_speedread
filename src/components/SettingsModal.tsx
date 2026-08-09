@@ -317,7 +317,7 @@ export function SettingsModal({
                     label="Chapter Break Delay"
                     description="Pause between chapters"
                     value={rsvpSettings.chapterBreakDelay}
-                    min={0} max={10000} step={500}
+                    min={0} max={10000} step={100}
                     unit="ms"
                     onChange={(v) => updateRsvp('chapterBreakDelay', v)}
                   />

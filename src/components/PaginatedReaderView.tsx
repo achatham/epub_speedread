@@ -381,7 +381,7 @@ export function PaginatedReaderView({
             )}
 
             {isChapterBreak ? (
-              <div className="flex flex-col items-center justify-center text-center px-4 animate-in fade-in zoom-in duration-500">
+              <div className="flex flex-col items-center justify-center text-center px-4 animate-in fade-in zoom-in duration-200">
                 <div className={`text-xs uppercase tracking-widest mb-3 opacity-50 font-bold ${theme === 'bedtime' ? 'text-amber-600' : 'text-zinc-500'}`}>
                   Next Chapter
                 </div>

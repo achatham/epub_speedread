@@ -6,6 +6,9 @@ test('pausing during chapter interlude should advance to next chapter and not ba
   await page.waitForFunction(() => typeof (window as any).__loadMockWords === 'function');
 
   await page.evaluate(() => {
+    // The shipped interlude is short by design; hold it open long enough for
+    // the assertions below to run against it.
+    (window as any).__setRsvpSettings?.({ chapterBreakDelay: 5000 });
     (window as any).__loadMockWords([
       { text: "This", isParagraphStart: true, isSentenceStart: true },
       { text: "is", isParagraphStart: false, isSentenceStart: false },

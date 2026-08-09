@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import { DEFAULT_RSVP_SETTINGS, DEFAULT_PAGINATED_FONT_SIZE } from '../constants';
 import type { RsvpSettings, ReadingMode } from '../utils/storage';
 import { getGeminiApiKey, setGeminiApiKey as saveGeminiApiKey } from '../utils/gemini';
+import { normalizeRsvpSettings } from '../utils/rsvp-settings';
 
 export type Theme = 'light' | 'dark' | 'bedtime';
 export type FontFamily = 'system' | 'serif' | 'mono' | 'opendyslexic' | 'atkinson';
@@ -83,6 +84,15 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'user_settings',
+      version: 1,
+      // v0 -> v1: shorten the 3000ms chapter interlude that shipped as the
+      // original default. Firestore-loaded settings get the same treatment in
+      // App.tsx, otherwise a sync would put the old value straight back.
+      migrate: (persisted, version) => {
+        const state = persisted as Partial<SettingsState> | undefined;
+        if (version >= 1 || !state?.rsvpSettings) return state;
+        return { ...state, rsvpSettings: normalizeRsvpSettings(state.rsvpSettings) };
+      },
     }
   )
 );

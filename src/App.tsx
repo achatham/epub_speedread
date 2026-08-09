@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { type BookRecord } from './utils/storage';
 import { processBook, analyzeRealEndOfBook } from './utils/ebook';
 import { AudioBookPlayer } from './utils/AudioBookPlayer';
+import { normalizeRsvpSettings } from './utils/rsvp-settings';
 import { AuthenticatedApp } from './components/AuthenticatedApp';
 import { AboutView, AboutContent } from './components/AboutView';
 import { ConsoleLogger } from './components/ConsoleLogger';
@@ -329,6 +330,12 @@ function App() {
       setWpm(newWpm);
     };
 
+    // Lets specs pin timing-sensitive values (e.g. a chapter interlude long
+    // enough to assert on) instead of racing the defaults.
+    (window as any).__setRsvpSettings = (partial: Record<string, number>) => {
+      setRsvpSettings(partial as any);
+    };
+
     (window as any).__setMockSettings = () => {
       MOCK_STORAGE.updateSettings();
     };
@@ -384,7 +391,7 @@ function App() {
           if (s.fontFamily) setFontFamily(s.fontFamily as any);
           if (s.ttsSpeed) setTtsSpeed(s.ttsSpeed);
           if (s.autoLandscape !== undefined) setAutoLandscape(s.autoLandscape);
-          if (s.rsvp) setRsvpSettings({ ...rsvpSettings, ...s.rsvp });
+          if (s.rsvp) setRsvpSettings(normalizeRsvpSettings({ ...rsvpSettings, ...s.rsvp }));
           if (s.paginatedFontSize) setPaginatedFontSize(s.paginatedFontSize);
           if (s.lastBookId !== undefined) setLastBookId(s.lastBookId);
 
