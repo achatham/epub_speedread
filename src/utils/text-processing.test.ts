@@ -123,3 +123,85 @@ describe('extractWordsFromDoc', () => {
     ]);
   });
 });
+
+describe('extractWordsFromDoc formatting', () => {
+  const parse = (html: string) =>
+    extractWordsFromDoc(new DOMParser().parseFromString(html, 'text/html'));
+
+  it('marks italic and bold words', () => {
+    const words = parse('<p>Plain <em>emphasised words</em> and <strong>strong</strong> ones.</p>');
+
+    expect(words.map(w => w.text)).toEqual([
+      'Plain', 'emphasised', 'words', 'and', 'strong', 'ones.'
+    ]);
+    expect(words.filter(w => w.isItalic).map(w => w.text)).toEqual(['emphasised', 'words']);
+    expect(words.filter(w => w.isBold).map(w => w.text)).toEqual(['strong']);
+  });
+
+  it('detects styling from inline styles and spelled-out class names', () => {
+    const words = parse(
+      '<p><span style="font-style: italic">slanted</span> ' +
+      '<span style="font-weight:700">heavy</span> ' +
+      '<span class="text italic">classy</span> ' +
+      '<span class="calibre4">plain</span></p>'
+    );
+
+    expect(words.filter(w => w.isItalic).map(w => w.text)).toEqual(['slanted', 'classy']);
+    expect(words.filter(w => w.isBold).map(w => w.text)).toEqual(['heavy']);
+  });
+
+  it('keeps words whole when formatting starts or ends mid-word', () => {
+    const words = parse('<p>He said <em>no</em>. That was <em>un</em>believable.</p>');
+
+    expect(words.map(w => w.text)).toEqual(['He', 'said', 'no.', 'That', 'was', 'unbelievable.']);
+    expect(words.find(w => w.text === 'no.')?.isItalic).toBe(true);
+    expect(words.find(w => w.text === 'unbelievable.')?.isItalic).toBe(true);
+  });
+
+  it('records heading levels', () => {
+    const words = parse('<h1>Part One</h1><h3>A section</h3><p>Body text.</p>');
+
+    expect(words[0]).toMatchObject({ text: 'Part', isHeading: true, headingLevel: 1 });
+    expect(words[2]).toMatchObject({ text: 'A', isHeading: true, headingLevel: 3 });
+    expect(words[4].isHeading).toBeUndefined();
+    expect(words[4].headingLevel).toBeUndefined();
+  });
+
+  it('records blockquote nesting', () => {
+    const words = parse('<p>Before.</p><blockquote><p>Quoted line.</p></blockquote><p>After.</p>');
+
+    expect(words.filter(w => w.quoteLevel === 1).map(w => w.text)).toEqual(['Quoted', 'line.']);
+    expect(words.find(w => w.text === 'After.')?.quoteLevel).toBeUndefined();
+  });
+
+  it('records nested blockquotes', () => {
+    const words = parse('<blockquote><p>Outer.</p><blockquote><p>Inner.</p></blockquote></blockquote>');
+
+    expect(words.find(w => w.text === 'Outer.')?.quoteLevel).toBe(1);
+    expect(words.find(w => w.text === 'Inner.')?.quoteLevel).toBe(2);
+  });
+
+  it('marks list items with bullets and numbers', () => {
+    const words = parse('<ul><li>First item</li><li>Second</li></ul><ol start="3"><li>Third</li><li>Fourth</li></ol>');
+
+    expect(words.filter(w => w.listMarker).map(w => `${w.listMarker} ${w.text}`)).toEqual([
+      '• First', '• Second', '3. Third', '4. Fourth'
+    ]);
+    expect(words.every(w => w.listLevel === 1)).toBe(true);
+    expect(words.find(w => w.text === 'item')?.listMarker).toBeUndefined();
+  });
+
+  it('starts a new paragraph for each list item', () => {
+    const words = parse('<ul><li>First item</li><li>Second item</li></ul>');
+
+    expect(words.filter(w => w.isParagraphStart).map(w => w.text)).toEqual(['First', 'Second']);
+  });
+
+  it('does not leak formatting past its element', () => {
+    const words = parse('<blockquote><p><em>Quoted.</em></p></blockquote><p>Plain again.</p>');
+
+    const after = words.find(w => w.text === 'Plain');
+    expect(after?.quoteLevel).toBeUndefined();
+    expect(after?.isItalic).toBeUndefined();
+  });
+});

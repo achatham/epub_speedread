@@ -1,5 +1,6 @@
 import { prepareWithSegments, layoutWithLines } from '@chenglou/pretext';
 import type { WordData } from './text-processing';
+import { getParagraphStyle } from './word-style';
 
 /** Use pretext to compute the end index of words that fit in the reading area. */
 export function computePageEndIndex(
@@ -44,15 +45,24 @@ export function computePageEndIndex(
 
   // Layout paragraph by paragraph
   for (const paraWords of paragraphs) {
-    const isHeading = paraWords.some(w => w.isHeading);
-    const activeFontSize = isHeading ? fontSize * 1.5 : fontSize;
-    const activeLineHeight = isHeading ? Math.round(activeFontSize * 1.5) : lineHeight;
-    const activeFontStr = isHeading ? `bold ${activeFontSize}px ${fontFamilyStr}` : baseFontStr;
+    const style = getParagraphStyle(paraWords);
+    const isPlain = style.fontScale === 1 && !style.isBold && !style.isItalic;
+    const activeFontSize = fontSize * style.fontScale;
+    const activeLineHeight = style.fontScale === 1 ? lineHeight : Math.round(activeFontSize * 1.5);
+    const activeFontStr = isPlain
+      ? baseFontStr
+      : `${style.isItalic ? 'italic ' : ''}${style.isBold ? 'bold ' : ''}${activeFontSize}px ${fontFamilyStr}`;
+    // Blockquotes and list items are drawn inset, so they wrap sooner
+    const activeWidth = style.indentEm > 0
+      ? Math.max(fontSize * 4, areaWidth - style.indentEm * fontSize)
+      : areaWidth;
+
+    accHeight += style.marginTopEm * activeFontSize;
 
     const text = paraWords.map((w) => w.text).join(' ');
 
     const prepared = prepareWithSegments(text, activeFontStr);
-    const { lines } = layoutWithLines(prepared, areaWidth, activeLineHeight);
+    const { lines } = layoutWithLines(prepared, activeWidth, activeLineHeight);
 
     const paraHeight = lines.length * activeLineHeight;
 
@@ -60,7 +70,8 @@ export function computePageEndIndex(
     if (accHeight + paraHeight <= areaHeight) {
       // Entire paragraph fits
       wordsIncluded += paraWords.length;
-      accHeight += paraHeight + (isHeading ? paragraphGap * 1.5 : paragraphGap);
+      // The rendered margin-bottom is 1em of the paragraph's own font size
+      accHeight += paraHeight + paragraphGap * style.fontScale;
     } else {
       // Paragraph doesn't fully fit, figure out how many lines do fit
       const remainingHeight = areaHeight - accHeight;

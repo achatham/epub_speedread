@@ -310,7 +310,14 @@ function App() {
         text: w.text,
         isParagraphStart: typeof w.isParagraphStart === 'boolean' ? w.isParagraphStart : (w.paragraphIndex === 0 && w.sentenceIndex === 0),
         isSentenceStart: typeof w.isSentenceStart === 'boolean' ? w.isSentenceStart : w.sentenceIndex === 0,
-        isHeading: w.isHeading
+        isHeading: w.isHeading,
+        isDivider: w.isDivider,
+        headingLevel: w.headingLevel,
+        isItalic: w.isItalic,
+        isBold: w.isBold,
+        quoteLevel: w.quoteLevel,
+        listLevel: w.listLevel,
+        listMarker: w.listMarker
       }));
 
       setWords(processedWords);

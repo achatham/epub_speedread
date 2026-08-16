@@ -135,3 +135,100 @@ describe('PaginatedReaderView Visual Highlighting', () => {
     expect(useReaderStore.getState().currentIndex).toBeLessThan(100);
   });
 });
+
+describe('PaginatedReaderView Rich Text', () => {
+  const renderReader = () =>
+    render(
+      <PaginatedReaderView
+        navigate={vi.fn()}
+        handleSetIsPlaying={vi.fn()}
+        onCloseBook={vi.fn()}
+        onReadChapter={vi.fn()}
+      />
+    );
+
+  const setWords = (words: any[]) => {
+    useReaderStore.setState({
+      words,
+      sections: [{ label: 'Chapter 1', startIndex: 0 }],
+      currentIndex: 0,
+      isPlaying: false,
+      isReadingAloud: false,
+    });
+    useSettingsStore.setState({
+      paginatedFontSize: 16,
+      fontFamily: 'system',
+      theme: 'light',
+    });
+  };
+
+  const wordAt = (container: HTMLElement, idx: number) =>
+    container.querySelector(`span[data-word-idx="${idx}"]`)!;
+
+  it('renders italic and bold words with their formatting', () => {
+    setWords([
+      { text: 'Plain', isParagraphStart: true, isSentenceStart: true },
+      { text: 'slanted', isParagraphStart: false, isSentenceStart: false, isItalic: true },
+      { text: 'heavy', isParagraphStart: false, isSentenceStart: false, isBold: true },
+    ]);
+
+    const { container } = renderReader();
+
+    expect(wordAt(container, 0).className).not.toContain('italic');
+    expect(wordAt(container, 1).className).toContain('italic');
+    expect(wordAt(container, 2).className).toContain('font-bold');
+  });
+
+  it('scales headings by level', () => {
+    setWords([
+      { text: 'Title', isParagraphStart: true, isSentenceStart: true, isHeading: true, headingLevel: 1 },
+      { text: 'Section', isParagraphStart: true, isSentenceStart: true, isHeading: true, headingLevel: 3 },
+      { text: 'Body', isParagraphStart: true, isSentenceStart: true },
+    ]);
+
+    const { container } = renderReader();
+
+    const h1Para = wordAt(container, 0).closest('p')!;
+    const h3Para = wordAt(container, 1).closest('p')!;
+    const bodyPara = wordAt(container, 2).closest('p')!;
+
+    expect(h1Para.style.fontSize).toBe('1.7em');
+    expect(h1Para.className).toContain('font-bold');
+    expect(h3Para.style.fontSize).toBe('1.25em');
+    expect(bodyPara.style.fontSize).toBe('');
+    expect(bodyPara.className).not.toContain('font-bold');
+  });
+
+  it('indents blockquotes and groups consecutive quoted paragraphs', () => {
+    setWords([
+      { text: 'Before', isParagraphStart: true, isSentenceStart: true },
+      { text: 'Quoted', isParagraphStart: true, isSentenceStart: true, quoteLevel: 1 },
+      { text: 'Still', isParagraphStart: true, isSentenceStart: true, quoteLevel: 1 },
+      { text: 'After', isParagraphStart: true, isSentenceStart: true },
+    ]);
+
+    const { container } = renderReader();
+
+    const quoteBlock = wordAt(container, 1).closest('div.border-l-2')!;
+    expect(quoteBlock).not.toBeNull();
+    // The second quoted paragraph shares the same wrapper
+    expect(quoteBlock.contains(wordAt(container, 2))).toBe(true);
+    expect(quoteBlock.contains(wordAt(container, 0))).toBe(false);
+    expect(wordAt(container, 3).closest('div.border-l-2')).toBeNull();
+  });
+
+  it('renders list markers ahead of the first word of an item', () => {
+    setWords([
+      { text: 'First', isParagraphStart: true, isSentenceStart: true, listLevel: 1, listMarker: '•' },
+      { text: 'item', isParagraphStart: false, isSentenceStart: false, listLevel: 1 },
+      { text: 'Second', isParagraphStart: true, isSentenceStart: true, listLevel: 1, listMarker: '2.' },
+    ]);
+
+    const { container } = renderReader();
+
+    const firstItem = wordAt(container, 0).closest('p')!;
+    expect(firstItem.textContent).toBe('•First item');
+    expect(firstItem.style.paddingLeft).toBe('1.2em');
+    expect(wordAt(container, 2).closest('p')!.textContent).toBe('2.Second');
+  });
+});

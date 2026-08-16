@@ -5,6 +5,7 @@ import { ReaderMenu } from './ReaderMenu';
 import { splitWord } from '../utils/orp';
 import type { WordData } from '../utils/text-processing';
 import { useReaderLayout } from '../hooks/useReaderLayout';
+import { getParagraphStyle, LIST_MARKER_WIDTH_EM, QUOTE_INDENT_EM, type ParagraphStyle } from '../utils/word-style';
 import { type Theme, type FontFamily } from '../stores/useSettingsStore';
 import type { NavigationType } from '../utils/navigation';
 import { useSettingsStore } from '../stores/useSettingsStore';
@@ -403,7 +404,14 @@ export function PaginatedReaderView({
           <div
             ref={innerRef}
             className="h-full w-full px-8 pt-8 pb-16 overflow-hidden"
-            style={{ fontSize: `${fontSize}px`, lineHeight: `${lineHeight}px`, opacity: 1 }}
+            style={{
+              fontSize: `${fontSize}px`,
+              lineHeight: `${lineHeight}px`,
+              opacity: 1,
+              // :root sets font-synthesis: none, which would silently drop the
+              // book's emphasis for families without real italic/bold faces.
+              fontSynthesis: 'weight style',
+            }}
           >
             {renderPageWords(pageWords, theme, layoutState.start, currentIndex)}
           </div>
@@ -496,6 +504,85 @@ export function PaginatedReaderView({
   );
 }
 
+const HIGHLIGHT_CLASS =
+  'underline decoration-red-500/50 dark:decoration-red-400/50 decoration-2 underline-offset-4';
+
+interface PositionedWord {
+  word: WordData;
+  globalIdx: number;
+}
+
+function renderParagraph(
+  para: PositionedWord[],
+  style: ParagraphStyle,
+  key: number,
+  theme: Theme,
+  highlightIndex?: number
+) {
+  const isDivider = para.length === 1 && para[0].word.isDivider;
+
+  if (isDivider) {
+    const { globalIdx } = para[0];
+    return (
+      <div key={key} className="w-full flex justify-center my-8 opacity-40">
+        <span
+          data-word-idx={globalIdx}
+          className={`tracking-[0.5em] ${globalIdx === highlightIndex ? HIGHLIGHT_CLASS : ''}`}
+        >
+          * * *
+        </span>
+      </div>
+    );
+  }
+
+  const paraTextColor = theme === 'bedtime' ? 'text-stone-400' : 'text-zinc-800 dark:text-zinc-200';
+  const paraStyle: React.CSSProperties = {
+    marginTop: style.marginTopEm > 0 ? `${style.marginTopEm}em` : 0,
+    marginBottom: '1em',
+    marginLeft: 0,
+    marginRight: 0,
+  };
+  if (style.fontScale !== 1) paraStyle.fontSize = `${style.fontScale}em`;
+  if (style.listLevel > 0) {
+    // Hanging indent so wrapped lines clear the bullet/number
+    paraStyle.paddingLeft = `${LIST_MARKER_WIDTH_EM}em`;
+    paraStyle.textIndent = `-${LIST_MARKER_WIDTH_EM}em`;
+  }
+
+  return (
+    <p
+      key={key}
+      className={`leading-[inherit] ${paraTextColor} ${style.isHeading ? 'font-bold' : ''}`}
+      style={paraStyle}
+    >
+      {style.listMarker && (
+        <span
+          className="inline-block opacity-70"
+          style={{ width: `${LIST_MARKER_WIDTH_EM}em`, textIndent: 0 }}
+        >
+          {style.listMarker}
+        </span>
+      )}
+      {para.map(({ word, globalIdx }, wIdx) => {
+        const wordClass = [
+          globalIdx === highlightIndex ? HIGHLIGHT_CLASS : '',
+          word.isItalic ? 'italic' : '',
+          word.isBold && !style.isHeading ? 'font-bold' : '',
+        ].filter(Boolean).join(' ');
+        return (
+          <span
+            key={globalIdx}
+            data-word-idx={globalIdx}
+            className={wordClass}
+          >
+            {wIdx > 0 ? ' ' : ''}{word.text}
+          </span>
+        );
+      })}
+    </p>
+  );
+}
+
 function renderPageWords(
   pageWords: WordData[],
   theme: Theme,
@@ -505,8 +592,8 @@ function renderPageWords(
   if (pageWords.length === 0) return null;
 
   // Group words into paragraphs
-  const paragraphs: { word: WordData; globalIdx: number }[][] = [];
-  let current: { word: WordData; globalIdx: number }[] = [];
+  const paragraphs: PositionedWord[][] = [];
+  let current: PositionedWord[] = [];
   let currentGlobalIdx = pageStartIndex;
 
   for (const word of pageWords) {
@@ -518,50 +605,40 @@ function renderPageWords(
   }
   if (current.length > 0) paragraphs.push(current);
 
-  const paraTextColor = theme === 'bedtime' ? 'text-stone-400' : 'text-zinc-800 dark:text-zinc-200';
+  const styles = paragraphs.map(para => getParagraphStyle(para.map(p => p.word)));
 
-  return (
-    <>
-      {paragraphs.map((para, pIdx) => {
-        const isHeading = para.some(({ word }) => word.isHeading);
-        const isDivider = para.length === 1 && para[0].word.isDivider;
+  const quoteBorder = theme === 'bedtime'
+    ? 'border-zinc-800'
+    : 'border-zinc-300 dark:border-zinc-700';
 
-        if (isDivider) {
-          const { globalIdx } = para[0];
-          const isHighlighted = globalIdx === highlightIndex;
-          return (
-            <div key={pIdx} className="w-full flex justify-center my-8 opacity-40">
-              <span 
-                data-word-idx={globalIdx}
-                className={`tracking-[0.5em] ${isHighlighted ? 'underline decoration-red-500/50 dark:decoration-red-400/50 decoration-2 underline-offset-4' : ''}`}
-              >
-                * * *
-              </span>
-            </div>
-          );
-        }
+  // Consecutive quoted paragraphs share one indent rule so a multi-paragraph
+  // blockquote reads as a single block.
+  const blocks: React.ReactNode[] = [];
+  for (let i = 0; i < paragraphs.length; i++) {
+    const quoteLevel = styles[i].quoteLevel;
+    if (quoteLevel === 0) {
+      blocks.push(renderParagraph(paragraphs[i], styles[i], i, theme, highlightIndex));
+      continue;
+    }
 
-        return (
-          <p
-            key={pIdx}
-            className={`mb-[1em] leading-[inherit] ${paraTextColor} ${isHeading ? 'text-[1.5em] font-bold' : ''}`}
-            style={{ margin: 0, marginBottom: '1em' }}
-          >
-            {para.map(({ word, globalIdx }, wIdx) => {
-              const isHighlighted = globalIdx === highlightIndex;
-            return (
-              <span 
-                key={globalIdx} 
-                data-word-idx={globalIdx}
-                className={isHighlighted ? 'underline decoration-red-500/50 dark:decoration-red-400/50 decoration-2 underline-offset-4' : ''}
-              >
-                {wIdx > 0 ? ' ' : ''}{word.text}
-              </span>
-            );
-          })}
-        </p>
-        );
-      })}
-    </>
-  );
+    const group: number[] = [];
+    const startIdx = i;
+    while (i < paragraphs.length && styles[i].quoteLevel === quoteLevel) {
+      group.push(i);
+      i++;
+    }
+    i--;
+
+    blocks.push(
+      <div
+        key={`q${startIdx}`}
+        className={`border-l-2 ${quoteBorder} opacity-90`}
+        style={{ paddingLeft: `${QUOTE_INDENT_EM * quoteLevel - 0.25}em`, marginLeft: '0.25em' }}
+      >
+        {group.map(pIdx => renderParagraph(paragraphs[pIdx], styles[pIdx], pIdx, theme, highlightIndex))}
+      </div>
+    );
+  }
+
+  return <>{blocks}</>;
 }
