@@ -228,7 +228,7 @@ export function SettingsModal({
                   </label>
                   <div className="p-4 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 flex flex-col gap-3">
                     <p className="text-xs opacity-70">
-                      Use this token in external scripts (like Heavy Agent) to fetch your last 30 days of reading history formatted as clean JSON.
+                      Use this token in external scripts (like Heavy Agent) to fetch your reading history as clean JSON — one entry per sitting, with local start and end times. Add <code>days</code>, <code>since</code>/<code>until</code>, <code>tz</code>, <code>granularity</code>, <code>gapMinutes</code> or <code>minSeconds</code> to tune it (see the README).
                     </p>
                     <div className="flex gap-2 items-center">
                       <input 
@@ -250,7 +250,7 @@ export function SettingsModal({
                     </div>
                     {apiSyncToken && (
                       <p className="text-[10px] opacity-50 mt-1 font-mono break-all">
-                        curl "https://us-central1-epub-speed-reader-82342.cloudfunctions.net/exportHistory?token={apiSyncToken}"
+                        curl "https://us-central1-epub-speed-reader-82342.cloudfunctions.net/exportHistory?token={apiSyncToken}&days=7&tz={Intl.DateTimeFormat().resolvedOptions().timeZone}"
                       </p>
                     )}
                   </div>

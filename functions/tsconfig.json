@@ -13,5 +13,9 @@
   "compileOnSave": true,
   "include": [
     "src"
+  ],
+  // Unit tests run under the root vitest project, not the functions build.
+  "exclude": [
+    "src/**/*.test.ts"
   ]
 }

@@ -71,6 +71,8 @@ export default defineConfig({
     // vitest's jsdom env doesn't expose a working localStorage/sessionStorage,
     // so a polyfill is installed in the setup file.
     setupFiles: ['./src/test/setup.ts'],
-    exclude: [...configDefaults.exclude, 'tests/**'],
+    // tests/ is Playwright; functions/lib is the compiled Cloud Functions
+    // output, whose sources are already covered by functions/src.
+    exclude: [...configDefaults.exclude, 'tests/**', 'functions/lib/**'],
   },
 })

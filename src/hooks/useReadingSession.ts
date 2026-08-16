@@ -45,6 +45,12 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
     const paginatedBookTitleRef = useRef<string>('');
     const paginatedMaxIndexReachedRef = useRef<number>(currentIndex);
 
+    // Wall-clock start of the stretch of paginated reading currently being
+    // accumulated. Distinct from paginatedSessionStartTimeRef, which restarts
+    // on every visibility change: this is what gets logged as the session's
+    // startTime so the record lands where the reading actually happened.
+    const paginatedWindowStartTimeRef = useRef<number | null>(null);
+
     const [isDocumentVisible, setIsDocumentVisible] = useState(document.visibilityState === 'visible');
     const lastInteractionTimeRef = useRef<number>(Date.now());
     const paginatedAccumulatedDurationMsRef = useRef<number>(0);
@@ -227,6 +233,7 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
                 paginatedBookIdRef.current = currentBookId;
                 paginatedBookTitleRef.current = bookTitle;
                 paginatedAccumulatedDurationMsRef.current = 0;
+                paginatedWindowStartTimeRef.current = Date.now();
             }
         } else if ((!isPaginatedTrulyActive || (paginatedBookIdRef.current !== currentBookId)) && paginatedSessionStartTimeRef.current !== null) {
             // Pausing or Stopping active segment
@@ -247,7 +254,10 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
                 storageProvider.logReadingSession({
                     bookId: savedBookId,
                     bookTitle: paginatedBookTitleRef.current,
-                    startTime: Date.now() - totalDurationMs, // Approximate
+                    // Real start of the reading stretch, not now-minus-duration:
+                    // duration excludes idle time, so deriving it would shift the
+                    // session later than it happened.
+                    startTime: paginatedWindowStartTimeRef.current ?? (Date.now() - totalDurationMs),
                     endTime: Date.now(),
                     durationSeconds,
                     startWordIndex: paginatedSessionStartIndexRef.current || 0,
@@ -286,11 +296,13 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
                 paginatedWordsReadRef.current = 0;
                 paginatedBookIdRef.current = null;
                 paginatedAccumulatedDurationMsRef.current = 0;
+                paginatedWindowStartTimeRef.current = null;
             } else if (isFinishingSession) {
                 // Mode/Book changed but not enough words to log, still reset
                 paginatedWordsReadRef.current = 0;
                 paginatedBookIdRef.current = null;
                 paginatedAccumulatedDurationMsRef.current = 0;
+                paginatedWindowStartTimeRef.current = null;
             }
 
             paginatedSessionStartTimeRef.current = null;
@@ -335,7 +347,7 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
                 storageProvider.logReadingSession({
                     bookId: savedBookId,
                     bookTitle: paginatedBookTitleRef.current,
-                    startTime: Date.now() - durationMs,
+                    startTime: paginatedWindowStartTimeRef.current ?? (Date.now() - durationMs),
                     endTime: Date.now(),
                     durationSeconds,
                     startWordIndex: paginatedSessionStartIndexRef.current || 0,
@@ -375,6 +387,9 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
                 paginatedSessionStartIndexRef.current = currentIndex;
                 paginatedWordsReadRef.current = 0;
                 paginatedAccumulatedDurationMsRef.current = 0;
+                // The next chunk starts where this one ended, keeping the
+                // logged stretches contiguous rather than overlapping.
+                paginatedWindowStartTimeRef.current = now;
             }
         }
     }, [currentIndex, isPlaying, isReadingAloud, currentBookId, storageProvider, bookTitle, library, setLibrary, setSessions, isDocumentVisible]);
