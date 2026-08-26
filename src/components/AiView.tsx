@@ -1,16 +1,17 @@
-import { Bot, Sparkles, X, Volume2, Square, Image as ImageIcon, MessageSquare, Download, Loader2, ListChecks, CheckSquare } from 'lucide-react';
+import { ArrowLeft, Sparkles, Volume2, Square, Image as ImageIcon, MessageSquare, Download, Loader2, ListChecks, CheckSquare, RotateCcw } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { useState, useRef, useEffect } from 'react';
 import { synthesizeSpeech, type AudioController } from '../utils/tts';
 import { AI_QUESTIONS } from '../constants';
 import type { IllustrationRecord } from '../utils/storage';
 
-interface AiModalProps {
+interface AiViewProps {
   isOpen: boolean;
   onClose: () => void;
   aiTab: 'ask' | 'illustrate';
   setAiTab: (tab: 'ask' | 'illustrate') => void;
   aiResponse: string;
+  setAiResponse: (response: string) => void;
   aiQuestion: string;
   setAiQuestion: (q: string) => void;
   aiContextMode: 'recent' | 'full';
@@ -48,12 +49,13 @@ const CANNED_ILLUSTRATIONS = [
   "Atmospheric landscape"
 ];
 
-export function AiModal({
+export function AiView({
   isOpen,
   onClose,
   aiTab,
   setAiTab,
   aiResponse,
+  setAiResponse,
   aiQuestion,
   setAiQuestion,
   aiContextMode,
@@ -77,7 +79,7 @@ export function AiModal({
   handleSuggestIllustrations,
   handleGenerateMultipleIllustrations,
   ttsSpeed
-}: AiModalProps) {
+}: AiViewProps) {
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const audioRef = useRef<AudioController | null>(null);
 
@@ -89,22 +91,33 @@ export function AiModal({
       setIsPlayingAudio(false);
   };
 
+  // Stop playback when the view closes or the response it was reading changes.
   useEffect(() => {
-      if (!isOpen || aiResponse) {
+      if (!isOpen) {
           if (audioRef.current) {
               audioRef.current.stop();
               audioRef.current = null;
           }
-          if (isPlayingAudio) setIsPlayingAudio(false);
+          setIsPlayingAudio(false);
       }
-  }, [isOpen, aiResponse, isPlayingAudio]);
+  }, [isOpen]);
+
+  useEffect(() => {
+      if (audioRef.current) {
+          audioRef.current.stop();
+          audioRef.current = null;
+          setIsPlayingAudio(false);
+      }
+  }, [aiResponse]);
+
+  if (!isOpen) return null;
 
   const handleToggleAudio = async () => {
       if (isPlayingAudio) {
           stopAudio();
       } else {
           if (!aiResponse) return;
-          setIsPlayingAudio(true); 
+          setIsPlayingAudio(true);
           const controller = await synthesizeSpeech(aiResponse, ttsSpeed);
           if (controller) {
               audioRef.current = controller;
@@ -118,8 +131,6 @@ export function AiModal({
       }
   };
 
-  if (!isOpen) return null;
-
   const handleDownloadImage = () => {
     if (!illustrationImage) return;
     const link = document.createElement('a');
@@ -128,100 +139,121 @@ export function AiModal({
     link.click();
   };
 
+  const hasAskContent = Boolean(aiResponse || aiQuestion || isAiLoading);
+  const hasIllustrateContent = Boolean(illustrationImage || illustrationQuery || illustrationPrompt || illustrationSuggestions.length);
+
+  const handleReset = () => {
+    if (aiTab === 'ask') {
+      stopAudio();
+      setAiQuestion('');
+      setAiResponse('');
+    } else {
+      setIllustrationImage(null);
+      setIllustrationPrompt('');
+      setIllustrationQuery('');
+      setIllustrationSuggestions([]);
+      setSelectedSuggestions([]);
+    }
+  };
+
+  const showReset = aiTab === 'ask'
+    ? hasAskContent && !isAiLoading
+    : hasIllustrateContent && !isIllustrationLoading;
+
+  const tabClass = (active: boolean) =>
+    `flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md transition-all ${active ? 'bg-white dark:bg-zinc-700 shadow-sm text-zinc-900 dark:text-zinc-100' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`;
+
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4 text-zinc-900 dark:text-zinc-100">
-      <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl border border-zinc-200 dark:border-zinc-800">
-        <div className="flex justify-between items-center mb-6">
-          <div className="flex items-center gap-2">
-            <Bot className="text-zinc-500" />
-            <h2 className="text-xl font-semibold">AI Assistant</h2>
-            {aiTab === 'ask' && aiResponse && !isAiLoading && (
-                <button 
-                    onClick={handleToggleAudio}
-                    className={`ml-2 p-1.5 rounded-full transition-colors ${isPlayingAudio ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500'}`}
-                    title={isPlayingAudio ? "Stop reading" : "Read aloud"}
-                >
-                    {isPlayingAudio ? <Square size={18} fill="currentColor" /> : <Volume2 size={18} />}
-                </button>
-            )}
-          </div>
-          <button onClick={onClose} className="opacity-50 hover:opacity-100">
-            <X size={24} />
+    <div className="fixed inset-0 z-[100] flex flex-col bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100">
+      <header className="shrink-0 flex items-center gap-2 px-2 sm:px-4 h-14 border-b border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+        <button onClick={onClose} className="p-2 rounded-lg text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800" title="Back to book" aria-label="Back to book">
+          <ArrowLeft size={20} />
+        </button>
+        <div className="flex bg-zinc-100 dark:bg-zinc-800 p-0.5 rounded-lg">
+          <button onClick={() => setAiTab('ask')} className={tabClass(aiTab === 'ask')}>
+            <MessageSquare size={16} />
+            Ask AI
+          </button>
+          <button onClick={() => setAiTab('illustrate')} className={tabClass(aiTab === 'illustrate')}>
+            <ImageIcon size={16} />
+            Illustrate
           </button>
         </div>
-
-        <div className="flex border-b border-zinc-100 dark:border-zinc-800 mb-6">
+        <div className="ml-auto flex items-center gap-1">
+          {aiTab === 'ask' && aiResponse && !isAiLoading && (
             <button
-                onClick={() => setAiTab('ask')}
-                className={`flex items-center gap-2 px-4 py-2 border-b-2 transition-colors ${aiTab === 'ask' ? 'border-zinc-900 dark:border-zinc-100 text-zinc-900 dark:text-zinc-100' : 'border-transparent text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300'}`}
+                onClick={handleToggleAudio}
+                className={`p-2 rounded-lg transition-colors ${isPlayingAudio ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500'}`}
+                title={isPlayingAudio ? "Stop reading" : "Read aloud"}
             >
-                <MessageSquare size={18} />
-                Ask AI
+                {isPlayingAudio ? <Square size={18} fill="currentColor" /> : <Volume2 size={18} />}
             </button>
+          )}
+          {showReset && (
             <button
-                onClick={() => setAiTab('illustrate')}
-                className={`flex items-center gap-2 px-4 py-2 border-b-2 transition-colors ${aiTab === 'illustrate' ? 'border-zinc-900 dark:border-zinc-100 text-zinc-900 dark:text-zinc-100' : 'border-transparent text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300'}`}
+                onClick={handleReset}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                title="Clear and start over"
             >
-                <ImageIcon size={18} />
-                Illustrate
+                <RotateCcw size={14} />
+                {aiTab === 'ask' ? 'New question' : 'Start over'}
             </button>
+          )}
         </div>
+      </header>
 
-        <div className="flex-1 overflow-y-auto mb-6 space-y-4 min-h-[300px] p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-lg border border-zinc-100 dark:border-zinc-800">
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-2xl mx-auto w-full min-h-full flex flex-col px-4 py-4">
           {aiTab === 'ask' ? (
-              aiResponse ? (
-                <div className="text-sm leading-relaxed whitespace-pre-wrap prose dark:prose-invert max-w-none">
-                  <ReactMarkdown>{aiResponse}</ReactMarkdown>
+              (aiResponse || isAiLoading) ? (
+                <div className="space-y-3">
+                  {aiQuestion && (
+                    <p className="text-sm font-medium text-zinc-400 dark:text-zinc-500">{aiQuestion}</p>
+                  )}
+                  {aiResponse ? (
+                    <div className="text-sm leading-relaxed whitespace-pre-wrap prose dark:prose-invert max-w-none">
+                      <ReactMarkdown>{aiResponse}</ReactMarkdown>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-sm opacity-50 animate-pulse">
+                      <div className="flex gap-1">
+                        <div className="w-1.5 h-1.5 bg-current rounded-full animate-bounce"></div>
+                        <div className="w-1.5 h-1.5 bg-current rounded-full animate-bounce [animation-delay:0.2s]"></div>
+                        <div className="w-1.5 h-1.5 bg-current rounded-full animate-bounce [animation-delay:0.4s]"></div>
+                      </div>
+                      Thinking...
+                    </div>
+                  )}
                 </div>
               ) : (
-                <div className="h-full flex flex-col items-center justify-center text-center">
-                  <Sparkles size={48} className="mb-4 opacity-30" />
-                  <p className="mb-6 opacity-50">Ask a question about what you've read so far.</p>
-
-                  <div className="flex flex-col items-center gap-4">
-                    <div className="flex flex-wrap gap-2 justify-center max-w-lg">
-                      {CANNED_QUESTIONS.map(q => (
-                        <button
-                          key={q}
-                          onClick={() => {
-                            setAiQuestion(q);
-                            handleAskAi(q);
-                          }}
-                          className="text-xs bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 px-3 py-1.5 rounded-full transition-colors border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400"
-                        >
-                          {q}
-                        </button>
-                      ))}
-                    </div>
-
-                    <div className="flex bg-zinc-100 dark:bg-zinc-800 p-1 rounded-lg">
+                <div className="flex-1 flex flex-col items-center justify-center text-center gap-4">
+                  <Sparkles size={32} className="opacity-30" />
+                  <div className="flex flex-wrap gap-2 justify-center max-w-lg">
+                    {CANNED_QUESTIONS.map(q => (
                       <button
-                        onClick={() => setAiContextMode('recent')}
-                        className={`px-3 py-1 text-xs rounded-md transition-all ${aiContextMode === 'recent' ? 'bg-white dark:bg-zinc-700 shadow-sm text-zinc-900 dark:text-zinc-100' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}
+                        key={q}
+                        onClick={() => {
+                          setAiQuestion(q);
+                          handleAskAi(q);
+                        }}
+                        className="text-xs bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 px-3 py-1.5 rounded-full transition-colors border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400"
                       >
-                        Recent Chapters
+                        {q}
                       </button>
-                      <button
-                        onClick={() => setAiContextMode('full')}
-                        className={`px-3 py-1 text-xs rounded-md transition-all ${aiContextMode === 'full' ? 'bg-white dark:bg-zinc-700 shadow-sm text-zinc-900 dark:text-zinc-100' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}
-                      >
-                        Full Book
-                      </button>
-                    </div>
+                    ))}
                   </div>
-
-                  <p className="text-xs opacity-30">The AI only sees text up to your current position.</p>
+                  <p className="text-xs opacity-40">The AI only sees text up to your current position.</p>
                 </div>
               )
           ) : (
-            <div className="h-full flex flex-col items-center justify-center text-center">
+            <div className="flex-1 flex flex-col text-center">
                 {illustrationImage ? (
-                    <div className="flex flex-col items-center gap-4 w-full h-full justify-center">
+                    <div className="flex-1 flex flex-col items-center justify-center gap-3 w-full">
                         <div className="relative group max-w-full">
                             <img
                                 src={illustrationImage.startsWith('http') ? illustrationImage : `data:image/png;base64,${illustrationImage}`}
                                 alt="Generated illustration"
-                                className="rounded-lg shadow-lg max-h-[400px] object-contain border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900"
+                                className="rounded-lg shadow-lg max-h-[60vh] object-contain border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900"
                             />
                             <button
                                 onClick={handleDownloadImage}
@@ -244,9 +276,9 @@ export function AiModal({
                         </button>
                     </div>
                 ) : isIllustrationLoading ? (
-                    <div className="flex flex-col items-center justify-center gap-4 w-full">
-                        <div className="w-full max-w-md p-6 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-inner">
-                            <Loader2 className="w-12 h-12 mb-4 animate-spin text-zinc-400 mx-auto" />
+                    <div className="flex-1 flex flex-col items-center justify-center gap-4 w-full">
+                        <div className="w-full max-w-md p-4 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-inner">
+                            <Loader2 className="w-10 h-10 mb-3 animate-spin text-zinc-400 mx-auto" />
                             {illustrationPrompt ? (
                                 <div className="space-y-3">
                                     <p className="text-sm font-medium">Generating image...</p>
@@ -265,11 +297,11 @@ export function AiModal({
                         </div>
                     </div>
                 ) : (
-                    <div className="w-full space-y-6">
+                    <div className={`w-full space-y-5 ${illustrations.length === 0 && !illustrationSuggestions.length ? 'flex-1 flex flex-col items-center justify-center' : ''}`}>
                         {illustrations.length > 0 && (
-                            <div className="space-y-3">
+                            <div className="space-y-2">
                                 <h3 className="text-xs font-semibold uppercase tracking-wider opacity-40 text-left px-1">Gallery</h3>
-                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 w-full">
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 w-full">
                                 {illustrations.map(ill => (
                                     <button
                                         key={ill.id}
@@ -292,10 +324,10 @@ export function AiModal({
                         )}
 
                         <div className="flex flex-col items-center w-full">
-                            {illustrations.length === 0 && !illustrationSuggestions.length && <ImageIcon size={48} className="mb-4 opacity-30" />}
+                            {illustrations.length === 0 && !illustrationSuggestions.length && <ImageIcon size={32} className="mb-3 opacity-30" />}
 
                             {illustrationSuggestions.length > 0 ? (
-                                <div className="w-full space-y-4">
+                                <div className="w-full space-y-3">
                                     <div className="flex items-center justify-between">
                                         <h3 className="text-xs font-semibold uppercase tracking-wider opacity-40 text-left px-1">Suggested Illustrations</h3>
                                         <button
@@ -322,28 +354,15 @@ export function AiModal({
                                     <button
                                         onClick={handleGenerateMultipleIllustrations}
                                         disabled={selectedSuggestions.length === 0 || isIllustrationLoading}
-                                        className="w-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 py-3 rounded-lg font-medium disabled:opacity-50 hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
+                                        className="w-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 py-2.5 rounded-lg font-medium disabled:opacity-50 hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
                                     >
                                         <Sparkles size={18} />
                                         Generate {selectedSuggestions.length} Illustration{selectedSuggestions.length !== 1 ? 's' : ''}
                                     </button>
-                                    <button
-                                        onClick={() => {
-                                            setSelectedSuggestions([]);
-                                            setIllustrationSuggestions([]);
-                                        }}
-                                        className="text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
-                                    >
-                                        Cancel
-                                    </button>
                                 </div>
                             ) : (
                                 <>
-                                    <p className="mb-4 text-sm opacity-50">
-                                        {illustrations.length === 0 ? 'Generate an illustration based on the story so far.' : 'Need inspiration? Try one of these:'}
-                                    </p>
-
-                                    <div className="flex flex-wrap gap-2 justify-center max-w-lg mb-6">
+                                    <div className="flex flex-wrap gap-2 justify-center max-w-lg mb-4">
                                         {CANNED_ILLUSTRATIONS.map(q => (
                                             <button
                                                 key={q}
@@ -375,10 +394,6 @@ export function AiModal({
                                             </>
                                         )}
                                     </button>
-
-                                    {illustrations.length === 0 && !isSuggesting && (
-                                        <p className="mt-4 text-xs opacity-30">Gemini will generate an image using your context.</p>
-                                    )}
                                 </>
                             )}
                         </div>
@@ -386,35 +401,48 @@ export function AiModal({
                 )}
             </div>
           )}
-          {aiTab === 'ask' && isAiLoading && (
-            <div className="flex items-center gap-2 text-sm opacity-50 animate-pulse">
-              <div className="flex gap-1">
-                <div className="w-1.5 h-1.5 bg-current rounded-full animate-bounce"></div>
-                <div className="w-1.5 h-1.5 bg-current rounded-full animate-bounce [animation-delay:0.2s]"></div>
-                <div className="w-1.5 h-1.5 bg-current rounded-full animate-bounce [animation-delay:0.4s]"></div>
+        </div>
+      </div>
+
+      <div className="shrink-0 border-t border-zinc-100 dark:border-zinc-800 px-4 py-3">
+        <div className="max-w-2xl mx-auto space-y-2">
+          {aiTab === 'ask' && (
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] uppercase tracking-wider opacity-40">Context</span>
+              <div className="flex bg-zinc-100 dark:bg-zinc-800 p-0.5 rounded-md">
+                <button
+                  onClick={() => setAiContextMode('recent')}
+                  className={`px-2.5 py-1 text-xs rounded transition-all ${aiContextMode === 'recent' ? 'bg-white dark:bg-zinc-700 shadow-sm text-zinc-900 dark:text-zinc-100' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}
+                >
+                  Recent Chapters
+                </button>
+                <button
+                  onClick={() => setAiContextMode('full')}
+                  className={`px-2.5 py-1 text-xs rounded transition-all ${aiContextMode === 'full' ? 'bg-white dark:bg-zinc-700 shadow-sm text-zinc-900 dark:text-zinc-100' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}
+                >
+                  Full Book
+                </button>
               </div>
-              Thinking...
             </div>
           )}
-        </div>
-
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={aiTab === 'ask' ? aiQuestion : illustrationQuery}
-            onChange={(e) => aiTab === 'ask' ? setAiQuestion(e.target.value) : setIllustrationQuery(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && (aiTab === 'ask' ? handleAskAi() : handleGenerateIllustration())}
-            className="flex-1 p-3 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-transparent focus:ring-2 focus:ring-zinc-500 outline-none transition-all"
-            placeholder={aiTab === 'ask' ? "How does the protagonist feel about...?" : "Describe a scene or character to illustrate..."}
-            disabled={isAiLoading || isIllustrationLoading}
-          />
-          <button
-            onClick={() => aiTab === 'ask' ? handleAskAi() : handleGenerateIllustration()}
-            disabled={isAiLoading || isIllustrationLoading || (aiTab === 'ask' ? !aiQuestion.trim() : !illustrationQuery.trim())}
-            className="bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 px-6 py-2 rounded-lg font-medium disabled:opacity-50 hover:opacity-90 transition-opacity"
-          >
-            {aiTab === 'ask' ? 'Ask' : 'Generate'}
-          </button>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={aiTab === 'ask' ? aiQuestion : illustrationQuery}
+              onChange={(e) => aiTab === 'ask' ? setAiQuestion(e.target.value) : setIllustrationQuery(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && (aiTab === 'ask' ? handleAskAi() : handleGenerateIllustration())}
+              className="flex-1 p-2.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-transparent focus:ring-2 focus:ring-zinc-500 outline-none transition-all"
+              placeholder={aiTab === 'ask' ? "How does the protagonist feel about...?" : "Describe a scene or character to illustrate..."}
+              disabled={isAiLoading || isIllustrationLoading}
+            />
+            <button
+              onClick={() => aiTab === 'ask' ? handleAskAi() : handleGenerateIllustration()}
+              disabled={isAiLoading || isIllustrationLoading || (aiTab === 'ask' ? !aiQuestion.trim() : !illustrationQuery.trim())}
+              className="bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 px-5 py-2 rounded-lg font-medium disabled:opacity-50 hover:opacity-90 transition-opacity"
+            >
+              {aiTab === 'ask' ? 'Ask' : 'Generate'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

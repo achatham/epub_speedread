@@ -1,7 +1,7 @@
 
 import { SettingsModal } from './SettingsModal';
 import { OnboardingModal } from './OnboardingModal';
-import { AiModal } from './AiModal';
+import { AiView } from './AiView';
 import { StatsView } from './StatsView';
 import { BookSettingsModal } from './BookSettingsModal';
 import { useSettingsStore } from '../stores/useSettingsStore';
@@ -96,12 +96,13 @@ export function AppModals({
                 }}
             />
 
-            <AiModal
+            <AiView
                 isOpen={ui.isAskAiOpen}
                 onClose={() => ui.setIsAskAiOpen(false)}
                 aiTab={ui.aiTab}
                 setAiTab={ui.setAiTab}
                 aiResponse={ui.aiResponse}
+                setAiResponse={ui.setAiResponse}
                 aiQuestion={ui.aiQuestion}
                 setAiQuestion={ui.setAiQuestion}
                 aiContextMode={ui.aiContextMode}
