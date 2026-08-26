@@ -21,7 +21,8 @@
       (function() {
         try {
           var settings = JSON.parse(localStorage.getItem('user_settings'));
-          var theme = settings ? settings.theme : null;
+          // zustand's persist middleware wraps the data in { state, version }
+          var theme = settings ? (settings.state ? settings.state.theme : settings.theme) : null;
           if (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches) {
             theme = 'dark';
           }

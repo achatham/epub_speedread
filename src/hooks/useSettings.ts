@@ -11,11 +11,15 @@ export function useSettingsSync(storageProvider: FirestoreStorage | null, onboar
 
     // Apply theme class to document
     useEffect(() => {
-        if (theme === 'dark' || theme === 'bedtime') {
-            document.documentElement.classList.add('dark');
-        } else {
-            document.documentElement.classList.remove('dark');
-        }
+        const dark = theme === 'dark' || theme === 'bedtime';
+        document.documentElement.classList.toggle('dark', dark);
+        // Keep the PWA status bar (Android colors it from theme-color) in
+        // sync with the active theme; e-ink devices use pure black/white.
+        const eink = document.documentElement.classList.contains('eink');
+        const color = !dark ? '#ffffff'
+            : (theme === 'bedtime' || eink) ? '#000000'
+            : '#18181b';
+        document.querySelector('meta[name="theme-color"]')?.setAttribute('content', color);
     }, [theme]);
 
     // Auto-save Settings to Firestore
