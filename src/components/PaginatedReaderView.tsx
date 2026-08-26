@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, useLayoutEffect } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Pause } from 'lucide-react';
 
 import { ReaderMenu } from './ReaderMenu';
 import { splitWord } from '../utils/orp';
@@ -27,6 +27,9 @@ const FONT_FAMILY_CSS: Record<FontFamily, string> = {
   opendyslexic: 'OpenDyslexic, sans-serif',
   atkinson: 'AtkinsonHyperlegible, sans-serif',
 };
+
+/** Width of the tap-to-turn-page strip down each side of the page. */
+const EDGE_TAP_WIDTH = 'clamp(56px, 14%, 140px)';
 
 /**
  * A book that switches font family mid-page is marking something — in Children
@@ -176,6 +179,16 @@ export function PaginatedReaderView({
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return;
       }
+      // While RSVP is running the page keys have nothing to turn, so space and
+      // escape become the keyboard equivalent of the pause target.
+      if (isPlaying) {
+        if (e.key === ' ' || e.key === 'Escape') {
+          e.preventDefault();
+          lastPauseTimeRef.current = Date.now();
+          handleSetIsPlaying(false);
+        }
+        return;
+      }
       if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
         e.preventDefault();
         navigateNextPage();
@@ -186,13 +199,16 @@ export function PaginatedReaderView({
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [navigateNextPage, navigatePrevPage]);
+  }, [navigateNextPage, navigatePrevPage, isPlaying, handleSetIsPlaying]);
   // Theme-derived classes
   const mainBg = theme === 'bedtime' ? 'bg-black' : 'bg-white dark:bg-zinc-900';
   const mainText = theme === 'bedtime' ? 'text-stone-400' : 'text-zinc-900 dark:text-zinc-100';
   const borderColor = theme === 'bedtime' ? 'border-zinc-900' : 'border-zinc-200 dark:border-zinc-800';
   const mutedText = theme === 'bedtime' ? 'text-stone-600' : 'text-zinc-400 dark:text-zinc-500';
   const itemHover = theme === 'bedtime' ? 'hover:bg-zinc-900' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800';
+  const pauseTargetClass = theme === 'bedtime'
+    ? 'bg-black border-zinc-900 text-stone-700'
+    : 'bg-zinc-900/5 border-zinc-900/15 text-zinc-900/50 dark:bg-white/10 dark:border-white/20 dark:text-white/60';
 
   const handlePointerDown = (e: React.PointerEvent) => {
     e.stopPropagation();
@@ -259,6 +275,37 @@ export function PaginatedReaderView({
   const handlePaginatedPointerCancel = () => {
     swipeStartXRef.current = null;
     swipeStartYRef.current = null;
+  };
+
+  /**
+   * A tap only counts if it isn't the click that trails a swipe, and isn't the
+   * click that trails the press which just paused RSVP. Both would otherwise
+   * turn a page (or restart playback) the moment the finger lifts.
+   */
+  const consumeTap = () => {
+    if (isSwipingRef.current) {
+      isSwipingRef.current = false;
+      return false;
+    }
+    if (Date.now() - lastPauseTimeRef.current < 400) return false;
+    return true;
+  };
+
+  const handleEdgeTap = (e: React.MouseEvent, goForward: boolean) => {
+    e.stopPropagation();
+    if (!consumeTap()) return;
+    if (goForward) navigateNextPage();
+    else navigatePrevPage();
+  };
+
+  const pauseFromTarget = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    // Pause on the press, not the release: the word must stop under the finger
+    // the instant it lands, and a release-based pause loses the event whenever
+    // the finger drifts off the target.
+    lastPauseTimeRef.current = Date.now();
+    handleSetIsPlaying(false);
   };
 
   // RSVP Dynamic Font Size
@@ -365,11 +412,7 @@ export function PaginatedReaderView({
         onPointerUp={handlePaginatedPointerUp}
         onPointerCancel={handlePaginatedPointerCancel}
         onClick={() => {
-          if (isSwipingRef.current) {
-            isSwipingRef.current = false;
-            return;
-          }
-          if (Date.now() - lastPauseTimeRef.current < 400) return;
+          if (!consumeTap()) return;
           if (!isPlaying) handleSetIsPlaying(true);
         }}
       >
@@ -432,7 +475,57 @@ export function PaginatedReaderView({
             }, layoutState.start)}
           </div>
         )}
+
+        {/* Edge tap zones — tap the left/right margin to turn the page. Rendered
+            after the text so they layer above it, and after the measured inner
+            div so `querySelector('div')` still finds the page body. */}
+        {!isPlaying && (
+          <>
+            {currentIndex > 0 && (
+              <div
+                data-testid="page-tap-prev"
+                aria-hidden="true"
+                onClick={(e) => handleEdgeTap(e, false)}
+                className={`absolute left-0 top-0 bottom-0 z-20 flex items-center justify-center
+                  cursor-pointer select-none opacity-[0.2] hover:opacity-60 active:opacity-80
+                  transition-opacity ${mutedText}`}
+                style={{ width: EDGE_TAP_WIDTH }}
+              >
+                <ChevronLeft size={32} />
+              </div>
+            )}
+            {!(pageEndIndex !== null && pageEndIndex >= words.length) && (
+              <div
+                data-testid="page-tap-next"
+                aria-hidden="true"
+                onClick={(e) => handleEdgeTap(e, true)}
+                className={`absolute right-0 top-0 bottom-0 z-20 flex items-center justify-center
+                  cursor-pointer select-none opacity-[0.2] hover:opacity-60 active:opacity-80
+                  transition-opacity ${mutedText}`}
+                style={{ width: EDGE_TAP_WIDTH }}
+              >
+                <ChevronRight size={32} />
+              </div>
+            )}
+          </>
+        )}
       </div>
+
+      {/* Visible pause target — holding the screen is easy to get wrong, so
+          give RSVP an unambiguous button that stops on the press itself. */}
+      {isPlaying && (
+        <button
+          data-testid="rsvp-pause"
+          onPointerDown={pauseFromTarget}
+          className={`fixed bottom-16 left-1/2 -translate-x-1/2 z-50 w-16 h-16 rounded-full border
+            flex items-center justify-center transition-transform active:scale-95 ${pauseTargetClass}`}
+          style={{ touchAction: 'none' }}
+          aria-label="Pause"
+          title="Pause"
+        >
+          <Pause size={26} />
+        </button>
+      )}
 
       {/* ── Footer / controls ──────────────────────────────────── */}
       <div className={`shrink-0 px-4 pt-3 pb-8 flex flex-col gap-2`}>

@@ -26,7 +26,7 @@ test('pausing during chapter interlude should advance to next chapter and not ba
 
   const menuFab = page.locator('button[title="Open Menu"]');
   await expect(menuFab).toBeVisible();
-  await page.click('body', { position: { x: 100, y: 100 } });
+  await page.locator('[data-testid="paginated-reading-area"]').click();
 
   // Wait for the "Next Chapter" interlude to appear
   // It appears when currentIndex is 3 and isChapterBreak becomes true
@@ -46,7 +46,7 @@ test('pausing during chapter interlude should advance to next chapter and not ba
 
   // Now click Play again after 500ms to bypass double-tap protection
   await page.waitForTimeout(500);
-  await page.click('body', { position: { x: 100, y: 100 } });
+  await page.locator('[data-testid="paginated-reading-area"]').click();
 
   // Focus word should be "Beginning" (index 4)
   // The RSVP container should show the word (prefix+focus+suffix concatenated)
@@ -74,7 +74,7 @@ test('pausing normally should back up to start of sentence on resume', async ({ 
 
   const menuFab = page.locator('button[title="Open Menu"]');
   await expect(menuFab).toBeVisible();
-  await page.click('body', { position: { x: 100, y: 100 } });
+  await page.locator('[data-testid="paginated-reading-area"]').click();
 
   // Wait for "end."
   const rsvpContainer = page.locator('.flex.w-full.items-baseline');
@@ -86,7 +86,7 @@ test('pausing normally should back up to start of sentence on resume', async ({ 
 
   // Play again after 500ms to bypass double-tap protection
   await page.waitForTimeout(500);
-  await page.click('body', { position: { x: 100, y: 100 } });
+  await page.locator('[data-testid="paginated-reading-area"]').click();
 
   // Should have backed up to "This"
   await expect(rsvpContainer).toHaveText(/This/);
