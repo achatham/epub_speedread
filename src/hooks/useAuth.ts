@@ -23,6 +23,7 @@ const MOCK_STORAGE = {
     getAggregatedSessions: async () => [],
     updateBookProgress: async () => { },
     updateBookWpm: async () => { },
+    updateBookStats: async () => { },
     updateSettings: async () => { },
     logReadingSession: async () => { },
     updateBookRealEndIndex: async () => { },

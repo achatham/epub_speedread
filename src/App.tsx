@@ -331,6 +331,7 @@ function App() {
       if (mockSessions) setSessions(mockSessions);
       setCurrentIndex(0);
       setCurrentBookId('mock-book-id');
+      lastLoadedBookIdRef.current = 'mock-book-id';
       // Note: We need a way to set reader's bookId if needed, but App.tsx uses currentBookId from library store for processing
       handleSetIsPlaying(false);
       setUser((u: any) => u || (MOCK_USER as any));
@@ -551,7 +552,11 @@ function App() {
   }, [currentBookId, handleProcessBook, storageProvider]);
 
   useEffect(() => {
-    if (!isPlaying && currentBookId && storageProvider) {
+    // Only persist once this book has actually been loaded and its saved
+    // position restored; before that, currentIndex is still the default 0
+    // and writing it would clobber the real progress (e.g. when a PWA
+    // update reloads the page and it gets frozen mid-load).
+    if (!isPlaying && currentBookId && storageProvider && currentBookId === lastLoadedBookIdRef.current) {
       storageProvider.updateBookProgress(currentBookId, currentIndex);
     }
     if (furthestIndex !== null && currentIndex > furthestIndex) {
