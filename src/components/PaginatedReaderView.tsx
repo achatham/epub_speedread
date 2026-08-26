@@ -1,5 +1,5 @@
-import { useRef, useState, useEffect, useLayoutEffect } from 'react';
-import { ChevronLeft, ChevronRight, Pause } from 'lucide-react';
+import { useRef, useState, useEffect, useLayoutEffect, useCallback } from 'react';
+import { ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react';
 
 import { ReaderMenu } from './ReaderMenu';
 import { splitWord } from '../utils/orp';
@@ -74,6 +74,19 @@ export function PaginatedReaderView({
   const innerRef = useRef<HTMLDivElement>(null);
   
   const [areaDims, setAreaDims] = useState<{ w: number; h: number } | null>(null);
+
+  // The pause target freezes RSVP where it stands rather than ending playback:
+  // the word stays on screen and resuming carries on from it, where stopping
+  // would drop back to the page view and rewind to the start of the sentence.
+  const [isTargetPaused, setIsTargetPaused] = useState(false);
+  useEffect(() => {
+    if (!isPlaying) setIsTargetPaused(false);
+  }, [isPlaying]);
+
+  const setTargetPaused = useCallback((paused: boolean) => {
+    setIsTargetPaused(paused);
+    setIsHoldPaused(paused);
+  }, [setIsHoldPaused]);
 
   // Track reading area dimensions
   useEffect(() => {
@@ -182,10 +195,14 @@ export function PaginatedReaderView({
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return;
       }
-      // While RSVP is running the page keys have nothing to turn, so space and
-      // escape become the keyboard equivalent of the pause target.
+      // While RSVP is running the page keys have nothing to turn, so space
+      // becomes the keyboard equivalent of the pause target and escape is the
+      // way back out to the page view.
       if (isPlaying) {
-        if (e.key === ' ' || e.key === 'Escape') {
+        if (e.key === ' ') {
+          e.preventDefault();
+          setTargetPaused(!isTargetPaused);
+        } else if (e.key === 'Escape') {
           e.preventDefault();
           lastPauseTimeRef.current = Date.now();
           handleSetIsPlaying(false);
@@ -202,7 +219,7 @@ export function PaginatedReaderView({
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [navigateNextPage, navigatePrevPage, isPlaying, handleSetIsPlaying]);
+  }, [navigateNextPage, navigatePrevPage, isPlaying, handleSetIsPlaying, setTargetPaused, isTargetPaused]);
   // Theme-derived classes
   const mainBg = theme === 'bedtime' ? 'bg-black' : 'bg-white dark:bg-zinc-900';
   const mainText = theme === 'bedtime' ? 'text-stone-400' : 'text-zinc-900 dark:text-zinc-100';
@@ -212,6 +229,9 @@ export function PaginatedReaderView({
   const pauseTargetClass = theme === 'bedtime'
     ? 'bg-black border-zinc-900 text-stone-700'
     : 'bg-zinc-900/5 border-zinc-900/15 text-zinc-900/50 dark:bg-white/10 dark:border-white/20 dark:text-white/60';
+  const pausedTargetClass = theme === 'bedtime'
+    ? 'bg-zinc-900 border-zinc-800 text-amber-700'
+    : 'bg-zinc-900/10 border-zinc-900/30 text-zinc-900/80 dark:bg-white/20 dark:border-white/30 dark:text-white';
 
   const handlePointerDown = (e: React.PointerEvent) => {
     e.stopPropagation();
@@ -237,7 +257,8 @@ export function PaginatedReaderView({
       }
       setIsHoldPaused(false);
     } else {
-      setIsHoldPaused(false);
+      // A hold that ends while the pause target is engaged stays paused.
+      setIsHoldPaused(isTargetPaused);
     }
   };
 
@@ -245,7 +266,7 @@ export function PaginatedReaderView({
     e.stopPropagation();
     if (pressStartTimeRef.current !== null) {
       pressStartTimeRef.current = null;
-      setIsHoldPaused(false);
+      setIsHoldPaused(isTargetPaused);
     }
   };
 
@@ -318,14 +339,13 @@ export function PaginatedReaderView({
     else navigatePrevPage();
   };
 
-  const pauseFromTarget = (e: React.PointerEvent) => {
+  const toggleTargetPause = (e: React.PointerEvent) => {
     e.stopPropagation();
     e.preventDefault();
-    // Pause on the press, not the release: the word must stop under the finger
+    // Act on the press, not the release: the word must stop under the finger
     // the instant it lands, and a release-based pause loses the event whenever
     // the finger drifts off the target.
-    lastPauseTimeRef.current = Date.now();
-    handleSetIsPlaying(false);
+    setTargetPaused(!isTargetPaused);
   };
 
   // RSVP Dynamic Font Size
@@ -541,14 +561,16 @@ export function PaginatedReaderView({
       {isPlaying && (
         <button
           data-testid="rsvp-pause"
-          onPointerDown={pauseFromTarget}
+          data-paused={isTargetPaused}
+          onPointerDown={toggleTargetPause}
           className={`fixed bottom-16 left-1/2 -translate-x-1/2 z-50 w-16 h-16 rounded-full border
-            flex items-center justify-center transition-transform active:scale-95 ${pauseTargetClass}`}
+            flex items-center justify-center transition-transform active:scale-95
+            ${isTargetPaused ? pausedTargetClass : pauseTargetClass}`}
           style={{ touchAction: 'none' }}
-          aria-label="Pause"
-          title="Pause"
+          aria-label={isTargetPaused ? 'Resume' : 'Pause'}
+          title={isTargetPaused ? 'Resume' : 'Pause'}
         >
-          <Pause size={26} />
+          {isTargetPaused ? <Play size={26} className="translate-x-0.5" /> : <Pause size={26} />}
         </button>
       )}
 
