@@ -1,6 +1,11 @@
 import { create } from 'zustand';
 import type { IllustrationRecord } from '../utils/storage';
 
+export interface AiExchange {
+  question: string;
+  answer: string;
+}
+
 interface UIState {
   isSettingsOpen: boolean;
   isAskAiOpen: boolean;
@@ -14,7 +19,8 @@ interface UIState {
   aiQuestion: string;
   aiContextMode: 'recent' | 'full';
   illustrationQuery: string;
-  aiResponse: string;
+  aiExchanges: AiExchange[];
+  pendingAiQuestion: string;
   isAiLoading: boolean;
   
   illustrationPrompt: string;
@@ -37,7 +43,9 @@ interface UIState {
   setAiQuestion: (q: string) => void;
   setAiContextMode: (mode: 'recent' | 'full') => void;
   setIllustrationQuery: (q: string) => void;
-  setAiResponse: (res: string) => void;
+  addAiExchange: (exchange: AiExchange) => void;
+  clearAiExchanges: () => void;
+  setPendingAiQuestion: (q: string) => void;
   setIsAiLoading: (loading: boolean) => void;
 
   setIllustrationPrompt: (prompt: string) => void;
@@ -62,7 +70,8 @@ export const useUIStore = create<UIState>((set) => ({
   aiQuestion: '',
   aiContextMode: 'recent',
   illustrationQuery: '',
-  aiResponse: '',
+  aiExchanges: [],
+  pendingAiQuestion: '',
   isAiLoading: false,
 
   illustrationPrompt: '',
@@ -85,7 +94,9 @@ export const useUIStore = create<UIState>((set) => ({
   setAiQuestion: (q) => set({ aiQuestion: q }),
   setAiContextMode: (mode) => set({ aiContextMode: mode }),
   setIllustrationQuery: (q) => set({ illustrationQuery: q }),
-  setAiResponse: (res) => set({ aiResponse: res }),
+  addAiExchange: (exchange) => set((state) => ({ aiExchanges: [...state.aiExchanges, exchange] })),
+  clearAiExchanges: () => set({ aiExchanges: [] }),
+  setPendingAiQuestion: (q) => set({ pendingAiQuestion: q }),
   setIsAiLoading: (loading) => set({ isAiLoading: loading }),
 
   setIllustrationPrompt: (prompt) => set({ illustrationPrompt: prompt }),

@@ -130,10 +130,11 @@ function App() {
   });
 
   const handleAskAi = async (qOverride?: string) => {
-    const q = qOverride || ui.aiQuestion;
-    if (!q.trim() || ui.isAiLoading) return;
+    const q = (qOverride || ui.aiQuestion).trim();
+    if (!q || ui.isAiLoading) return;
     ui.setIsAiLoading(true);
-    ui.setAiResponse('');
+    ui.setPendingAiQuestion(q);
+    ui.setAiQuestion('');
     try {
       let currentChapterIdx = 0;
       for (let i = 0; i < sections.length; i++) if (sections[i].startIndex <= currentIndex) currentChapterIdx = i; else break;
@@ -145,8 +146,14 @@ function App() {
       } else {
         context = words.slice(0, currentIndex + 1).map(w => w.text).join(' ');
       }
-      ui.setAiResponse(await askAboutBook(q, context));
-    } catch { ui.setAiResponse('Error'); } finally { ui.setIsAiLoading(false); }
+      const answer = await askAboutBook(q, context, ui.aiExchanges);
+      ui.addAiExchange({ question: q, answer });
+    } catch {
+      ui.addAiExchange({ question: q, answer: 'Error' });
+    } finally {
+      ui.setPendingAiQuestion('');
+      ui.setIsAiLoading(false);
+    }
   };
 
   const performIllustrationGeneration = async (description: string) => {
@@ -218,6 +225,11 @@ function App() {
   };
 
   const handleSelectBook = useCallback(async (id: string) => {
+    // A different book means a different conversation context.
+    if (useReaderStore.getState().currentBookId !== id) {
+      useUIStore.getState().clearAiExchanges();
+      useUIStore.getState().setAiQuestion('');
+    }
     useReaderStore.getState().setCurrentBookId(id);
     useSettingsStore.getState().setLastBookId(id);
     if (useSettingsStore.getState().autoLandscape) {

@@ -88,12 +88,20 @@ export async function findRealEndOfBook(chapters: string[], fullText: string): P
   return null;
 }
 
-export async function askAboutBook(question: string, context: string): Promise<string> {
+export async function askAboutBook(
+  question: string,
+  context: string,
+  history: { question: string; answer: string }[] = []
+): Promise<string> {
   const apiKey = getGeminiApiKey();
   if (!apiKey) return "API Key not found. Please set it in settings.";
 
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
+
+  const historyBlock = history.length
+    ? `\nEarlier questions and answers in this conversation (the new question may refer back to these):\n${history.map(h => `User Question: ${h.question}\nAnswer: ${h.answer}`).join('\n\n')}\n`
+    : '';
 
   const prompt = `The following is the text of a book read so far. Please answer the user's question based on this context.
 Do not provide spoilers for anything that might happen later in the book if you happen to know the book.
@@ -102,7 +110,7 @@ Please format your response in Markdown. Don't include any leading or closing te
 
 Context:
 ${context}
-
+${historyBlock}
 User Question: ${question}`;
 
   try {

@@ -4,14 +4,16 @@ import { useState, useRef, useEffect } from 'react';
 import { synthesizeSpeech, type AudioController } from '../utils/tts';
 import { AI_QUESTIONS } from '../constants';
 import type { IllustrationRecord } from '../utils/storage';
+import type { AiExchange } from '../stores/useUIStore';
 
 interface AiViewProps {
   isOpen: boolean;
   onClose: () => void;
   aiTab: 'ask' | 'illustrate';
   setAiTab: (tab: 'ask' | 'illustrate') => void;
-  aiResponse: string;
-  setAiResponse: (response: string) => void;
+  aiExchanges: AiExchange[];
+  clearAiExchanges: () => void;
+  pendingAiQuestion: string;
   aiQuestion: string;
   setAiQuestion: (q: string) => void;
   aiContextMode: 'recent' | 'full';
@@ -54,8 +56,9 @@ export function AiView({
   onClose,
   aiTab,
   setAiTab,
-  aiResponse,
-  setAiResponse,
+  aiExchanges,
+  clearAiExchanges,
+  pendingAiQuestion,
   aiQuestion,
   setAiQuestion,
   aiContextMode,
@@ -82,6 +85,9 @@ export function AiView({
 }: AiViewProps) {
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const audioRef = useRef<AudioController | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  const latestAnswer = aiExchanges.length > 0 ? aiExchanges[aiExchanges.length - 1].answer : '';
 
   const stopAudio = () => {
       if (audioRef.current) {
@@ -108,7 +114,14 @@ export function AiView({
           audioRef.current = null;
           setIsPlayingAudio(false);
       }
-  }, [aiResponse]);
+  }, [latestAnswer]);
+
+  // Keep the newest exchange in view as the conversation grows.
+  useEffect(() => {
+      if (scrollRef.current) {
+          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      }
+  }, [aiExchanges.length, isAiLoading, aiTab]);
 
   if (!isOpen) return null;
 
@@ -116,9 +129,9 @@ export function AiView({
       if (isPlayingAudio) {
           stopAudio();
       } else {
-          if (!aiResponse) return;
+          if (!latestAnswer) return;
           setIsPlayingAudio(true);
-          const controller = await synthesizeSpeech(aiResponse, ttsSpeed);
+          const controller = await synthesizeSpeech(latestAnswer, ttsSpeed);
           if (controller) {
               audioRef.current = controller;
               controller.onEnded = () => {
@@ -139,14 +152,14 @@ export function AiView({
     link.click();
   };
 
-  const hasAskContent = Boolean(aiResponse || aiQuestion || isAiLoading);
+  const hasAskContent = Boolean(aiExchanges.length || aiQuestion || isAiLoading);
   const hasIllustrateContent = Boolean(illustrationImage || illustrationQuery || illustrationPrompt || illustrationSuggestions.length);
 
   const handleReset = () => {
     if (aiTab === 'ask') {
       stopAudio();
       setAiQuestion('');
-      setAiResponse('');
+      clearAiExchanges();
     } else {
       setIllustrationImage(null);
       setIllustrationPrompt('');
@@ -180,7 +193,7 @@ export function AiView({
           </button>
         </div>
         <div className="ml-auto flex items-center gap-1">
-          {aiTab === 'ask' && aiResponse && !isAiLoading && (
+          {aiTab === 'ask' && latestAnswer && !isAiLoading && (
             <button
                 onClick={handleToggleAudio}
                 className={`p-2 rounded-lg transition-colors ${isPlayingAudio ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500'}`}
@@ -202,26 +215,32 @@ export function AiView({
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto">
         <div className="max-w-2xl mx-auto w-full min-h-full flex flex-col px-4 py-4">
           {aiTab === 'ask' ? (
-              (aiResponse || isAiLoading) ? (
-                <div className="space-y-3">
-                  {aiQuestion && (
-                    <p className="text-sm font-medium text-zinc-400 dark:text-zinc-500">{aiQuestion}</p>
-                  )}
-                  {aiResponse ? (
-                    <div className="text-sm leading-relaxed whitespace-pre-wrap prose dark:prose-invert max-w-none">
-                      <ReactMarkdown>{aiResponse}</ReactMarkdown>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 text-sm opacity-50 animate-pulse">
-                      <div className="flex gap-1">
-                        <div className="w-1.5 h-1.5 bg-current rounded-full animate-bounce"></div>
-                        <div className="w-1.5 h-1.5 bg-current rounded-full animate-bounce [animation-delay:0.2s]"></div>
-                        <div className="w-1.5 h-1.5 bg-current rounded-full animate-bounce [animation-delay:0.4s]"></div>
+              (aiExchanges.length > 0 || isAiLoading) ? (
+                <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                  {aiExchanges.map((exchange, i) => (
+                    <div key={i} className="py-3 first:pt-0 space-y-2">
+                      <p className="text-sm font-medium text-zinc-400 dark:text-zinc-500">{exchange.question}</p>
+                      <div className="text-sm leading-relaxed whitespace-pre-wrap prose dark:prose-invert max-w-none">
+                        <ReactMarkdown>{exchange.answer}</ReactMarkdown>
                       </div>
-                      Thinking...
+                    </div>
+                  ))}
+                  {isAiLoading && (
+                    <div className="py-3 first:pt-0 space-y-2">
+                      {pendingAiQuestion && (
+                        <p className="text-sm font-medium text-zinc-400 dark:text-zinc-500">{pendingAiQuestion}</p>
+                      )}
+                      <div className="flex items-center gap-2 text-sm opacity-50 animate-pulse">
+                        <div className="flex gap-1">
+                          <div className="w-1.5 h-1.5 bg-current rounded-full animate-bounce"></div>
+                          <div className="w-1.5 h-1.5 bg-current rounded-full animate-bounce [animation-delay:0.2s]"></div>
+                          <div className="w-1.5 h-1.5 bg-current rounded-full animate-bounce [animation-delay:0.4s]"></div>
+                        </div>
+                        Thinking...
+                      </div>
                     </div>
                   )}
                 </div>
@@ -232,10 +251,7 @@ export function AiView({
                     {CANNED_QUESTIONS.map(q => (
                       <button
                         key={q}
-                        onClick={() => {
-                          setAiQuestion(q);
-                          handleAskAi(q);
-                        }}
+                        onClick={() => handleAskAi(q)}
                         className="text-xs bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 px-3 py-1.5 rounded-full transition-colors border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400"
                       >
                         {q}
@@ -432,7 +448,9 @@ export function AiView({
               onChange={(e) => aiTab === 'ask' ? setAiQuestion(e.target.value) : setIllustrationQuery(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && (aiTab === 'ask' ? handleAskAi() : handleGenerateIllustration())}
               className="flex-1 p-2.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-transparent focus:ring-2 focus:ring-zinc-500 outline-none transition-all"
-              placeholder={aiTab === 'ask' ? "How does the protagonist feel about...?" : "Describe a scene or character to illustrate..."}
+              placeholder={aiTab === 'ask'
+                ? (aiExchanges.length > 0 ? "Ask a follow-up question..." : "How does the protagonist feel about...?")
+                : "Describe a scene or character to illustrate..."}
               disabled={isAiLoading || isIllustrationLoading}
             />
             <button

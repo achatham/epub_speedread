@@ -49,6 +49,52 @@ test.describe('AI State and Context Toggle', () => {
     await expect(page.getByText('Give me the dramatis personae so far')).not.toBeVisible();
   });
 
+  test('Follow-up questions feed prior exchanges back to the model', async ({ page }) => {
+    const requestBodies: string[] = [];
+    let answerCount = 0;
+    await page.route('**://generativelanguage.googleapis.com/**', async route => {
+      requestBodies.push(route.request().postData() || '');
+      answerCount++;
+      await route.fulfill({
+        json: {
+          candidates: [{
+            content: { parts: [{ text: `Mock answer ${answerCount}` }], role: 'model' },
+            finishReason: 'STOP',
+            index: 0
+          }]
+        }
+      });
+    });
+
+    const askInput = page.locator('input[placeholder*="How does the protagonist"]');
+    await askInput.fill('Who is Bob?');
+    await askInput.press('Enter');
+    await expect(page.getByText('Mock answer 1')).toBeVisible();
+
+    // The input clears and invites a follow-up
+    const followUpInput = page.locator('input[placeholder*="follow-up"]');
+    await expect(followUpInput).toHaveValue('');
+    await followUpInput.fill('What about Alice?');
+    await followUpInput.press('Enter');
+    await expect(page.getByText('Mock answer 2')).toBeVisible();
+
+    // Both exchanges stay visible as a thread
+    await expect(page.getByText('Who is Bob?')).toBeVisible();
+    await expect(page.getByText('Mock answer 1')).toBeVisible();
+    await expect(page.getByText('What about Alice?')).toBeVisible();
+
+    // The follow-up request carried the earlier Q&A
+    expect(requestBodies.length).toBe(2);
+    expect(requestBodies[1]).toContain('Who is Bob?');
+    expect(requestBodies[1]).toContain('Mock answer 1');
+    expect(requestBodies[0]).not.toContain('Earlier questions');
+
+    // "New question" clears the conversation back to the empty state
+    await page.getByRole('button', { name: 'New question' }).click();
+    await expect(page.getByText('Mock answer 2')).not.toBeVisible();
+    await expect(page.getByText('What just happened?')).toBeVisible();
+  });
+
   test('Context toggle is functional', async ({ page }) => {
     const recentBtn = page.getByRole('button', { name: 'Recent Chapters' });
     const fullBtn = page.getByRole('button', { name: 'Full Book' });

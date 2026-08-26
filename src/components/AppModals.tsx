@@ -101,8 +101,9 @@ export function AppModals({
                 onClose={() => ui.setIsAskAiOpen(false)}
                 aiTab={ui.aiTab}
                 setAiTab={ui.setAiTab}
-                aiResponse={ui.aiResponse}
-                setAiResponse={ui.setAiResponse}
+                aiExchanges={ui.aiExchanges}
+                clearAiExchanges={ui.clearAiExchanges}
+                pendingAiQuestion={ui.pendingAiQuestion}
                 aiQuestion={ui.aiQuestion}
                 setAiQuestion={ui.setAiQuestion}
                 aiContextMode={ui.aiContextMode}
