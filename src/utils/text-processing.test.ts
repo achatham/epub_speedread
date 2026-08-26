@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { extractWordsFromDoc } from './text-processing';
+import { parseCss, resolveDocumentStyles } from './epub-css';
 
 describe('extractWordsFromDoc', () => {
   it('should extract words from a simple paragraph', () => {
@@ -203,5 +204,99 @@ describe('extractWordsFromDoc formatting', () => {
     const after = words.find(w => w.text === 'Plain');
     expect(after?.quoteLevel).toBeUndefined();
     expect(after?.isItalic).toBeUndefined();
+  });
+
+  describe('source spacing', () => {
+    /** Rebuilds the source text the way paginated rendering draws a page. */
+    const rejoin = (words: ReturnType<typeof parse>) =>
+      words.map((w, i) => (i > 0 && !w.glueLeft ? ' ' : '') + w.text).join('');
+
+    it('splits hyphenated words for RSVP but rejoins them on a page', () => {
+      const words = parse('<p>His body-language was shiny-edged.</p>');
+
+      expect(words.map(w => w.text)).toEqual(['His', 'body-', 'language', 'was', 'shiny-', 'edged.']);
+      expect(rejoin(words)).toBe('His body-language was shiny-edged.');
+    });
+
+    it('keeps dashes as their own token without inventing spaces', () => {
+      const words = parse('<p>The robot—the one moving—keeps going.</p>');
+
+      expect(words.map(w => w.text)).toEqual(
+        ['The', 'robot', '—', 'the', 'one', 'moving', '—', 'keeps', 'going.']
+      );
+      expect(rejoin(words)).toBe('The robot—the one moving—keeps going.');
+    });
+
+    it('leaves real spaces alone', () => {
+      const words = parse('<p>An em dash — spaced out — here.</p>');
+
+      expect(rejoin(words)).toBe('An em dash — spaced out — here.');
+    });
+
+    it('glues an ellipsis to the word it followed', () => {
+      const words = parse('<p>I… I\'m not sure.</p>');
+
+      expect(words.map(w => w.text)).toEqual(['I', '...', "I'm", 'not', 'sure.']);
+      expect(rejoin(words)).toBe("I... I'm not sure.");
+    });
+
+    it('never glues the first word of a paragraph to the last of the one before', () => {
+      const words = parse('<p>Ends with—</p><p>Starts here.</p>');
+
+      expect(words.find(w => w.text === 'Starts')?.glueLeft).toBeUndefined();
+    });
+  });
+
+  describe('book stylesheets', () => {
+    const parseStyled = (html: string, css: string) => {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      return extractWordsFromDoc(doc, {
+        styles: resolveDocumentStyles(doc, parseCss([css])),
+      });
+    };
+
+    it('marks a run the book set in a different family', () => {
+      const words = parseStyled(
+        '<p>He said <span class="special">Now haste</span> and left.</p>',
+        'span.special { font-family: sans-serif; }'
+      );
+
+      expect(words.filter(w => w.face).map(w => w.text)).toEqual(['Now', 'haste']);
+      expect(words.find(w => w.text === 'Now')?.face).toBe('sans');
+    });
+
+    it('leaves runs that match the book\'s own base family unmarked', () => {
+      const words = parseStyled(
+        '<p>Plain <span class="q">quoted</span> text.</p>',
+        'body { font-family: Georgia, serif; } span.q { font-family: "Times New Roman", serif; }'
+      );
+
+      expect(words.some(w => w.face)).toBe(false);
+    });
+
+    it('reads emphasis from a class the stylesheet defines', () => {
+      const words = parseStyled(
+        '<p>A <span class="calibre7">stressed</span> word.</p>',
+        '.calibre7 { font-style: italic; }'
+      );
+
+      expect(words.find(w => w.text === 'stressed')?.isItalic).toBe(true);
+      expect(words.find(w => w.text === 'word.')?.isItalic).toBeUndefined();
+    });
+
+    it('carries paragraph indent and spacing on the opening word', () => {
+      const words = parseStyled(
+        '<p class="noindent">First para.</p><p>Second para.</p>',
+        'p { margin: 0; text-indent: 20pt; } p.noindent { text-indent: 0; }'
+      );
+
+      const first = words.find(w => w.text === 'First')!;
+      const second = words.find(w => w.text === 'Second')!;
+      expect(first.paraIndentEm).toBe(0);
+      expect(second.paraIndentEm).toBeCloseTo(1.667, 2);
+      expect(second.paraSpaceBelowEm).toBe(0);
+      // Only the word that opens the paragraph carries the metrics
+      expect(words.find(w => w.text === 'para.')?.paraIndentEm).toBeUndefined();
+    });
   });
 });

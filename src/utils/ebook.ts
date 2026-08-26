@@ -1,5 +1,6 @@
 import ePub from 'epubjs';
 import { extractWordsFromDoc, extractWordsFromText, type WordData } from './text-processing';
+import { parseCss, resolveDocumentStyles, type CssRule } from './epub-css';
 import { getGeminiApiKey, findRealEndOfBook } from './gemini';
 import { type BookRecord, type FirestoreStorage } from './storage';
 
@@ -122,6 +123,80 @@ export async function processPdf(
   return result;
 }
 
+/** Joins an href against the directory of the document that referenced it. */
+function resolveHref(base: string, href: string): string {
+  if (/^[a-z][a-z\d+.-]*:/i.test(href)) return href;
+  const trimmed = href.split('#')[0].split('?')[0];
+  if (trimmed.startsWith('/')) return trimmed.slice(1);
+  const dir = base.includes('/') ? base.slice(0, base.lastIndexOf('/') + 1) : '';
+  const out: string[] = [];
+  for (const part of (dir + trimmed).split('/')) {
+    if (part === '' || part === '.') continue;
+    if (part === '..') out.pop();
+    else out.push(part);
+  }
+  return out.join('/');
+}
+
+/**
+ * Reads a zip entry, trying each candidate path. Spine hrefs are sometimes
+ * relative to the package document and sometimes to the zip root, so a
+ * stylesheet's path has to be tried against both — and Archive.getText drops
+ * the first character of whatever it's given, hence the leading slash.
+ */
+async function readArchiveText(book: any, paths: string[]): Promise<string | null> {
+  for (const path of paths) {
+    if (!path) continue;
+    try {
+      const text = (await book.archive?.getText('/' + path))
+        ?? (await book.archive?.getText(path));
+      if (text) return text;
+    } catch {
+      // try the next candidate
+    }
+  }
+  return null;
+}
+
+/**
+ * Reads the stylesheets a chapter links to, plus any inline <style>. Books use
+ * CSS classes for meaningful typography — emphasis, a second speaker's font,
+ * first-line paragraph indents — none of which survive as tags.
+ */
+async function loadChapterCss(
+  book: any,
+  itemBases: string[],
+  doc: Document,
+  cache: Map<string, CssRule[]>
+): Promise<CssRule[]> {
+  const rules: CssRule[] = [];
+
+  for (const link of Array.from(doc.getElementsByTagName('link'))) {
+    const rel = (link.getAttribute('rel') || '').toLowerCase();
+    const type = (link.getAttribute('type') || '').toLowerCase();
+    const href = link.getAttribute('href');
+    if (!href || (!rel.split(/\s+/).includes('stylesheet') && type !== 'text/css')) continue;
+
+    const candidates = itemBases.map(base => resolveHref(base, href));
+    const key = candidates[0];
+    let cached = cache.get(key);
+    if (!cached) {
+      const text = await readArchiveText(book, candidates);
+      if (!text) console.warn(`[Epub] Could not read stylesheet ${key}`);
+      cached = text ? parseCss([text]) : [];
+      cache.set(key, cached);
+    }
+    rules.push(...cached);
+  }
+
+  const inline = Array.from(doc.getElementsByTagName('style'))
+    .map(el => el.textContent || '')
+    .filter(Boolean);
+  if (inline.length > 0) rules.push(...parseCss(inline));
+
+  return rules;
+}
+
 export async function processEpub(
   bookRecord: BookRecord,
   storageProvider: FirestoreStorage
@@ -143,6 +218,8 @@ export async function processEpub(
   let allWords: WordData[] = [];
   const spine = book.spine as any;
   const hrefToStartIndex: Record<string, number> = {};
+  // Every chapter of a book usually links the same stylesheet.
+  const cssCache = new Map<string, CssRule[]>();
 
   for (let i = 0; i < (spine.length || 0); i++) {
     const item = spine.get(i);
@@ -201,7 +278,15 @@ export async function processEpub(
       }
 
       if (doc) {
-        const sectionWords = extractWordsFromDoc(doc);
+        let styles;
+        try {
+          const bases = [item.canonical, item.href].filter(Boolean) as string[];
+          const rules = await loadChapterCss(book, bases, doc, cssCache);
+          if (rules.length > 0) styles = resolveDocumentStyles(doc, rules);
+        } catch (e) {
+          console.warn(`[Epub] Stylesheet handling failed for ${item.href}`, e);
+        }
+        const sectionWords = extractWordsFromDoc(doc, { styles });
         if (sectionWords.length > 0) allWords = [...allWords, ...sectionWords];
       } else {
         console.warn(`[Epub] No doc created for ${item.href}. Type of contents: ${typeof contents}`);

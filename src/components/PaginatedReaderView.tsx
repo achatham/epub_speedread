@@ -5,7 +5,8 @@ import { ReaderMenu } from './ReaderMenu';
 import { splitWord } from '../utils/orp';
 import type { WordData } from '../utils/text-processing';
 import { useReaderLayout } from '../hooks/useReaderLayout';
-import { getParagraphStyle, LIST_MARKER_WIDTH_EM, QUOTE_INDENT_EM, type ParagraphStyle } from '../utils/word-style';
+import { getParagraphStyles, LIST_MARKER_WIDTH_EM, QUOTE_INDENT_EM, type ParagraphStyle } from '../utils/word-style';
+import type { GenericFamily } from '../utils/epub-css';
 import { type Theme, type FontFamily } from '../stores/useSettingsStore';
 import type { NavigationType } from '../utils/navigation';
 import { useSettingsStore } from '../stores/useSettingsStore';
@@ -26,6 +27,17 @@ const FONT_FAMILY_CSS: Record<FontFamily, string> = {
   opendyslexic: 'OpenDyslexic, sans-serif',
   atkinson: 'AtkinsonHyperlegible, sans-serif',
 };
+
+/**
+ * A book that switches font family mid-page is marking something — in Children
+ * of Strife, `span.special` sets one character's speech in sans-serif so you
+ * can tell who is talking. The reader picks its own base family, so preserve
+ * the contrast rather than the book's literal font.
+ */
+function faceFamilies(base: FontFamily): Record<GenericFamily, string> {
+  const contrast = base === 'serif' ? FONT_FAMILY_CSS.system : FONT_FAMILY_CSS.serif;
+  return { mono: FONT_FAMILY_CSS.mono, sans: contrast, serif: contrast };
+}
 
 export function PaginatedReaderView({
   onCloseBook,
@@ -413,7 +425,11 @@ export function PaginatedReaderView({
               fontSynthesis: 'weight style',
             }}
           >
-            {renderPageWords(pageWords, theme, layoutState.start, currentIndex)}
+            {renderPageWords(pageWords, {
+              theme,
+              faces: faceFamilies(fontFamily),
+              highlightIndex: currentIndex,
+            }, layoutState.start)}
           </div>
         )}
       </div>
@@ -512,13 +528,20 @@ interface PositionedWord {
   globalIdx: number;
 }
 
+interface RenderContext {
+  theme: Theme;
+  /** Font stacks for runs the book set in a different family */
+  faces: Record<GenericFamily, string>;
+  highlightIndex?: number;
+}
+
 function renderParagraph(
   para: PositionedWord[],
   style: ParagraphStyle,
   key: number,
-  theme: Theme,
-  highlightIndex?: number
+  ctx: RenderContext
 ) {
+  const { theme, faces, highlightIndex } = ctx;
   const isDivider = para.length === 1 && para[0].word.isDivider;
 
   if (isDivider) {
@@ -538,11 +561,12 @@ function renderParagraph(
   const paraTextColor = theme === 'bedtime' ? 'text-stone-400' : 'text-zinc-800 dark:text-zinc-200';
   const paraStyle: React.CSSProperties = {
     marginTop: style.marginTopEm > 0 ? `${style.marginTopEm}em` : 0,
-    marginBottom: '1em',
+    marginBottom: style.marginBottomEm > 0 ? `${style.marginBottomEm}em` : 0,
     marginLeft: 0,
     marginRight: 0,
   };
   if (style.fontScale !== 1) paraStyle.fontSize = `${style.fontScale}em`;
+  if (style.textIndentEm > 0) paraStyle.textIndent = `${style.textIndentEm}em`;
   if (style.listLevel > 0) {
     // Hanging indent so wrapped lines clear the bullet/number
     paraStyle.paddingLeft = `${LIST_MARKER_WIDTH_EM}em`;
@@ -569,13 +593,17 @@ function renderParagraph(
           word.isItalic ? 'italic' : '',
           word.isBold && !style.isHeading ? 'font-bold' : '',
         ].filter(Boolean).join(' ');
+        // "well-known" and "robot—the" are several RSVP tokens but one word on
+        // the page, so a glued token gets no leading space.
+        const space = wIdx > 0 && !word.glueLeft ? ' ' : '';
         return (
           <span
             key={globalIdx}
             data-word-idx={globalIdx}
             className={wordClass}
+            style={word.face ? { fontFamily: faces[word.face] } : undefined}
           >
-            {wIdx > 0 ? ' ' : ''}{word.text}
+            {space}{word.text}
           </span>
         );
       })}
@@ -585,10 +613,10 @@ function renderParagraph(
 
 function renderPageWords(
   pageWords: WordData[],
-  theme: Theme,
-  pageStartIndex: number,
-  highlightIndex?: number
+  ctx: RenderContext,
+  pageStartIndex: number
 ) {
+  const { theme } = ctx;
   if (pageWords.length === 0) return null;
 
   // Group words into paragraphs
@@ -605,7 +633,7 @@ function renderPageWords(
   }
   if (current.length > 0) paragraphs.push(current);
 
-  const styles = paragraphs.map(para => getParagraphStyle(para.map(p => p.word)));
+  const styles = getParagraphStyles(paragraphs.map(para => para.map(p => p.word)));
 
   const quoteBorder = theme === 'bedtime'
     ? 'border-zinc-800'
@@ -617,7 +645,7 @@ function renderPageWords(
   for (let i = 0; i < paragraphs.length; i++) {
     const quoteLevel = styles[i].quoteLevel;
     if (quoteLevel === 0) {
-      blocks.push(renderParagraph(paragraphs[i], styles[i], i, theme, highlightIndex));
+      blocks.push(renderParagraph(paragraphs[i], styles[i], i, ctx));
       continue;
     }
 
@@ -635,7 +663,7 @@ function renderPageWords(
         className={`border-l-2 ${quoteBorder} opacity-90`}
         style={{ paddingLeft: `${QUOTE_INDENT_EM * quoteLevel - 0.25}em`, marginLeft: '0.25em' }}
       >
-        {group.map(pIdx => renderParagraph(paragraphs[pIdx], styles[pIdx], pIdx, theme, highlightIndex))}
+        {group.map(pIdx => renderParagraph(paragraphs[pIdx], styles[pIdx], pIdx, ctx))}
       </div>
     );
   }

@@ -1,5 +1,7 @@
 import { splitWord } from './orp';
 import { type RsvpSettings } from './storage';
+import type { DocumentStyles, ElementStyle, GenericFamily } from './epub-css';
+import { genericFamily } from './epub-css';
 
 export interface WordData {
   text: string;
@@ -17,6 +19,20 @@ export interface WordData {
   listLevel?: number;
   /** Bullet or number shown before the first word of a list item */
   listMarker?: string;
+  /**
+   * No space separated this word from the previous one in the source. RSVP
+   * splits "well-known" and "robot\u2014the" into separate tokens; paginated
+   * rendering uses this to put them back together as the book had them.
+   */
+  glueLeft?: boolean;
+  /** Set when the book switches this run away from its base font family */
+  face?: GenericFamily;
+  /** First-line indent of this paragraph, in em, from the book's CSS */
+  paraIndentEm?: number;
+  /** Space above this paragraph, in em, from the book's CSS */
+  paraSpaceAboveEm?: number;
+  /** Space below this paragraph, in em, from the book's CSS */
+  paraSpaceBelowEm?: number;
 }
 
 const BLOCK_TAGS = new Set([
@@ -34,6 +50,13 @@ const BOLD_STYLE_REGEX = /font-weight\s*:\s*(bold|bolder|[6-9]00)/i;
 // names ("calibre4") would produce false positives.
 const ITALIC_CLASS_REGEX = /(^|[\s_-])(italic|italics)([\s_-]|$)/i;
 const BOLD_CLASS_REGEX = /(^|[\s_-])(bold|boldface)([\s_-]|$)/i;
+
+/** Generic family from an inline `style="font-family: ..."` attribute. */
+function inlineFontFamily(element: Element): GenericFamily | undefined {
+  const style = element.getAttribute('style');
+  const match = style ? INLINE_FAMILY_REGEX.exec(style) : null;
+  return match ? genericFamily(match[1]) : undefined;
+}
 
 function isItalicElement(element: Element, tagName: string): boolean {
   if (ITALIC_TAGS.has(tagName)) return true;
@@ -136,10 +159,93 @@ interface StyledSegment {
   text: string;
   isItalic: boolean;
   isBold: boolean;
+  face?: GenericFamily;
 }
 
-export function extractWordsFromDoc(doc: Document): WordData[] {
+/** One RSVP token, plus whether the source had a space before it. */
+interface FlushedWord extends StyledSegment {
+  glueLeft: boolean;
+}
+
+/**
+ * Marks a token boundary that RSVP wants but the source text did not contain,
+ * so paginated rendering can tell "well- known" (our split) from "well known".
+ */
+const GLUE = '\u0001';
+// eslint-disable-next-line no-control-regex -- GLUE is a deliberate sentinel
+const SEPARATORS = /([\s\u0001]+)/;
+const INLINE_FAMILY_REGEX = /font-family\s*:\s*([^;]+)/i;
+
+/**
+ * Splits a run of source text into RSVP tokens. Em/en dashes stand alone,
+ * hyphenated words break after the hyphen, and ellipses become one token —
+ * each boundary marked with GLUE so it can be undone when drawing a page.
+ */
+function normalize(text: string): string {
+  return text
+    .replace(/—/g, `${GLUE}—${GLUE}`)
+    .replace(/–/g, `${GLUE}–${GLUE}`)
+    .replace(/(\w)-(\w)/g, `$1-${GLUE}$2`)
+    .replace(/…/g, `${GLUE}...${GLUE}`)
+    // A spaced-out ellipsis ("word. . . word") keeps the space that followed it.
+    .replace(/(?:\. ?){3,}/g, (m) => `${GLUE}...${m.endsWith(' ') ? ' ' : GLUE}`);
+}
+
+/**
+ * Turns buffered segments into tokens. A word may straddle segments
+ * ("un<em>believable</em>", or "<em>no</em>."), in which case the pieces are
+ * joined back together and the formatting of the parts is merged.
+ */
+function tokenizeSegments(pending: StyledSegment[]): FlushedWord[] {
+  const flushed: FlushedWord[] = [];
+  // The separator crossed since the last token, or null when the previous
+  // segment ended mid-word. Deliberately spans segments.
+  let separator: string | null = null;
+
+  for (const segment of pending) {
+    const text = normalize(segment.text);
+    if (!text) continue;
+
+    // split() with a capturing group alternates token, separator, token, ...
+    const parts = text.split(SEPARATORS);
+    for (let i = 0; i < parts.length; i++) {
+      if (i % 2 === 1) {
+        separator = parts[i];
+        continue;
+      }
+      const token = parts[i];
+      if (!token) continue;
+
+      if (separator === null && flushed.length > 0) {
+        const prev = flushed[flushed.length - 1];
+        prev.text += token;
+        prev.isItalic = prev.isItalic || segment.isItalic;
+        prev.isBold = prev.isBold || segment.isBold;
+        prev.face = prev.face ?? segment.face;
+      } else {
+        flushed.push({
+          text: token,
+          isItalic: segment.isItalic,
+          isBold: segment.isBold,
+          face: segment.face,
+          glueLeft: flushed.length > 0 && separator !== null && !/\s/.test(separator),
+        });
+      }
+      separator = null;
+    }
+  }
+
+  return flushed;
+}
+
+export interface ExtractOptions {
+  /** Typography resolved from the book's own stylesheets, when we have it. */
+  styles?: DocumentStyles;
+}
+
+export function extractWordsFromDoc(doc: Document, options: ExtractOptions = {}): WordData[] {
   const words: WordData[] = [];
+  const { styles } = options;
 
   // Text buffered since the last block boundary, split into runs so that
   // inline formatting (<em>, <strong>, ...) survives down to the word level.
@@ -154,18 +260,15 @@ export function extractWordsFromDoc(doc: Document): WordData[] {
   let italicDepth = 0;
   let boldDepth = 0;
   let pendingListMarker: string | null = null;
+  // Font families the book has switched into, innermost last.
+  const familyStack: GenericFamily[] = [];
+  // Style of the innermost block element, for paragraph indent and spacing.
+  let blockStyle: ElementStyle | undefined;
 
-  // Replace em-dashes and en-dashes with padded versions to ensure they split into separate words
-  // "word—word" -> "word — word"
-  // Also split hyphenated words, keeping the hyphen on the preceding word
-  // Standardize ellipses (...) and single-char ellipses (…) as distinct padded tokens
-  function normalize(text: string): string {
-    return text
-      .replace(/—/g, ' — ')
-      .replace(/–/g, ' – ')
-      .replace(/(\w)-(\w)/g, '$1- $2')
-      .replace(/…/g, ' ... ')
-      .replace(/(?:\. ?){3,}/g, ' ... ');
+  /** The face of the current run, when the book moved off its base family. */
+  function currentFace(): GenericFamily | undefined {
+    const family = familyStack[familyStack.length - 1];
+    return family && family !== styles?.baseFamily ? family : undefined;
   }
 
   function flush() {
@@ -173,37 +276,7 @@ export function extractWordsFromDoc(doc: Document): WordData[] {
     segments = [];
     if (!pending.some(s => s.text.trim())) return;
 
-    // Split into words. A word may straddle segments ("un<em>believable</em>",
-    // or "<em>no</em>."), in which case the pieces are joined back together and
-    // the formatting of the parts is merged.
-    const flushed: StyledSegment[] = [];
-    let wordIsOpen = false;
-
-    for (const segment of pending) {
-      const text = normalize(segment.text);
-      if (!text) continue;
-
-      const tokens = text.split(/\s+/).filter(t => t.length > 0);
-      if (tokens.length === 0) {
-        wordIsOpen = false; // pure whitespace ends any open word
-        continue;
-      }
-
-      const continuesPrevious = wordIsOpen && flushed.length > 0 && !/^\s/.test(text);
-      tokens.forEach((token, index) => {
-        if (index === 0 && continuesPrevious) {
-          const prev = flushed[flushed.length - 1];
-          prev.text += token;
-          prev.isItalic = prev.isItalic || segment.isItalic;
-          prev.isBold = prev.isBold || segment.isBold;
-        } else {
-          flushed.push({ text: token, isItalic: segment.isItalic, isBold: segment.isBold });
-        }
-      });
-
-      wordIsOpen = !/\s$/.test(text);
-    }
-
+    const flushed = tokenizeSegments(pending);
     if (flushed.length === 0) return;
 
     if (markNextAsDivider) {
@@ -218,9 +291,10 @@ export function extractWordsFromDoc(doc: Document): WordData[] {
     }
 
     flushed.forEach((w, index) => {
+      const first = index === 0;
       words.push({
         text: w.text,
-        isParagraphStart: markNextAsParagraphStart && index === 0,
+        isParagraphStart: markNextAsParagraphStart && first,
         isSentenceStart: false, // Post-process
         isHeading: headingLevel > 0 ? true : undefined,
         headingLevel: headingLevel > 0 ? headingLevel : undefined,
@@ -228,7 +302,13 @@ export function extractWordsFromDoc(doc: Document): WordData[] {
         isBold: w.isBold ? true : undefined,
         quoteLevel: quoteLevel > 0 ? quoteLevel : undefined,
         listLevel: listLevel > 0 ? listLevel : undefined,
-        listMarker: index === 0 && pendingListMarker ? pendingListMarker : undefined
+        listMarker: first && pendingListMarker ? pendingListMarker : undefined,
+        glueLeft: w.glueLeft && !first ? true : undefined,
+        face: w.face,
+        // Paragraph metrics live on the word that opens the paragraph.
+        paraIndentEm: first ? blockStyle?.textIndentEm : undefined,
+        paraSpaceAboveEm: first ? blockStyle?.marginTopEm : undefined,
+        paraSpaceBelowEm: first ? blockStyle?.marginBottomEm : undefined,
       });
     });
 
@@ -239,13 +319,21 @@ export function extractWordsFromDoc(doc: Document): WordData[] {
   function traverse(node: Node) {
     if (node.nodeType === Node.TEXT_NODE) {
       const text = node.textContent || '';
-      if (text) segments.push({ text, isItalic: italicDepth > 0, isBold: boldDepth > 0 });
+      if (text) {
+        segments.push({
+          text,
+          isItalic: italicDepth > 0,
+          isBold: boldDepth > 0,
+          face: currentFace(),
+        });
+      }
       return;
     }
     if (node.nodeType !== Node.ELEMENT_NODE) return;
 
     const element = node as Element;
     const tagName = element.tagName.toUpperCase();
+    const cssStyle = styles?.byElement.get(element);
     const isBlock = BLOCK_TAGS.has(tagName);
     const isBr = tagName === 'BR';
     const isHeadingTag = /^H[1-6]$/.test(tagName);
@@ -260,6 +348,8 @@ export function extractWordsFromDoc(doc: Document): WordData[] {
 
     // Block context — restored after the closing flush below
     const prevHeadingLevel = headingLevel;
+    const prevBlockStyle = blockStyle;
+    if (isBlock) blockStyle = cssStyle;
     if (isHeadingTag) headingLevel = parseInt(tagName[1], 10);
     if (tagName === 'BLOCKQUOTE') quoteLevel++;
     if (tagName === 'UL' || tagName === 'OL') listLevel++;
@@ -271,13 +361,17 @@ export function extractWordsFromDoc(doc: Document): WordData[] {
       markNextAsDivider = true;
     }
 
-    const italic = isItalicElement(element, tagName);
-    const bold = isBoldElement(element, tagName);
+    const italic = isItalicElement(element, tagName) || cssStyle?.italic === true;
+    const bold = isBoldElement(element, tagName) || cssStyle?.bold === true;
     if (italic) italicDepth++;
     if (bold) boldDepth++;
 
+    const family = inlineFontFamily(element) ?? cssStyle?.family;
+    if (family) familyStack.push(family);
+
     node.childNodes.forEach(child => traverse(child));
 
+    if (family) familyStack.pop();
     if (italic) italicDepth--;
     if (bold) boldDepth--;
 
@@ -289,6 +383,7 @@ export function extractWordsFromDoc(doc: Document): WordData[] {
     }
 
     headingLevel = prevHeadingLevel;
+    blockStyle = prevBlockStyle;
     if (tagName === 'BLOCKQUOTE') quoteLevel--;
     if (tagName === 'UL' || tagName === 'OL') listLevel--;
     if (tagName === 'LI') pendingListMarker = null;
@@ -327,23 +422,14 @@ export function extractWordsFromText(text: string): WordData[] {
   const allWords: WordData[] = [];
 
   paragraphs.forEach((para) => {
-    const processedPara = para
-      .replace(/—/g, ' — ')
-      .replace(/–/g, ' – ')
-      .replace(/(\w)-(\w)/g, '$1- $2')
-      .replace(/…/g, ' ... ')
-      .replace(/(?:\. ?){3,}/g, ' ... ');
-
-    const rawWords = processedPara
-      .replace(/\s+/g, ' ')
-      .split(' ')
-      .filter(w => w.length > 0);
+    const rawWords = tokenizeSegments([{ text: para, isItalic: false, isBold: false }]);
 
     rawWords.forEach((w, wordIndex) => {
       allWords.push({
-        text: w,
+        text: w.text,
         isParagraphStart: wordIndex === 0,
-        isSentenceStart: false // Post-process
+        isSentenceStart: false, // Post-process
+        glueLeft: w.glueLeft && wordIndex > 0 ? true : undefined,
       });
     });
   });

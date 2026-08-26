@@ -306,18 +306,12 @@ function App() {
         return;
       }
 
+      // Pass formatting through as-is so specs can exercise any WordData
+      // field; only the two positional flags have a legacy fallback.
       const processedWords = mockWords.map((w: any) => ({
-        text: w.text,
+        ...w,
         isParagraphStart: typeof w.isParagraphStart === 'boolean' ? w.isParagraphStart : (w.paragraphIndex === 0 && w.sentenceIndex === 0),
         isSentenceStart: typeof w.isSentenceStart === 'boolean' ? w.isSentenceStart : w.sentenceIndex === 0,
-        isHeading: w.isHeading,
-        isDivider: w.isDivider,
-        headingLevel: w.headingLevel,
-        isItalic: w.isItalic,
-        isBold: w.isBold,
-        quoteLevel: w.quoteLevel,
-        listLevel: w.listLevel,
-        listMarker: w.listMarker
       }));
 
       setWords(processedWords);

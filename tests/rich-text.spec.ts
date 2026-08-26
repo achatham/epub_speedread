@@ -89,3 +89,67 @@ test('paginated mode renders headings, emphasis, quotes and lists', async ({ pag
 
   await expect(page).toHaveScreenshot(['screenshots', 'rich-text-rendering.png']);
 });
+
+/**
+ * Page 208 of Children of Strife: one speaker's dialogue is set in a second
+ * font family and broken across several short paragraphs, so losing either the
+ * family or the book's paragraph style makes it read as narration.
+ */
+const DIALOGUE_WORDS = [
+  ...paragraph('Presumably Kern is transmitting back, even as Cato carves a path with his twin machetes. The', {
+    paraIndentEm: 0, paraSpaceBelowEm: 0,
+  }),
+  word('robot'),
+  word('—', { glueLeft: true }),
+  word('the', { glueLeft: true }),
+  ...'one moving under its own power'.split(' ').map(t => word(t)),
+  word('—', { glueLeft: true }),
+  word('keeps', { glueLeft: true }),
+  ...'stopping and starting.'.split(' ').map(t => word(t)),
+  ...paragraph('“Progress!', { face: 'sans', paraIndentEm: 1.67, paraSpaceBelowEm: 0 }),
+  ...paragraph('Motion!', { face: 'sans', paraIndentEm: 1.67, paraSpaceBelowEm: 0 }),
+  ...paragraph('Or be left', { face: 'sans', paraIndentEm: 1.67, paraSpaceBelowEm: 0 }),
+  ...paragraph('And I’ll make excuses to your mother,” Cato sends through forceful body-', {
+    face: 'sans', paraIndentEm: 1.67, paraSpaceBelowEm: 0,
+  }),
+  word('language', { glueLeft: true, face: 'sans' }),
+  word('and'), word('angry'), word('coloration.'),
+  ...paragraph('I don’t understand. I’m not getting any kind of link at all,', {
+    isItalic: true, paraIndentEm: 1.67, paraSpaceBelowEm: 0,
+  }),
+  ...'Kern complains.'.split(' ').map(t => word(t)),
+];
+
+test('paginated mode keeps the book\'s own dialogue formatting', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => typeof (window as any).__loadMockWords === 'function');
+  await page.evaluate(({ words, sections }: any) => {
+    (window as any).__loadMockWords(words, sections);
+  }, { words: DIALOGUE_WORDS, sections: [{ label: 'Chapter 7.4', startIndex: 0 }] });
+
+  const area = '[data-testid="paginated-reading-area"]';
+  await expect(page.locator(area)).toHaveAttribute('data-is-measuring', 'false');
+
+  const familyOf = (text: string) =>
+    page.locator(`${area} span[data-word-idx]`).filter({ hasText: text }).first()
+      .evaluate((el) => getComputedStyle(el).fontFamily);
+
+  // The speech runs in a different family from the narration around it
+  const spoken = await familyOf('Progress!');
+  const narration = await familyOf('Presumably');
+  expect(spoken).not.toBe(narration);
+
+  // Words RSVP split apart are one word again on the page
+  const narrationPara = page.locator('p:has-text("Presumably Kern")').first();
+  expect(await narrationPara.textContent()).toContain('robot—the one moving');
+  const hyphenated = page.locator('p:has-text("And I’ll make excuses")').first();
+  expect(await hyphenated.textContent()).toContain('body-language');
+
+  // The book sets paragraphs with a first-line indent and no gap between them
+  const speech = page.locator('p:has-text("Motion!")').first();
+  const indent = await speech.evaluate((el) => getComputedStyle(el).textIndent);
+  expect(parseFloat(indent)).toBeGreaterThan(0);
+  expect(await speech.evaluate((el) => getComputedStyle(el).marginBottom)).toBe('0px');
+
+  await expect(page).toHaveScreenshot(['screenshots', 'dialogue-formatting.png']);
+});
