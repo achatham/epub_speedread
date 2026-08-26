@@ -135,8 +135,7 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
                     type: 'rsvp'
                 })
                     .then(async () => {
-                        await storageProvider.aggregateSessions();
-                        setSessions(await storageProvider.getAggregatedSessions());
+                        setSessions(await storageProvider.aggregateSessions());
 
                         const idToUpdate = sessionBookIdRef.current;
                         const bookRecord = idToUpdate ? library.find(b => b.id === idToUpdate) : undefined;
@@ -265,8 +264,7 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
                     wordsRead: wordsRead,
                     type: 'paginated'
                 }).then(async () => {
-                    await storageProvider.aggregateSessions();
-                    setSessions(await storageProvider.getAggregatedSessions());
+                    setSessions(await storageProvider.aggregateSessions());
                     
                     const bookRecord = library.find(b => b.id === savedBookId);
                     if (bookRecord) {
@@ -355,8 +353,7 @@ export function useReadingSession(storageProvider: FirestoreStorage | null) {
                     wordsRead: wordsRead,
                     type: 'paginated'
                 }).then(async () => {
-                    await storageProvider.aggregateSessions();
-                    setSessions(await storageProvider.getAggregatedSessions());
+                    setSessions(await storageProvider.aggregateSessions());
 
                     const bookRecord = library.find(b => b.id === savedBookId);
                     if (bookRecord) {

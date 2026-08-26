@@ -198,69 +198,82 @@ export function getBookProgressTrendData(
   return result;
 }
 
-export function getIncrementalAggregationPlan(
-  existingAggregated: ReadingSession[],
-  newRawSessions: ReadingSession[]
-): { deleteIds: string[], createSessions: ReadingSession[] } {
+/**
+ * Rebuilds the per-day aggregates from scratch out of the raw session log.
+ *
+ * This is deliberately a pure function of the raw sessions rather than an
+ * incremental "existing aggregate + new sessions" merge. The incremental form
+ * was not idempotent: two overlapping aggregation runs each minted a fresh
+ * `crypto.randomUUID()` document for the same day, so Firestore saw two
+ * non-conflicting writes and kept both. The next run then folded *all* of the
+ * duplicates back into one group and summed them, multiplying the totals.
+ *
+ * The document id is the session key (book + local day + type), so concurrent
+ * runs converge on the same document and repeated runs produce the same value.
+ */
+export function buildAggregatedSessions(rawSessions: ReadingSession[]): ReadingSession[] {
   const groups = new Map<string, ReadingSession[]>();
-
-  // 1. Group existing aggregated sessions
-  // We use a list in case multiple existing records have the same key (bug recovery)
-  for (const s of existingAggregated) {
+  for (const s of rawSessions) {
     const key = getSessionKey(s);
-    if (!groups.has(key)) {
-      groups.set(key, []);
+    const group = groups.get(key);
+    if (group) {
+      group.push(s);
+    } else {
+      groups.set(key, [s]);
     }
-    groups.get(key)!.push(s);
   }
 
-  // 2. Track which groups are modified and add new raw sessions
-  const modifiedKeys = new Set<string>();
-  for (const s of newRawSessions) {
-    const key = getSessionKey(s);
-    if (!groups.has(key)) {
-      groups.set(key, []);
-    }
-    groups.get(key)!.push(s);
-    modifiedKeys.add(key);
-  }
-
-  const deleteIds: string[] = [];
-  const createSessions: ReadingSession[] = [];
-
-  // 3. Process only modified groups
-  for (const key of modifiedKeys) {
-    const group = groups.get(key)!;
-
-    // Find all existing records for this key to ensure they are all replaced/deleted
-    const existing = existingAggregated.filter(ea => getSessionKey(ea) === key);
-    const idToUse = existing.length > 0 ? existing[0].id : crypto.randomUUID();
-
-    if (existing.length > 0) {
-      deleteIds.push(...existing.map(e => e.id));
-    }
-
-    const sorted = [...group].sort((a, b) => a.startTime - b.startTime);
-    const first = sorted[0];
-
-    const aggregated: ReadingSession = {
-      id: idToUse,
+  const aggregated: ReadingSession[] = [];
+  for (const [key, group] of groups) {
+    const first = [...group].sort((a, b) => a.startTime - b.startTime)[0];
+    aggregated.push({
+      id: key,
       bookId: first.bookId,
       bookTitle: first.bookTitle,
       startTime: first.startTime,
       endTime: Math.max(...group.map(s => s.endTime)),
       startWordIndex: Math.min(...group.map(s => s.startWordIndex)),
       endWordIndex: Math.max(...group.map(s => s.endWordIndex)),
-      wordsRead: group.reduce((acc, s) => acc + (s.wordsRead || Math.max(0, s.endWordIndex - s.startWordIndex)), 0),
+      wordsRead: group.reduce((acc, s) => acc + getSessionWordsRead(s), 0),
       durationSeconds: group.reduce((acc, s) => acc + s.durationSeconds, 0),
       type: (first.type || 'reading') as 'reading' | 'listening' | 'rsvp' | 'paginated'
-    };
-
-    createSessions.push(aggregated);
+    });
   }
 
-  // Filter out the ID we are currently updating from deleteIds
-  const actualDeleteIds = deleteIds.filter(id => !createSessions.some(cs => cs.id === id));
+  return aggregated.sort((a, b) => b.startTime - a.startTime);
+}
 
-  return { deleteIds: actualDeleteIds, createSessions };
+function isSameAggregate(a: ReadingSession | undefined, b: ReadingSession): boolean {
+  return !!a
+    && a.startTime === b.startTime
+    && a.endTime === b.endTime
+    && a.startWordIndex === b.startWordIndex
+    && a.endWordIndex === b.endWordIndex
+    && a.wordsRead === b.wordsRead
+    && a.durationSeconds === b.durationSeconds
+    && a.bookTitle === b.bookTitle;
+}
+
+/**
+ * Diffs the stored aggregates against what the raw sessions say they should be.
+ *
+ * `deleteIds` covers both days whose raw sessions have since been removed and
+ * the legacy random-UUID duplicates written before ids were derived from the
+ * session key, so running this repairs an inflated collection in place.
+ */
+export function getAggregationPlan(
+  existingAggregated: ReadingSession[],
+  rawSessions: ReadingSession[]
+): { deleteIds: string[], upsertSessions: ReadingSession[], sessions: ReadingSession[] } {
+  const sessions = buildAggregatedSessions(rawSessions);
+  const desiredById = new Map(sessions.map(s => [s.id, s]));
+  const existingById = new Map(existingAggregated.map(s => [s.id, s]));
+
+  const deleteIds = existingAggregated
+    .map(s => s.id)
+    .filter(id => !desiredById.has(id));
+
+  const upsertSessions = sessions.filter(s => !isSameAggregate(existingById.get(s.id), s));
+
+  return { deleteIds, upsertSessions, sessions };
 }

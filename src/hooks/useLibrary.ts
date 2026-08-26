@@ -31,7 +31,7 @@ export function useLibrary(
                     storageProvider.getAllBooks(),
                     storageProvider.pruneImplausibleSessions()
                 ]);
-                const history = await storageProvider.getAggregatedSessions();
+                const history = await storageProvider.aggregateSessions();
 
                 setLibrary(books);
                 setSessions(history);
@@ -144,8 +144,7 @@ export function useLibrary(
 
     const refreshSessions = useCallback(async () => {
         if (storageProvider) {
-            await storageProvider.aggregateSessions();
-            setSessions(await storageProvider.getAggregatedSessions());
+            setSessions(await storageProvider.aggregateSessions());
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageProvider]);

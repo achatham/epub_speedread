@@ -8,7 +8,7 @@ import { useSettingsStore } from '../stores/useSettingsStore';
 // Mock storage provider
 const mockStorageProvider = {
     logReadingSession: vi.fn().mockResolvedValue(undefined),
-    aggregateSessions: vi.fn().mockResolvedValue(undefined),
+    aggregateSessions: vi.fn().mockResolvedValue([]),
     getAggregatedSessions: vi.fn().mockResolvedValue([]),
     updateBookStats: vi.fn().mockResolvedValue(undefined),
 };

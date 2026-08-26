@@ -1,8 +1,8 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { db as firestore, storage as firebaseStorage } from './firebase';
-import { collection, doc, setDoc, getDocs, deleteDoc, getDoc, updateDoc, runTransaction, query, where, orderBy, getDocFromCache, getDocsFromCache } from 'firebase/firestore';
+import { collection, doc, setDoc, getDocs, deleteDoc, getDoc, updateDoc, runTransaction, writeBatch, query, where, orderBy, getDocFromCache, getDocsFromCache } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { getIncrementalAggregationPlan, isImplausiblySlowSession, getSessionWordsRead } from './stats';
+import { buildAggregatedSessions, getAggregationPlan, isImplausiblySlowSession, getSessionWordsRead } from './stats';
 
 export interface RsvpSettings {
   periodMultiplier: number;
@@ -31,6 +31,8 @@ export interface UserSettings {
   paginatedFontSize?: number;
   lastBookId?: string | null;
   lastUpdated: number;
+  /** @deprecated Aggregation is now a pure rebuild from the raw session log,
+   *  so no watermark is needed. Left on the type to describe existing docs. */
   lastAggregationTime?: number;
   apiSyncToken?: string;
 }
@@ -149,6 +151,8 @@ class LocalFileCache {
 export class FirestoreStorage {
   private fileCache = new LocalFileCache();
   private userId: string;
+  private aggregationInFlight: Promise<ReadingSession[]> | null = null;
+  private pendingSessions: ReadingSession[] = [];
 
   constructor(userId: string) {
     this.userId = userId;
@@ -263,33 +267,87 @@ export class FirestoreStorage {
     return books.sort((a, b) => (b.progress?.lastReadAt || 0) - (a.progress?.lastReadAt || 0));
   }
 
-  async aggregateSessions(): Promise<void> {
-    if (!firestore) return;
-    try {
-      const settings = await this.getSettings();
-      const lastAgg = settings?.lastAggregationTime || 0;
-
-      const newRawSessions = await this.getRawSessions(lastAgg);
-      if (newRawSessions.length === 0) return;
-
-      const existingAggregated = await this.getAggregatedSessions();
-      const { deleteIds, createSessions } = getIncrementalAggregationPlan(existingAggregated, newRawSessions);
-
-      const maxEndTime = Math.max(...newRawSessions.map(s => s.endTime));
-
-      await runTransaction(firestore, async (transaction) => {
-        for (const id of deleteIds) {
-          transaction.delete(doc(this.aggregatedSessionsCollection, id));
-        }
-        for (const s of createSessions) {
-          transaction.set(doc(this.aggregatedSessionsCollection, s.id), s);
-        }
-        transaction.update(this.userDocRef, { lastAggregationTime: maxEndTime });
-      });
-      console.log(`[Storage] Incremental aggregation: ${newRawSessions.length} new raw sessions processed.`);
-    } catch (e) {
-      console.error("Aggregation transaction failed", e);
+  /**
+   * Rebuilds the per-day aggregates from the raw session log and returns them.
+   *
+   * Returning the freshly computed sessions (rather than making callers re-read
+   * the collection) keeps the stats screen correct offline: the raw sessions
+   * are served from the local Firestore cache and the aggregates are derived in
+   * memory, so nothing on this path needs a round trip to succeed.
+   */
+  async aggregateSessions(): Promise<ReadingSession[]> {
+    // Aggregation is triggered from several places that can fire in the same
+    // burst on load. Without this guard each run read the collection before any
+    // of the others had written, and they all wrote separate documents.
+    if (!this.aggregationInFlight) {
+      this.aggregationInFlight = this.runAggregation()
+        .finally(() => { this.aggregationInFlight = null; });
     }
+    return this.aggregationInFlight;
+  }
+
+  private async runAggregation(): Promise<ReadingSession[]> {
+    if (!firestore) return [];
+    try {
+      const [fetched, existingAggregated] = await Promise.all([
+        this.readCollectionCached(this.sessionsCollection),
+        this.getAggregatedSessions(),
+      ]);
+
+      // A failed read must never be mistaken for "the user has no history" —
+      // acting on it would delete every aggregate.
+      if (fetched === null) return existingAggregated;
+
+      const fetchedIds = new Set(fetched.map(s => s.id));
+      this.pendingSessions = this.pendingSessions.filter(s => !fetchedIds.has(s.id));
+      const rawSessions = [...fetched, ...this.pendingSessions];
+      if (rawSessions.length === 0) return [];
+
+      const { deleteIds, upsertSessions, sessions } = getAggregationPlan(existingAggregated, rawSessions);
+
+      if (deleteIds.length > 0 || upsertSessions.length > 0) {
+        console.log(`[Storage] Aggregation: ${rawSessions.length} raw sessions -> ${sessions.length} daily aggregates (${upsertSessions.length} written, ${deleteIds.length} stale removed).`);
+        this.writeAggregates(deleteIds, upsertSessions);
+      }
+
+      return sessions;
+    } catch (e) {
+      console.error("Aggregation failed", e);
+      return this.getAggregatedSessions();
+    }
+  }
+
+  /**
+   * Persists the aggregation plan. Uses batched writes rather than a
+   * transaction: a transaction needs a server round trip and so fails while
+   * offline, whereas a batch is applied to the local cache immediately and
+   * flushed on reconnect. The commit is intentionally not awaited for the same
+   * reason — offline it only settles once the network returns.
+   */
+  private writeAggregates(deleteIds: string[], upsertSessions: ReadingSession[]): void {
+    if (!firestore) return;
+    const MAX_BATCH_OPS = 450; // Firestore's hard limit is 500.
+    const ops: (() => void)[] = [];
+    let batch = writeBatch(firestore);
+
+    const flush = () => {
+      const pending = batch;
+      batch = writeBatch(firestore!);
+      pending.commit().catch(e => console.error("Aggregation write failed", e));
+    };
+
+    for (const id of deleteIds) {
+      ops.push(() => batch.delete(doc(this.aggregatedSessionsCollection, id)));
+    }
+    for (const s of upsertSessions) {
+      ops.push(() => batch.set(doc(this.aggregatedSessionsCollection, s.id), s));
+    }
+
+    ops.forEach((op, i) => {
+      op();
+      if ((i + 1) % MAX_BATCH_OPS === 0) flush();
+    });
+    if (ops.length % MAX_BATCH_OPS !== 0) flush();
   }
 
   async getBook(id: string): Promise<BookRecord | undefined> {
@@ -433,39 +491,67 @@ export class FirestoreStorage {
 
   async logReadingSession(sessionData: Omit<ReadingSession, 'id'>): Promise<void> {
     const sessionRef = doc(this.sessionsCollection);
-    await setDoc(sessionRef, { ...sessionData, id: sessionRef.id });
+    const session: ReadingSession = { ...sessionData, id: sessionRef.id };
+
+    // Held so the next aggregation reflects this session even though the write
+    // below has not been acknowledged yet. Offline that acknowledgement only
+    // arrives on reconnect, and awaiting it used to stall the stats refresh
+    // that callers chain onto this promise.
+    this.pendingSessions.push(session);
+
+    setDoc(sessionRef, session).catch(e => console.error("Failed to persist reading session", e));
   }
 
-  async getRawSessions(since: number = 0): Promise<ReadingSession[]> {
+  /**
+   * Reads a collection, falling back to the offline cache.
+   *
+   * getDocs() normally resolves from the local cache on its own when the device
+   * is offline, but on a connection that is reachable-yet-dead (captive portal,
+   * dropped tunnel) it can sit waiting for a server that never answers. The
+   * timeout means the stats screen renders from cache instead of hanging.
+   */
+  private async readCollectionCached(coll: ReturnType<typeof collection>): Promise<ReadingSession[] | null> {
+    const SERVER_READ_TIMEOUT_MS = 4000;
+    const toSessions = (snap: Awaited<ReturnType<typeof getDocs>>) =>
+      snap.docs.map(d => d.data() as ReadingSession);
+
+    const server = getDocs(coll);
+    // Swallow the rejection here so the losing side of the race below can never
+    // surface as an unhandled rejection.
+    const serverResult = server.then(toSessions, () => null);
+
+    const timedOut = Symbol('timeout');
+    let timerId: ReturnType<typeof setTimeout>;
+    const timer = new Promise<typeof timedOut>(resolve => {
+      timerId = setTimeout(() => resolve(timedOut), SERVER_READ_TIMEOUT_MS);
+    });
+
+    const first = await Promise.race([serverResult, timer]).finally(() => clearTimeout(timerId));
+    if (first !== timedOut && first !== null) return first;
+
     try {
-      const q = query(
-        this.sessionsCollection,
-        where('startTime', '>', since),
-        orderBy('startTime', 'desc')
-      );
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map(d => d.data() as ReadingSession);
-    } catch (e) {
-      console.error("Firestore getRawSessions failed", e);
-      return [];
+      return toSessions(await getDocsFromCache(coll));
+    } catch (cacheErr) {
+      if (first === timedOut) {
+        // Nothing cached yet, so the slow server read is the only hope.
+        const eventual = await serverResult;
+        if (eventual) return eventual;
+      }
+      console.error("[Storage] Collection read failed online and from cache", cacheErr);
+      return null;
     }
+  }
+
+  /**
+   * The full raw session log. This is the source of truth for all reading
+   * stats; the aggregated collection is only a derived cache of it.
+   */
+  async getRawSessions(): Promise<ReadingSession[]> {
+    return (await this.readCollectionCached(this.sessionsCollection)) ?? [];
   }
 
   async getAggregatedSessions(bookId?: string): Promise<ReadingSession[]> {
-    let snapshot;
-    try {
-      snapshot = await getDocs(this.aggregatedSessionsCollection);
-    } catch (e) {
-      console.warn("[Storage] Fetch aggregated sessions failed, trying cache...", e);
-      try {
-        snapshot = await getDocsFromCache(this.aggregatedSessionsCollection);
-      } catch (cacheErr) {
-        console.error("[Storage] Cache aggregated sessions fetch also failed", cacheErr);
-        return [];
-      }
-    }
-    
-    let sessions = snapshot.docs.map(d => d.data() as ReadingSession);
+    let sessions = (await this.readCollectionCached(this.aggregatedSessionsCollection)) ?? [];
     if (bookId) {
       sessions = sessions.filter(s => s.bookId === bookId);
     }
@@ -510,7 +596,8 @@ export class FirestoreStorage {
     const newCumulativeExpected = newCumulativeWords;
 
     // 4. Aggregate remaining sessions locally
-    const { createSessions } = getIncrementalAggregationPlan([], remainingRawSessions);
+    const createSessions = buildAggregatedSessions(remainingRawSessions);
+    const survivingAggIds = new Set(createSessions.map(s => s.id));
 
     // 5. Run transaction to apply all changes atomically
     await runTransaction(firestore, async (transaction) => {
@@ -518,8 +605,10 @@ export class FirestoreStorage {
       for (const ref of sessionsToDeleteRefs) {
         transaction.delete(ref);
       }
-      // Delete OLD aggregated sessions
-      for (const d of aggSnap.docs) {
+      // Delete aggregates that the surviving sessions no longer produce. Ids
+      // are derived from the session key, so anything still in the new set is
+      // overwritten below rather than deleted and re-created.
+      for (const d of aggSnap.docs.filter(d => !survivingAggIds.has(d.id))) {
         transaction.delete(d.ref);
       }
       // Set NEW aggregated sessions
@@ -578,72 +667,61 @@ export class FirestoreStorage {
   }
 
   /**
-   * Deletes reading sessions whose effective speed is physically implausible
-   * (e.g. an old entry showing a single page "read" over many hours, caused by
-   * historical timing bugs). Both raw and aggregated session docs are scanned.
-   * For each affected book, the aggregated sessions and cumulative stats are
-   * rebuilt from the remaining (plausible) raw sessions so totals stay correct.
+   * Deletes raw reading sessions whose effective speed is physically
+   * implausible (e.g. an old entry showing a single page "read" over many
+   * hours, caused by historical timing bugs) and recomputes the affected books'
+   * cumulative stats from what survives.
+   *
+   * The aggregated collection is not touched here: it is rebuilt from the raw
+   * log by aggregateSessions(), which runs straight after this on load, so any
+   * implausible aggregate disappears on its own.
+   *
    * Returns the number of session documents removed.
    */
   async pruneImplausibleSessions(): Promise<number> {
     if (!firestore) return 0;
 
     try {
-      const [rawSnap, aggSnap] = await Promise.all([
-        getDocs(this.sessionsCollection),
-        getDocs(this.aggregatedSessionsCollection),
-      ]);
+      const rawSessions = await this.getRawSessions();
+      const implausible = rawSessions.filter(isImplausiblySlowSession);
+      if (implausible.length === 0) return 0;
 
-      const implausibleRaw = rawSnap.docs.filter(d => isImplausiblySlowSession(d.data() as ReadingSession));
-      const implausibleAgg = aggSnap.docs.filter(d => isImplausiblySlowSession(d.data() as ReadingSession));
-
-      if (implausibleRaw.length === 0 && implausibleAgg.length === 0) return 0;
-
-      const affectedBookIds = new Set<string>();
-      implausibleRaw.forEach(d => affectedBookIds.add((d.data() as ReadingSession).bookId));
-      implausibleAgg.forEach(d => affectedBookIds.add((d.data() as ReadingSession).bookId));
-
-      const implausibleRawIds = new Set(implausibleRaw.map(d => d.id));
+      const implausibleIds = new Set(implausible.map(s => s.id));
+      const affectedBookIds = new Set(implausible.map(s => s.bookId));
       let deletedCount = 0;
 
-      // Rebuild each affected book independently to keep transactions small.
+      // Rebuild each affected book independently to keep the batches small.
       for (const bookId of affectedBookIds) {
-        const bookRawDocs = rawSnap.docs.filter(d => (d.data() as ReadingSession).bookId === bookId);
-        const rawToDelete = bookRawDocs.filter(d => implausibleRawIds.has(d.id));
-        const remainingRaw = bookRawDocs
-          .filter(d => !implausibleRawIds.has(d.id))
-          .map(d => d.data() as ReadingSession);
-        const oldAggDocs = aggSnap.docs.filter(d => (d.data() as ReadingSession).bookId === bookId);
+        const bookSessions = rawSessions.filter(s => s.bookId === bookId);
+        const toDelete = bookSessions.filter(s => implausibleIds.has(s.id));
+        const remaining = bookSessions.filter(s => !implausibleIds.has(s.id));
 
         // Recompute cumulative stats from the surviving raw sessions.
         let cumulativeWords = 0;
         let cumulativeDuration = 0;
-        for (const s of remainingRaw) {
+        for (const s of remaining) {
           cumulativeWords += getSessionWordsRead(s);
           cumulativeDuration += s.durationSeconds;
         }
-        const { createSessions } = getIncrementalAggregationPlan([], remainingRaw);
 
-        await runTransaction(firestore!, async (transaction) => {
-          const bookRef = doc(this.booksCollection, bookId);
-          const bookSnap = await transaction.get(bookRef);
+        // A batch rather than a transaction so this stays usable offline; the
+        // book document is read up front instead of inside a transaction.
+        const bookRef = doc(this.booksCollection, bookId);
+        const bookSnap = await getDoc(bookRef);
+        const batch = writeBatch(firestore);
+        for (const s of toDelete) batch.delete(doc(this.sessionsCollection, s.id));
+        if (bookSnap.exists()) {
+          batch.update(bookRef, {
+            'progress.cumulativeWordsRead': cumulativeWords,
+            'progress.cumulativeExpectedWords': cumulativeWords,
+            'progress.cumulativeDurationSeconds': cumulativeDuration,
+          });
+        }
+        // Not awaited: offline a commit only settles once the network returns,
+        // and this runs on the app's load path.
+        batch.commit().catch(e => console.error("Prune write failed", e));
 
-          for (const d of rawToDelete) transaction.delete(d.ref);
-          for (const d of oldAggDocs) transaction.delete(d.ref);
-          for (const s of createSessions) {
-            transaction.set(doc(this.aggregatedSessionsCollection, s.id), s);
-          }
-
-          if (bookSnap.exists()) {
-            transaction.update(bookRef, {
-              'progress.cumulativeWordsRead': cumulativeWords,
-              'progress.cumulativeExpectedWords': cumulativeWords,
-              'progress.cumulativeDurationSeconds': cumulativeDuration,
-            });
-          }
-        });
-
-        deletedCount += rawToDelete.length + oldAggDocs.length;
+        deletedCount += toDelete.length;
       }
 
       console.log(`[Storage] Pruned implausibly slow sessions across ${affectedBookIds.size} book(s); removed ${deletedCount} session doc(s).`);

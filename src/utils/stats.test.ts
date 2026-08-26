@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getIncrementalAggregationPlan, getHistoryRangeData, getBookProgressTrendData, calculateFinishedBooks, isImplausiblySlowSession } from './stats';
+import { buildAggregatedSessions, getAggregationPlan, getSessionKey, getHistoryRangeData, getBookProgressTrendData, calculateFinishedBooks, isImplausiblySlowSession } from './stats';
 import type { ReadingSession, BookRecord } from './storage';
 
 // Mock crypto.randomUUID
@@ -8,158 +8,117 @@ if (!global.crypto) {
 }
 (global.crypto as any).randomUUID = () => '00000000-0000-0000-0000-000000000000';
 
-describe('incremental stats aggregation', () => {
+describe('daily session aggregation', () => {
     const book1 = 'book-1';
     const today = new Date('2023-10-27T10:00:00Z').getTime();
     const todayLater = new Date('2023-10-27T14:00:00Z').getTime();
 
-    it('should create new aggregated session when none exists', () => {
-        const newSessions: ReadingSession[] = [{
-            id: 's1',
-            bookId: book1,
-            bookTitle: 'Book 1',
-            startTime: today,
-            endTime: today + 1000,
-            startWordIndex: 0,
-            endWordIndex: 100,
-            wordsRead: 100,
-            durationSeconds: 60,
-            type: 'reading'
-        }];
-
-        const plan = getIncrementalAggregationPlan([], newSessions);
-        expect(plan.deleteIds).toHaveLength(0);
-        expect(plan.createSessions).toHaveLength(1);
-        expect(plan.createSessions[0].wordsRead).toBe(100);
+    const raw = (over: Partial<ReadingSession>): ReadingSession => ({
+        id: 's1',
+        bookId: book1,
+        bookTitle: 'Book 1',
+        startTime: today,
+        endTime: today + 1000,
+        startWordIndex: 0,
+        endWordIndex: 100,
+        wordsRead: 100,
+        durationSeconds: 60,
+        type: 'reading',
+        ...over
     });
 
-    it('should merge new session into existing aggregated session', () => {
-        const existing: ReadingSession = {
-            id: 'agg-1',
-            bookId: book1,
-            bookTitle: 'Book 1',
-            startTime: today,
-            endTime: today + 1000,
-            startWordIndex: 0,
-            endWordIndex: 100,
-            wordsRead: 100,
-            durationSeconds: 60,
-            type: 'reading'
-        };
-
-        const newSessions: ReadingSession[] = [{
-            id: 's2',
-            bookId: book1,
-            bookTitle: 'Book 1',
-            startTime: todayLater,
-            endTime: todayLater + 1000,
-            startWordIndex: 100,
-            endWordIndex: 250,
-            wordsRead: 150,
-            durationSeconds: 90,
-            type: 'reading'
-        }];
-
-        const plan = getIncrementalAggregationPlan([existing], newSessions);
-
-        // Since we reuse the ID, deleteIds should be empty
-        expect(plan.deleteIds).toHaveLength(0);
-        expect(plan.createSessions).toHaveLength(1);
-
-        const agg = plan.createSessions[0];
-        expect(agg.id).toBe('agg-1');
-        expect(agg.wordsRead).toBe(250);
-        expect(agg.durationSeconds).toBe(150);
-        expect(agg.endTime).toBe(todayLater + 1000);
+    it('aggregates a single session', () => {
+        const sessions = buildAggregatedSessions([raw({})]);
+        expect(sessions).toHaveLength(1);
+        expect(sessions[0].wordsRead).toBe(100);
     });
 
-    it('should handle multiple books and days', () => {
+    it('sums sessions that fall in the same book, day and type', () => {
+        const sessions = buildAggregatedSessions([
+            raw({ id: 's1' }),
+            raw({ id: 's2', startTime: todayLater, endTime: todayLater + 1000, startWordIndex: 100, endWordIndex: 250, wordsRead: 150, durationSeconds: 90 })
+        ]);
+
+        expect(sessions).toHaveLength(1);
+        expect(sessions[0].wordsRead).toBe(250);
+        expect(sessions[0].durationSeconds).toBe(150);
+        expect(sessions[0].endTime).toBe(todayLater + 1000);
+    });
+
+    it('derives the document id from the session key so runs converge', () => {
+        const input = [raw({})];
+        const first = buildAggregatedSessions(input);
+        const second = buildAggregatedSessions(input);
+        expect(first[0].id).toBe(getSessionKey(input[0]));
+        expect(second[0].id).toBe(first[0].id);
+    });
+
+    it('separates different books and days', () => {
         const book2 = 'book-2';
         const tomorrow = today + 24 * 60 * 60 * 1000;
-
-        const existing: ReadingSession[] = [{
-            id: 'agg-b1-today',
-            bookId: book1,
-            bookTitle: 'Book 1',
-            startTime: today,
-            endTime: today + 1000,
-            startWordIndex: 0,
-            endWordIndex: 100,
-            wordsRead: 100,
-            durationSeconds: 60,
-            type: 'reading'
-        }];
-
-        const newSessions: ReadingSession[] = [
-            {
-                id: 's-b1-today-extra',
-                bookId: book1,
-                bookTitle: 'Book 1',
-                startTime: todayLater,
-                endTime: todayLater + 1000,
-                startWordIndex: 100,
-                endWordIndex: 150,
-                wordsRead: 50,
-                durationSeconds: 30,
-                type: 'reading'
-            },
-            {
-                id: 's-b2-tomorrow',
-                bookId: book2,
-                bookTitle: 'Book 2',
-                startTime: tomorrow,
-                endTime: tomorrow + 1000,
-                startWordIndex: 0,
-                endWordIndex: 100,
-                wordsRead: 100,
-                durationSeconds: 60,
-                type: 'reading'
-            }
-        ];
-
-        const plan = getIncrementalAggregationPlan(existing, newSessions);
-
-        expect(plan.createSessions).toHaveLength(2);
-
-        const aggB1 = plan.createSessions.find(s => s.bookId === book1)!;
-        expect(aggB1.id).toBe('agg-b1-today');
-        expect(aggB1.wordsRead).toBe(150);
-
-        const aggB2 = plan.createSessions.find(s => s.bookId === book2)!;
-        expect(aggB2.bookId).toBe(book2);
-        expect(aggB2.wordsRead).toBe(100);
+        const sessions = buildAggregatedSessions([
+            raw({ id: 'a' }),
+            raw({ id: 'b', bookId: book2, bookTitle: 'Book 2' }),
+            raw({ id: 'c', startTime: tomorrow, endTime: tomorrow + 1000 })
+        ]);
+        expect(sessions).toHaveLength(3);
+        expect(sessions.every(s => s.wordsRead === 100)).toBe(true);
     });
 
-    it('should use maximum endWordIndex even if later session has lower index', () => {
-        const existing: ReadingSession = {
-            id: 'agg-1',
-            bookId: book1,
-            bookTitle: 'Book 1',
-            startTime: today,
-            endTime: today + 1000,
-            startWordIndex: 0,
-            endWordIndex: 2000,
-            wordsRead: 2000,
-            durationSeconds: 600,
-            type: 'reading'
-        };
+    it('uses the maximum endWordIndex even if a later session backtracks', () => {
+        const sessions = buildAggregatedSessions([
+            raw({ id: 's1', endWordIndex: 2000, wordsRead: 2000, durationSeconds: 600 }),
+            raw({ id: 's2', startTime: todayLater, endTime: todayLater + 1000, startWordIndex: 1000, endWordIndex: 1500, wordsRead: 500, durationSeconds: 300 })
+        ]);
+        expect(sessions[0].endWordIndex).toBe(2000);
+        expect(sessions[0].startWordIndex).toBe(0);
+        expect(sessions[0].wordsRead).toBe(2500);
+    });
 
-        const newSessions: ReadingSession[] = [{
-            id: 's-later-but-behind',
-            bookId: book1,
-            bookTitle: 'Book 1',
-            startTime: todayLater,
-            endTime: todayLater + 1000,
-            startWordIndex: 1000,
-            endWordIndex: 1500,
-            wordsRead: 500,
-            durationSeconds: 300,
-            type: 'reading'
-        }];
+    it('is idempotent: re-running against its own output writes nothing', () => {
+        const rawSessions = [raw({ id: 's1' }), raw({ id: 's2', wordsRead: 50 })];
+        const first = getAggregationPlan([], rawSessions);
+        expect(first.upsertSessions).toHaveLength(1);
 
-        const plan = getIncrementalAggregationPlan([existing], newSessions);
-        expect(plan.createSessions[0].endWordIndex).toBe(2000);
-        expect(plan.createSessions[0].wordsRead).toBe(2500);
+        const second = getAggregationPlan(first.sessions, rawSessions);
+        expect(second.upsertSessions).toHaveLength(0);
+        expect(second.deleteIds).toHaveLength(0);
+        expect(second.sessions[0].wordsRead).toBe(150);
+    });
+
+    it('replaces legacy duplicate aggregates instead of summing them', () => {
+        // Regression: concurrent runs used to mint a random UUID per run, so the
+        // same day ended up with several documents that were then folded back
+        // together, multiplying the totals.
+        const rawSessions = [raw({ id: 's1' })];
+        const key = getSessionKey(rawSessions[0]);
+        const duplicate = { ...rawSessions[0], id: '', wordsRead: 100 };
+        const legacy = [
+            { ...duplicate, id: 'e6a0b1f0-0000-4000-8000-000000000001' },
+            { ...duplicate, id: 'e6a0b1f0-0000-4000-8000-000000000002' },
+            { ...duplicate, id: 'e6a0b1f0-0000-4000-8000-000000000003' }
+        ];
+
+        const plan = getAggregationPlan(legacy, rawSessions);
+
+        expect(plan.deleteIds).toEqual(legacy.map(s => s.id));
+        expect(plan.sessions).toHaveLength(1);
+        expect(plan.sessions[0].id).toBe(key);
+        expect(plan.sessions[0].wordsRead).toBe(100);
+    });
+
+    it('deletes aggregates whose raw sessions are gone', () => {
+        const removed = raw({ id: 'gone', startTime: today - 7 * 24 * 60 * 60 * 1000 });
+        const existing = buildAggregatedSessions([removed]);
+        const plan = getAggregationPlan(existing, [raw({ id: 's1' })]);
+        expect(plan.deleteIds).toEqual([getSessionKey(removed)]);
+    });
+
+    it('falls back to the index delta when wordsRead is missing', () => {
+        const sessions = buildAggregatedSessions([
+            raw({ id: 's1', wordsRead: undefined as unknown as number, startWordIndex: 10, endWordIndex: 90 })
+        ]);
+        expect(sessions[0].wordsRead).toBe(80);
     });
 });
 

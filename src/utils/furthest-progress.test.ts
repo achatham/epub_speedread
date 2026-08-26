@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { FirestoreStorage, type BookRecord, type ReadingSession } from './storage';
-import { getIncrementalAggregationPlan } from './stats';
+import { buildAggregatedSessions } from './stats';
 
 // Mock Firebase
 vi.mock('./firebase', () => ({
@@ -141,7 +141,7 @@ describe('Sync to Furthest Progress', () => {
       }
     ];
 
-    const { createSessions } = getIncrementalAggregationPlan([], sessions);
+    const createSessions = buildAggregatedSessions(sessions);
     expect(createSessions).toHaveLength(1);
     const agg = createSessions[0];
     

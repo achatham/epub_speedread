@@ -111,8 +111,7 @@ export function AuthenticatedApp({
                             durationSeconds: stats.durationSeconds,
                             type: 'listening'
                         }).then(async () => {
-                            await storageProvider.aggregateSessions();
-                            setSessions(await storageProvider.getAggregatedSessions());
+                            setSessions(await storageProvider.aggregateSessions());
                         });
                     }
                 },
