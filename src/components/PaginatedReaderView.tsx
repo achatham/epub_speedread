@@ -31,6 +31,9 @@ const FONT_FAMILY_CSS: Record<FontFamily, string> = {
 /** Width of the tap-to-turn-page strip down each side of the page. */
 const EDGE_TAP_WIDTH = 'clamp(56px, 14%, 140px)';
 
+/** How far a drag must travel horizontally before it counts as a page swipe. */
+const SWIPE_THRESHOLD_PX = 50;
+
 /**
  * A book that switches font family mid-page is marking something — in Children
  * of Strife, `span.special` sets one character's speech in sans-serif so you
@@ -253,26 +256,43 @@ export function PaginatedReaderView({
     isSwipingRef.current = false;
   };
 
-  const handlePaginatedPointerUp = (e: React.PointerEvent) => {
+  /**
+   * Turn the page the moment the drag crosses the threshold instead of waiting
+   * for the finger to lift. A phone browser can claim a drag mid-gesture and
+   * fire pointercancel in place of pointerup, which silently swallowed every
+   * release-based swipe; acting on the move means the gesture has already been
+   * honoured by the time anything can cancel it.
+   */
+  const trySwipe = (clientX: number, clientY: number) => {
     if (isPlaying || swipeStartXRef.current === null || swipeStartYRef.current === null) return;
 
-    const deltaX = e.clientX - swipeStartXRef.current;
-    const deltaY = e.clientY - swipeStartYRef.current;
+    const deltaX = clientX - swipeStartXRef.current;
+    const deltaY = clientY - swipeStartYRef.current;
+    if (Math.abs(deltaX) <= SWIPE_THRESHOLD_PX || Math.abs(deltaX) <= Math.abs(deltaY)) return;
 
+    // Consume the gesture so the rest of this drag — and the click that trails
+    // it — can't turn a second page.
     swipeStartXRef.current = null;
     swipeStartYRef.current = null;
+    isSwipingRef.current = true;
 
-    if (Math.abs(deltaX) > 50 && Math.abs(deltaX) > Math.abs(deltaY)) {
-      isSwipingRef.current = true;
-      if (deltaX > 0) {
-        navigatePrevPage();
-      } else {
-        navigateNextPage();
-      }
-    }
+    if (deltaX > 0) navigatePrevPage();
+    else navigateNextPage();
   };
 
-  const handlePaginatedPointerCancel = () => {
+  const handlePaginatedPointerMove = (e: React.PointerEvent) => {
+    trySwipe(e.clientX, e.clientY);
+  };
+
+  const handlePaginatedPointerUp = (e: React.PointerEvent) => {
+    trySwipe(e.clientX, e.clientY);
+    swipeStartXRef.current = null;
+    swipeStartYRef.current = null;
+  };
+
+  const handlePaginatedPointerCancel = (e: React.PointerEvent) => {
+    // Last resort: the browser took the gesture before any move of ours landed.
+    trySwipe(e.clientX, e.clientY);
     swipeStartXRef.current = null;
     swipeStartYRef.current = null;
   };
@@ -409,8 +429,13 @@ export function PaginatedReaderView({
         data-testid="paginated-reading-area"
         data-is-measuring={isMeasuring}
         onPointerDown={handlePaginatedPointerDown}
+        onPointerMove={handlePaginatedPointerMove}
         onPointerUp={handlePaginatedPointerUp}
         onPointerCancel={handlePaginatedPointerCancel}
+        // The page never scrolls, so claim touch gestures outright. Left to the
+        // browser default, a horizontal drag on a phone is treated as a pan and
+        // the pointer stream is cancelled before the swipe can be read.
+        style={{ touchAction: 'none' }}
         onClick={() => {
           if (!consumeTap()) return;
           if (!isPlaying) handleSetIsPlaying(true);
