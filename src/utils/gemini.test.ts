@@ -40,7 +40,7 @@ describe('gemini utils', () => {
     const summary = await summarizeRecent(context);
 
     expect(summary).toBe('Mock summary');
-    expect(getGenerativeModelMock).toHaveBeenCalledWith({ model: "gemini-3-flash-preview" });
+    expect(getGenerativeModelMock).toHaveBeenCalledWith({ model: "gemini-3.7-flash" });
   });
 
   it('summarizeRecent should handle missing API key', async () => {

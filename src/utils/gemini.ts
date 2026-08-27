@@ -3,6 +3,11 @@ import { calculateCost } from "./pricing";
 
 const API_KEY_STORAGE_KEY = 'gemini_api_key';
 
+/** Flash model used for all text generation (summaries, Q&A, illustration prompts). */
+export const TEXT_MODEL = "gemini-3.7-flash";
+/** Flash model used for image generation. */
+export const IMAGE_MODEL = "gemini-3.1-flash-image";
+
 export function getGeminiApiKey(): string | null {
   return localStorage.getItem(API_KEY_STORAGE_KEY);
 }
@@ -17,7 +22,7 @@ export async function findRealEndOfBook(chapters: string[], fullText: string): P
 
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
-    model: "gemini-3-flash-preview",
+    model: TEXT_MODEL,
     generationConfig: { responseMimeType: "application/json" }
   });
 
@@ -55,7 +60,7 @@ export async function findRealEndOfBook(chapters: string[], fullText: string): P
       const response = await result.response;
       
       if (response.usageMetadata) {
-          const cost = calculateCost("gemini-3-flash-preview", 
+          const cost = calculateCost(TEXT_MODEL, 
               response.usageMetadata.promptTokenCount, 
               response.usageMetadata.candidatesTokenCount);
           console.log(`Gemini Cost (End Detection Chunk at ${startPos}): $${cost.toFixed(6)}`);
@@ -97,7 +102,7 @@ export async function askAboutBook(
   if (!apiKey) return "API Key not found. Please set it in settings.";
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
+  const model = genAI.getGenerativeModel({ model: TEXT_MODEL });
 
   const historyBlock = history.length
     ? `\nEarlier questions and answers in this conversation (the new question may refer back to these):\n${history.map(h => `User Question: ${h.question}\nAnswer: ${h.answer}`).join('\n\n')}\n`
@@ -118,7 +123,7 @@ User Question: ${question}`;
     const response = await result.response;
     
     if (response.usageMetadata) {
-        const cost = calculateCost("gemini-3-flash-preview", 
+        const cost = calculateCost(TEXT_MODEL, 
             response.usageMetadata.promptTokenCount, 
             response.usageMetadata.candidatesTokenCount);
         console.log(`Gemini Cost (Q&A): $${cost.toFixed(6)}`);
@@ -136,7 +141,7 @@ export async function generateIllustrationPrompt(description: string, context: s
   if (!apiKey) return "API Key not found.";
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
+  const model = genAI.getGenerativeModel({ model: TEXT_MODEL });
 
   const prompt = `The following is an excerpt from a book read so far.
 The user wants to generate an illustration of: ${description}
@@ -159,7 +164,7 @@ ${context}`;
     const response = await result.response;
 
     if (response.usageMetadata) {
-      const cost = calculateCost("gemini-3-flash-preview",
+      const cost = calculateCost(TEXT_MODEL,
         response.usageMetadata.promptTokenCount,
         response.usageMetadata.candidatesTokenCount);
       console.log(`Gemini Cost (Illustration Prompt): $${cost.toFixed(6)}`);
@@ -178,7 +183,7 @@ export async function suggestIllustrations(context: string, existingPrompts: str
 
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
-    model: "gemini-3-flash-preview",
+    model: TEXT_MODEL,
     generationConfig: { responseMimeType: "application/json" }
   });
 
@@ -201,7 +206,7 @@ JSON response (array of strings):`;
     const response = await result.response;
 
     if (response.usageMetadata) {
-      const cost = calculateCost("gemini-3-flash-preview",
+      const cost = calculateCost(TEXT_MODEL,
         response.usageMetadata.promptTokenCount,
         response.usageMetadata.candidatesTokenCount);
       console.log(`Gemini Cost (Suggest Illustrations): $${cost.toFixed(6)}`);
@@ -219,20 +224,9 @@ export async function generateIllustration(prompt: string): Promise<string> {
   const apiKey = getGeminiApiKey();
   if (!apiKey) throw new Error("API Key not found.");
 
-  // Using fetch directly as the current SDK might not fully support the preview image model's response structure in all environments
-  // or it might be easier to handle the base64 output this way based on the documentation.
-  // Actually, let's try to use the SDK if possible, or fallback to fetch.
-  // The documentation showed:
-  // const response = await ai.models.generateContent({
-  //   model: "gemini-3.1-flash-image-preview",
-  //   contents: prompt,
-  // });
-  // But our SDK is @google/generative-ai which might be slightly different.
-
-  // Let's use fetch to be safe and follow the REST example if the SDK doesn't behave.
-  // Wait, I see GoogleGenerativeAI is being used.
-
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent?key=${apiKey}`;
+  // Using fetch directly rather than the SDK: @google/generative-ai doesn't expose
+  // responseModalities, so we follow the REST example and pull the base64 out ourselves.
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_MODEL}:generateContent?key=${apiKey}`;
 
   const body = {
     contents: [{
@@ -274,7 +268,7 @@ export async function summarizeWhatJustHappened(context: string): Promise<string
   if (!apiKey) return "API Key not found. Please set it in settings.";
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
+  const model = genAI.getGenerativeModel({ model: TEXT_MODEL });
 
   const prompt = `The following is an excerpt from a book that has been read recently.
 Focusing ONLY on the very end of this excerpt (the last paragraph or few sentences), please provide a very brief summary of what just happened.
@@ -288,7 +282,7 @@ ${context}`;
     const response = await result.response;
 
     if (response.usageMetadata) {
-      const cost = calculateCost("gemini-3-flash-preview",
+      const cost = calculateCost(TEXT_MODEL,
         response.usageMetadata.promptTokenCount,
         response.usageMetadata.candidatesTokenCount);
       console.log(`Gemini Cost (Just Happened): $${cost.toFixed(6)}`);
@@ -306,7 +300,7 @@ export async function summarizeRecent(context: string): Promise<string> {
   if (!apiKey) return "API Key not found. Please set it in settings.";
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
+  const model = genAI.getGenerativeModel({ model: TEXT_MODEL });
 
   const prompt = `The following is an excerpt from a book that has been read recently.
 Please provide a concise summary of what happened in this excerpt to help the reader catch up.
@@ -320,7 +314,7 @@ ${context}`;
     const response = await result.response;
 
     if (response.usageMetadata) {
-        const cost = calculateCost("gemini-3-flash-preview",
+        const cost = calculateCost(TEXT_MODEL,
             response.usageMetadata.promptTokenCount,
             response.usageMetadata.candidatesTokenCount);
         console.log(`Gemini Cost (Summary): $${cost.toFixed(6)}`);
