@@ -143,6 +143,7 @@ export function AboutContent({ onSignIn }: AboutContentProps) {
           <Github size={18} />
           View on GitHub
         </a>
+        <p className="mt-4 text-xs opacity-30 font-mono">Build {__BUILD_ID__}</p>
       </footer>
     </div>
   );

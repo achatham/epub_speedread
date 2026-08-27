@@ -3,9 +3,23 @@ import { defineConfig, configDefaults } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import { execSync } from 'node:child_process'
+
+const gitCommit = (() => {
+  try {
+    return execSync('git rev-parse --short HEAD').toString().trim()
+  } catch {
+    return 'unknown'
+  }
+})()
+const buildId = `${gitCommit} · ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC`
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ command }) => ({
+  define: {
+    // Dev/test get a stable id so screenshot baselines don't churn
+    __BUILD_ID__: JSON.stringify(command === 'build' ? buildId : 'dev'),
+  },
   plugins: [
     react(),
     tailwindcss(),
@@ -75,4 +89,4 @@ export default defineConfig({
     // output, whose sources are already covered by functions/src.
     exclude: [...configDefaults.exclude, 'tests/**', 'functions/lib/**'],
   },
-})
+}))
