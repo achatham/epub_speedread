@@ -54,7 +54,7 @@ export function PaginatedReaderView({
 }: PaginatedReaderViewProps) {
   const { 
     words, currentIndex, realEndIndex, furthestIndex, 
-    setCurrentIndex, sections, bookTitle, 
+    setCurrentIndex, setVisibleEndIndex, sections, bookTitle,
     isPlaying, setIsHoldPaused, isChapterBreak 
   } = useReaderStore();
   const { 
@@ -169,7 +169,8 @@ export function PaginatedReaderView({
     const endIdx = Math.min(unboundEndIdx, nextChapterStart);
     
     setLayoutState(prev => ({ start: prev.start, end: endIdx }));
-  }, [layoutState, currentIndex, areaDims, words, isPlaying, isPageValid, setLayoutState, nextChapterStart]);
+    setVisibleEndIndex(endIdx);
+  }, [layoutState, currentIndex, areaDims, words, isPlaying, isPageValid, setLayoutState, nextChapterStart, setVisibleEndIndex]);
 
   // Progress
   const bookProgress = effectiveTotalWords > 0
