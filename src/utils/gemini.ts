@@ -5,8 +5,8 @@ const API_KEY_STORAGE_KEY = 'gemini_api_key';
 
 /** Flash model used for all text generation (summaries, Q&A, illustration prompts). */
 export const TEXT_MODEL = "gemini-3.7-flash";
-/** Flash model used for image generation. */
-export const IMAGE_MODEL = "gemini-3.1-flash-image";
+/** Flash Lite model used for image generation (Nano Banana 2 Lite). */
+export const IMAGE_MODEL = "gemini-3.1-flash-lite-image";
 
 export function getGeminiApiKey(): string | null {
   return localStorage.getItem(API_KEY_STORAGE_KEY);

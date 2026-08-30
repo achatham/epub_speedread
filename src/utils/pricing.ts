@@ -15,15 +15,19 @@ export const GEMINI_PRICING: Record<string, ModelPricing> = {
     input: { text: 0.75 },
     output: { text: 3.75 } // Includes thinking tokens
   },
-  "gemini-3.1-flash-image": {
-    input: { text: 0.50 },
-    output: { text: 60.00 } // Image output tokens, roughly $0.067 for a 1024x1024 image
+  "gemini-3.1-flash-lite-image": {
+    input: { text: 0.25 },
+    output: { text: 30.00 } // Image output tokens, roughly $0.0336 for a 1024x1024 image
   },
   "gemini-3.1-flash-tts-preview": {
     input: { text: 1.00 },
     output: { audio: 20.00 }
   },
   // Legacy models, kept so previously recorded usage still prices correctly.
+  "gemini-3.1-flash-image": {
+    input: { text: 0.50 },
+    output: { text: 60.00 } // Image output tokens, roughly $0.067 for a 1024x1024 image
+  },
   "gemini-3-flash-preview": {
     input: { text: 0.50, audio: 1.00 },
     output: { text: 3.00 }
