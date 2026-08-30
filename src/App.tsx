@@ -21,7 +21,7 @@ import { useReadingSession } from './hooks/useReadingSession';
 import { useSettingsStore } from './stores/useSettingsStore';
 import { useReaderStore } from './stores/useReaderStore';
 import { useLibraryStore } from './stores/useLibraryStore';
-import { useUIStore } from './stores/useUIStore';
+import { useUIStore, type PendingIllustration } from './stores/useUIStore';
 
 function App() {
   // Settings Store
@@ -204,24 +204,48 @@ function App() {
     }
   };
 
+  // Bounded so a big batch doesn't trip Gemini rate limits.
+  const ILLUSTRATION_CONCURRENCY = 4;
+
+  const runPendingIllustration = async (pending: PendingIllustration, context: string) => {
+    try {
+      const prompt = await generateIllustrationPrompt(pending.description, context);
+      const base64Image = await generateIllustration(prompt);
+      if (currentBookId && storageProvider) {
+        const record = await storageProvider.addIllustration(currentBookId, prompt, base64Image, currentIndex);
+        ui.setIllustrations(prev => [record, ...prev]);
+      }
+      ui.setPendingIllustrations(prev => prev.filter(p => p.id !== pending.id));
+    } catch (err) {
+      console.error(`Illustration generation failed for "${pending.description}":`, err);
+      ui.setPendingIllustrations(prev => prev.map(p => p.id === pending.id ? { ...p, error: true } : p));
+    }
+  };
+
   const handleGenerateMultipleIllustrations = async () => {
-    if (ui.selectedSuggestions.length === 0 || ui.isIllustrationLoading) return;
+    if (ui.selectedSuggestions.length === 0) return;
     const toGenerate = [...ui.selectedSuggestions];
     ui.setIllustrationSuggestions([]);
     ui.setSelectedSuggestions([]);
 
-    ui.setIsIllustrationLoading(true);
-    try {
-      for (const suggestion of toGenerate) {
-        ui.setIllustrationPrompt('');
-        ui.setIllustrationImage(null);
-        await performIllustrationGeneration(suggestion);
+    const context = words.slice(0, currentIndex + 1).map(w => w.text).join(' ');
+    const batch = toGenerate.map((description, i) => ({ id: `${Date.now()}-${i}`, description }));
+    ui.setPendingIllustrations(prev => [...prev, ...batch]);
+
+    const queue = [...batch];
+    await Promise.all(Array.from({ length: Math.min(ILLUSTRATION_CONCURRENCY, queue.length) }, async () => {
+      for (let p = queue.shift(); p; p = queue.shift()) {
+        await runPendingIllustration(p, context);
       }
-    } catch (err) {
-      console.error("Multiple illustration generation failed:", err);
-    } finally {
-      ui.setIsIllustrationLoading(false);
-    }
+    }));
+  };
+
+  const handleRetryPendingIllustration = async (id: string) => {
+    const pending = useUIStore.getState().pendingIllustrations.find(p => p.id === id);
+    if (!pending || !pending.error) return;
+    ui.setPendingIllustrations(prev => prev.map(p => p.id === id ? { ...p, error: false } : p));
+    const context = words.slice(0, currentIndex + 1).map(w => w.text).join(' ');
+    await runPendingIllustration(pending, context);
   };
 
   const handleSelectBook = useCallback(async (id: string) => {
@@ -620,6 +644,7 @@ function App() {
         isSuggesting={ui.isSuggesting}
         handleSuggestIllustrations={handleSuggestIllustrations}
         handleGenerateMultipleIllustrations={handleGenerateMultipleIllustrations}
+        handleRetryPendingIllustration={handleRetryPendingIllustration}
         handleUpdateBookFinishedDate={handleUpdateBookFinishedDate}
         handleUpdateBookTitle={handleUpdateBookTitle}
         handleRecomputeRealEnd={handleRecomputeRealEnd}

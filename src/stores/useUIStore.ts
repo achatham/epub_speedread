@@ -6,6 +6,12 @@ export interface AiExchange {
   answer: string;
 }
 
+export interface PendingIllustration {
+  id: string;
+  description: string;
+  error?: boolean;
+}
+
 interface UIState {
   isSettingsOpen: boolean;
   isAskAiOpen: boolean;
@@ -30,6 +36,7 @@ interface UIState {
   selectedSuggestions: string[];
   isSuggesting: boolean;
   illustrations: IllustrationRecord[];
+  pendingIllustrations: PendingIllustration[];
 
   setIsSettingsOpen: (open: boolean) => void;
   setIsAskAiOpen: (open: boolean) => void;
@@ -55,6 +62,7 @@ interface UIState {
   setSelectedSuggestions: (suggestions: string[]) => void;
   setIsSuggesting: (suggesting: boolean) => void;
   setIllustrations: (illustrations: IllustrationRecord[] | ((prev: IllustrationRecord[]) => IllustrationRecord[])) => void;
+  setPendingIllustrations: (pending: PendingIllustration[] | ((prev: PendingIllustration[]) => PendingIllustration[])) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -81,6 +89,7 @@ export const useUIStore = create<UIState>((set) => ({
   selectedSuggestions: [],
   isSuggesting: false,
   illustrations: [],
+  pendingIllustrations: [],
 
   setIsSettingsOpen: (open) => set({ isSettingsOpen: open }),
   setIsAskAiOpen: (open) => set({ isAskAiOpen: open }),
@@ -107,5 +116,8 @@ export const useUIStore = create<UIState>((set) => ({
   setIsSuggesting: (suggesting) => set({ isSuggesting: suggesting }),
   setIllustrations: (illustrations) => set((state) => ({
     illustrations: typeof illustrations === 'function' ? illustrations(state.illustrations) : illustrations
+  })),
+  setPendingIllustrations: (pending) => set((state) => ({
+    pendingIllustrations: typeof pending === 'function' ? pending(state.pendingIllustrations) : pending
   })),
 }));

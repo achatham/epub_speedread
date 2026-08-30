@@ -21,6 +21,7 @@ interface AppModalsProps {
     isSuggesting: boolean;
     handleSuggestIllustrations: () => void;
     handleGenerateMultipleIllustrations: () => void;
+    handleRetryPendingIllustration: (id: string) => void;
     handleUpdateBookFinishedDate: (updates: { id: string, date: number }[]) => Promise<void>;
     handleUpdateBookTitle: (bookId: string, title: string) => Promise<void>;
     handleRecomputeRealEnd: () => Promise<void>;
@@ -33,7 +34,7 @@ export function AppModals({
     user, handleSignIn, handleSignOut, storageProvider,
     handleAskAi, isAiLoading,
     isIllustrationLoading, handleGenerateIllustration,
-    isSuggesting, handleSuggestIllustrations, handleGenerateMultipleIllustrations,
+    isSuggesting, handleSuggestIllustrations, handleGenerateMultipleIllustrations, handleRetryPendingIllustration,
     handleUpdateBookFinishedDate, handleUpdateBookTitle, handleRecomputeRealEnd, isRecomputingEnd,
     onClearFutureSessions, onClearRecentSessions
 }: AppModalsProps) {
@@ -126,6 +127,9 @@ export function AppModals({
                 isSuggesting={isSuggesting}
                 handleSuggestIllustrations={handleSuggestIllustrations}
                 handleGenerateMultipleIllustrations={handleGenerateMultipleIllustrations}
+                pendingIllustrations={ui.pendingIllustrations}
+                retryPendingIllustration={handleRetryPendingIllustration}
+                dismissPendingIllustration={(id) => ui.setPendingIllustrations(prev => prev.filter(p => p.id !== id))}
                 ttsSpeed={settings.ttsSpeed}
             />
 

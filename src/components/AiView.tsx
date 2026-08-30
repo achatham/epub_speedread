@@ -1,10 +1,10 @@
-import { ArrowLeft, Sparkles, Volume2, Square, Image as ImageIcon, MessageSquare, Download, Loader2, ListChecks, CheckSquare, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Sparkles, Volume2, Square, Image as ImageIcon, MessageSquare, Download, Loader2, ListChecks, CheckSquare, RotateCcw, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { useState, useRef, useEffect } from 'react';
 import { synthesizeSpeech, type AudioController } from '../utils/tts';
 import { AI_QUESTIONS } from '../constants';
 import type { IllustrationRecord } from '../utils/storage';
-import type { AiExchange } from '../stores/useUIStore';
+import type { AiExchange, PendingIllustration } from '../stores/useUIStore';
 
 interface AiViewProps {
   isOpen: boolean;
@@ -36,6 +36,9 @@ interface AiViewProps {
   isSuggesting: boolean;
   handleSuggestIllustrations: () => void;
   handleGenerateMultipleIllustrations: () => void;
+  pendingIllustrations: PendingIllustration[];
+  retryPendingIllustration: (id: string) => void;
+  dismissPendingIllustration: (id: string) => void;
   ttsSpeed: number;
 }
 
@@ -81,6 +84,9 @@ export function AiView({
   isSuggesting,
   handleSuggestIllustrations,
   handleGenerateMultipleIllustrations,
+  pendingIllustrations,
+  retryPendingIllustration,
+  dismissPendingIllustration,
   ttsSpeed
 }: AiViewProps) {
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
@@ -313,11 +319,41 @@ export function AiView({
                         </div>
                     </div>
                 ) : (
-                    <div className={`w-full space-y-5 ${illustrations.length === 0 && !illustrationSuggestions.length ? 'flex-1 flex flex-col items-center justify-center' : ''}`}>
-                        {illustrations.length > 0 && (
+                    <div className={`w-full space-y-5 ${illustrations.length === 0 && !pendingIllustrations.length && !illustrationSuggestions.length ? 'flex-1 flex flex-col items-center justify-center' : ''}`}>
+                        {(illustrations.length > 0 || pendingIllustrations.length > 0) && (
                             <div className="space-y-2">
                                 <h3 className="text-xs font-semibold uppercase tracking-wider opacity-40 text-left px-1">Gallery</h3>
                                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 w-full">
+                                {pendingIllustrations.map(p => p.error ? (
+                                    <div
+                                        key={p.id}
+                                        className="relative aspect-square rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 flex flex-col items-center justify-center gap-2 p-3 text-center"
+                                    >
+                                        <button
+                                            onClick={() => dismissPendingIllustration(p.id)}
+                                            className="absolute top-1.5 right-1.5 p-1 rounded text-red-400 hover:text-red-600 dark:hover:text-red-300"
+                                            title="Dismiss"
+                                            aria-label="Dismiss failed illustration"
+                                        >
+                                            <X size={14} />
+                                        </button>
+                                        <p className="text-[10px] text-red-600 dark:text-red-400 line-clamp-2 italic">{p.description.split('\n')[0]}</p>
+                                        <button
+                                            onClick={() => retryPendingIllustration(p.id)}
+                                            className="text-xs text-red-600 dark:text-red-400 underline"
+                                        >
+                                            Failed — retry
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div
+                                        key={p.id}
+                                        className="aspect-square rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50 flex flex-col items-center justify-center gap-2 p-3 text-center"
+                                    >
+                                        <Loader2 size={20} className="animate-spin text-zinc-400" />
+                                        <p className="text-[10px] text-zinc-500 dark:text-zinc-400 line-clamp-2 italic animate-pulse">{p.description.split('\n')[0]}</p>
+                                    </div>
+                                ))}
                                 {illustrations.map(ill => (
                                     <button
                                         key={ill.id}
@@ -340,7 +376,7 @@ export function AiView({
                         )}
 
                         <div className="flex flex-col items-center w-full">
-                            {illustrations.length === 0 && !illustrationSuggestions.length && <ImageIcon size={32} className="mb-3 opacity-30" />}
+                            {illustrations.length === 0 && !pendingIllustrations.length && !illustrationSuggestions.length && <ImageIcon size={32} className="mb-3 opacity-30" />}
 
                             {illustrationSuggestions.length > 0 ? (
                                 <div className="w-full space-y-3">
