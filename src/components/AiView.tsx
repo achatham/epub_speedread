@@ -57,6 +57,9 @@ const CANNED_ILLUSTRATIONS = [
 // Illustration prompts start with a short title line (see generateIllustrationPrompt).
 const promptName = (prompt: string) => prompt.split('\n')[0];
 
+/** How far a drag must travel horizontally before it counts as a lightbox swipe. */
+const SWIPE_THRESHOLD_PX = 50;
+
 export function AiView({
   isOpen,
   onClose,
@@ -115,6 +118,38 @@ export function AiView({
   };
   const showNext = () => {
     if (viewerIndex >= 0 && viewerIndex < illustrations.length - 1) setViewerId(illustrations[viewerIndex + 1].id);
+  };
+
+  const swipeStartXRef = useRef<number | null>(null);
+  const swipeStartYRef = useRef<number | null>(null);
+
+  const handleViewerPointerDown = (e: React.PointerEvent) => {
+    swipeStartXRef.current = e.clientX;
+    swipeStartYRef.current = e.clientY;
+  };
+
+  // Same trick as PaginatedReaderView: act the moment the drag crosses the
+  // threshold rather than on release, because a phone browser can claim the
+  // gesture mid-drag and fire pointercancel in place of pointerup.
+  const tryViewerSwipe = (clientX: number, clientY: number) => {
+    if (swipeStartXRef.current === null || swipeStartYRef.current === null) return;
+    const deltaX = clientX - swipeStartXRef.current;
+    const deltaY = clientY - swipeStartYRef.current;
+    if (Math.abs(deltaX) <= SWIPE_THRESHOLD_PX || Math.abs(deltaX) <= Math.abs(deltaY)) return;
+    swipeStartXRef.current = null;
+    swipeStartYRef.current = null;
+    if (deltaX > 0) showPrev();
+    else showNext();
+  };
+
+  const handleViewerPointerMove = (e: React.PointerEvent) => {
+    tryViewerSwipe(e.clientX, e.clientY);
+  };
+
+  const handleViewerPointerEnd = (e: React.PointerEvent) => {
+    tryViewerSwipe(e.clientX, e.clientY);
+    swipeStartXRef.current = null;
+    swipeStartYRef.current = null;
   };
 
   const latestAnswer = aiExchanges.length > 0 ? aiExchanges[aiExchanges.length - 1].answer : '';
@@ -308,7 +343,13 @@ export function AiView({
             <div className="flex-1 flex flex-col text-center">
                 {isViewerOpen ? (
                     <div className="flex-1 min-h-0 flex flex-col items-center gap-3 w-full">
-                        <div className="relative flex-1 min-h-0 w-full flex items-center justify-center">
+                        <div
+                            className="relative flex-1 min-h-0 w-full flex items-center justify-center touch-pan-y select-none"
+                            onPointerDown={handleViewerPointerDown}
+                            onPointerMove={handleViewerPointerMove}
+                            onPointerUp={handleViewerPointerEnd}
+                            onPointerCancel={handleViewerPointerEnd}
+                        >
                             {viewerIndex > 0 && (
                                 <button
                                     onClick={showPrev}
@@ -323,6 +364,7 @@ export function AiView({
                                 <img
                                     src={viewerImage!.startsWith('http') ? viewerImage! : `data:image/png;base64,${viewerImage}`}
                                     alt={promptName(viewerPrompt) || 'Generated illustration'}
+                                    draggable={false}
                                     className="max-h-[calc(100dvh-14rem)] max-w-full object-contain rounded-lg shadow-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900"
                                 />
                                 <button
