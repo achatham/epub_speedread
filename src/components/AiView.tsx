@@ -1,4 +1,4 @@
-import { ArrowLeft, Sparkles, Volume2, Square, Image as ImageIcon, MessageSquare, Download, Loader2, ListChecks, CheckSquare, RotateCcw, X } from 'lucide-react';
+import { ArrowLeft, Sparkles, Volume2, Square, Image as ImageIcon, MessageSquare, Download, Loader2, ListChecks, CheckSquare, RotateCcw, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { useState, useRef, useEffect } from 'react';
 import { synthesizeSpeech, type AudioController } from '../utils/tts';
@@ -54,6 +54,9 @@ const CANNED_ILLUSTRATIONS = [
   "Atmospheric landscape"
 ];
 
+// Illustration prompts start with a short title line (see generateIllustrationPrompt).
+const promptName = (prompt: string) => prompt.split('\n')[0];
+
 export function AiView({
   isOpen,
   onClose,
@@ -93,6 +96,27 @@ export function AiView({
   const audioRef = useRef<AudioController | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
+  // Gallery lightbox tracks the record id, not the index: new images are
+  // prepended while a batch runs, so indices shift under us.
+  const [viewerId, setViewerId] = useState<string | null>(null);
+  const viewerIndex = viewerId !== null ? illustrations.findIndex(i => i.id === viewerId) : -1;
+  const viewerRecord = viewerIndex >= 0 ? illustrations[viewerIndex] : null;
+  // A freshly generated single image lives in store state until it's viewed from the gallery.
+  const viewerImage = viewerRecord ? viewerRecord.url : illustrationImage;
+  const viewerPrompt = viewerRecord ? viewerRecord.prompt : illustrationPrompt;
+  const isViewerOpen = Boolean(viewerImage);
+
+  const closeViewer = () => {
+    setViewerId(null);
+    setIllustrationImage(null);
+  };
+  const showPrev = () => {
+    if (viewerIndex > 0) setViewerId(illustrations[viewerIndex - 1].id);
+  };
+  const showNext = () => {
+    if (viewerIndex >= 0 && viewerIndex < illustrations.length - 1) setViewerId(illustrations[viewerIndex + 1].id);
+  };
+
   const latestAnswer = aiExchanges.length > 0 ? aiExchanges[aiExchanges.length - 1].answer : '';
 
   const stopAudio = () => {
@@ -129,6 +153,19 @@ export function AiView({
       }
   }, [aiExchanges.length, isAiLoading, aiTab]);
 
+  // Keyboard navigation for the gallery lightbox. No dependency array: the
+  // handler is re-bound each render so it always sees current state.
+  useEffect(() => {
+      if (!isOpen || aiTab !== 'illustrate' || !isViewerOpen) return;
+      const onKey = (e: KeyboardEvent) => {
+          if (e.key === 'Escape') closeViewer();
+          else if (e.key === 'ArrowLeft') showPrev();
+          else if (e.key === 'ArrowRight') showNext();
+      };
+      window.addEventListener('keydown', onKey);
+      return () => window.removeEventListener('keydown', onKey);
+  });
+
   if (!isOpen) return null;
 
   const handleToggleAudio = async () => {
@@ -151,15 +188,15 @@ export function AiView({
   };
 
   const handleDownloadImage = () => {
-    if (!illustrationImage) return;
+    if (!viewerImage) return;
     const link = document.createElement('a');
-    link.href = illustrationImage.startsWith('http') ? illustrationImage : `data:image/png;base64,${illustrationImage}`;
-    link.download = `illustration-${Date.now()}.png`;
+    link.href = viewerImage.startsWith('http') ? viewerImage : `data:image/png;base64,${viewerImage}`;
+    link.download = `${(promptName(viewerPrompt) || 'illustration').replace(/[^\w -]/g, '').trim() || 'illustration'}.png`;
     link.click();
   };
 
   const hasAskContent = Boolean(aiExchanges.length || aiQuestion || isAiLoading);
-  const hasIllustrateContent = Boolean(illustrationImage || illustrationQuery || illustrationPrompt || illustrationSuggestions.length);
+  const hasIllustrateContent = Boolean(isViewerOpen || illustrationQuery || illustrationPrompt || illustrationSuggestions.length);
 
   const handleReset = () => {
     if (aiTab === 'ask') {
@@ -167,7 +204,7 @@ export function AiView({
       setAiQuestion('');
       clearAiExchanges();
     } else {
-      setIllustrationImage(null);
+      closeViewer();
       setIllustrationPrompt('');
       setIllustrationQuery('');
       setIllustrationSuggestions([]);
@@ -222,7 +259,7 @@ export function AiView({
       </header>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto">
-        <div className="max-w-2xl mx-auto w-full min-h-full flex flex-col px-4 py-4">
+        <div className={`${aiTab === 'illustrate' ? 'max-w-5xl' : 'max-w-2xl'} mx-auto w-full min-h-full flex flex-col px-4 py-4`}>
           {aiTab === 'ask' ? (
               (aiExchanges.length > 0 || isAiLoading) ? (
                 <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
@@ -269,33 +306,63 @@ export function AiView({
               )
           ) : (
             <div className="flex-1 flex flex-col text-center">
-                {illustrationImage ? (
-                    <div className="flex-1 flex flex-col items-center justify-center gap-3 w-full">
-                        <div className="relative group max-w-full">
-                            <img
-                                src={illustrationImage.startsWith('http') ? illustrationImage : `data:image/png;base64,${illustrationImage}`}
-                                alt="Generated illustration"
-                                className="rounded-lg shadow-lg max-h-[60vh] object-contain border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900"
-                            />
+                {isViewerOpen ? (
+                    <div className="flex-1 min-h-0 flex flex-col items-center gap-3 w-full">
+                        <div className="relative flex-1 min-h-0 w-full flex items-center justify-center">
+                            {viewerIndex > 0 && (
+                                <button
+                                    onClick={showPrev}
+                                    className="absolute left-0 z-10 p-2 rounded-full bg-white/90 dark:bg-zinc-800/90 border border-zinc-200 dark:border-zinc-700 shadow text-zinc-600 dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-800"
+                                    title="Previous illustration"
+                                    aria-label="Previous illustration"
+                                >
+                                    <ChevronLeft size={22} />
+                                </button>
+                            )}
+                            <div className="relative group max-w-full flex items-center justify-center">
+                                <img
+                                    src={viewerImage!.startsWith('http') ? viewerImage! : `data:image/png;base64,${viewerImage}`}
+                                    alt={promptName(viewerPrompt) || 'Generated illustration'}
+                                    className="max-h-[calc(100dvh-14rem)] max-w-full object-contain rounded-lg shadow-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900"
+                                />
+                                <button
+                                    onClick={handleDownloadImage}
+                                    className="absolute bottom-4 right-4 bg-zinc-900/80 hover:bg-zinc-900 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                                    title="Download image"
+                                >
+                                    <Download size={20} />
+                                </button>
+                            </div>
+                            {viewerIndex >= 0 && viewerIndex < illustrations.length - 1 && (
+                                <button
+                                    onClick={showNext}
+                                    className="absolute right-0 z-10 p-2 rounded-full bg-white/90 dark:bg-zinc-800/90 border border-zinc-200 dark:border-zinc-700 shadow text-zinc-600 dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-800"
+                                    title="Next illustration"
+                                    aria-label="Next illustration"
+                                >
+                                    <ChevronRight size={22} />
+                                </button>
+                            )}
+                        </div>
+                        <div className="shrink-0 space-y-1 max-w-xl">
+                            <p className="text-sm font-medium">
+                                {promptName(viewerPrompt)}
+                                {viewerIndex >= 0 && illustrations.length > 1 && (
+                                    <span className="ml-2 text-xs font-normal opacity-40">{viewerIndex + 1} of {illustrations.length}</span>
+                                )}
+                            </p>
+                            {viewerPrompt && (
+                                <p className="text-xs opacity-50 italic line-clamp-2" title={viewerPrompt}>
+                                    {viewerPrompt.split('\n').slice(1).join(' ').trim() || viewerPrompt}
+                                </p>
+                            )}
                             <button
-                                onClick={handleDownloadImage}
-                                className="absolute bottom-4 right-4 bg-zinc-900/80 hover:bg-zinc-900 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                                title="Download image"
+                                onClick={closeViewer}
+                                className="text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 underline"
                             >
-                                <Download size={20} />
+                                Back to Gallery
                             </button>
                         </div>
-                        {illustrationPrompt && (
-                            <p className="text-xs opacity-50 italic max-w-md line-clamp-2" title={illustrationPrompt}>
-                                {illustrationPrompt}
-                            </p>
-                        )}
-                        <button
-                            onClick={() => setIllustrationImage(null)}
-                            className="text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 underline"
-                        >
-                            Back to Gallery
-                        </button>
                     </div>
                 ) : isIllustrationLoading ? (
                     <div className="flex-1 flex flex-col items-center justify-center gap-4 w-full">
@@ -323,11 +390,11 @@ export function AiView({
                         {(illustrations.length > 0 || pendingIllustrations.length > 0) && (
                             <div className="space-y-2">
                                 <h3 className="text-xs font-semibold uppercase tracking-wider opacity-40 text-left px-1">Gallery</h3>
-                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 w-full">
+                                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 w-full">
                                 {pendingIllustrations.map(p => p.error ? (
                                     <div
                                         key={p.id}
-                                        className="relative aspect-square rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 flex flex-col items-center justify-center gap-2 p-3 text-center"
+                                        className="relative rounded-lg border border-red-200 dark:border-red-900 overflow-hidden flex flex-col"
                                     >
                                         <button
                                             onClick={() => dismissPendingIllustration(p.id)}
@@ -337,38 +404,37 @@ export function AiView({
                                         >
                                             <X size={14} />
                                         </button>
-                                        <p className="text-[10px] text-red-600 dark:text-red-400 line-clamp-2 italic">{p.description.split('\n')[0]}</p>
-                                        <button
-                                            onClick={() => retryPendingIllustration(p.id)}
-                                            className="text-xs text-red-600 dark:text-red-400 underline"
-                                        >
-                                            Failed — retry
-                                        </button>
+                                        <div className="aspect-square flex items-center justify-center bg-red-50 dark:bg-red-950/30 p-3">
+                                            <button
+                                                onClick={() => retryPendingIllustration(p.id)}
+                                                className="text-xs text-red-600 dark:text-red-400 underline"
+                                            >
+                                                Failed — retry
+                                            </button>
+                                        </div>
+                                        <p className="text-[11px] px-2 py-1.5 text-left line-clamp-1 text-red-600 dark:text-red-400">{promptName(p.description)}</p>
                                     </div>
                                 ) : (
                                     <div
                                         key={p.id}
-                                        className="aspect-square rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50 flex flex-col items-center justify-center gap-2 p-3 text-center"
+                                        className="rounded-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden flex flex-col"
                                     >
-                                        <Loader2 size={20} className="animate-spin text-zinc-400" />
-                                        <p className="text-[10px] text-zinc-500 dark:text-zinc-400 line-clamp-2 italic animate-pulse">{p.description.split('\n')[0]}</p>
+                                        <div className="aspect-square flex items-center justify-center bg-zinc-50 dark:bg-zinc-800/50">
+                                            <Loader2 size={20} className="animate-spin text-zinc-400" />
+                                        </div>
+                                        <p className="text-[11px] px-2 py-1.5 text-left line-clamp-1 text-zinc-500 dark:text-zinc-400 animate-pulse">{promptName(p.description)}</p>
                                     </div>
                                 ))}
                                 {illustrations.map(ill => (
                                     <button
                                         key={ill.id}
-                                        onClick={() => {
-                                            setIllustrationImage(ill.url);
-                                            setIllustrationPrompt(ill.prompt);
-                                        }}
-                                        className="relative aspect-square rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-700 hover:scale-[1.02] transition-transform group shadow-sm"
+                                        onClick={() => setViewerId(ill.id)}
+                                        className="rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-700 hover:border-zinc-400 dark:hover:border-zinc-500 hover:scale-[1.02] transition-transform shadow-sm flex flex-col bg-white dark:bg-zinc-900"
                                     >
-                                        <img src={ill.url} alt={ill.prompt} className="w-full h-full object-cover" />
-                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2">
-                                            <p className="text-[10px] text-white line-clamp-2 text-left italic">
-                                                {ill.prompt}
-                                            </p>
-                                        </div>
+                                        <img src={ill.url} alt={promptName(ill.prompt)} className="w-full aspect-square object-cover" />
+                                        <p className="text-[11px] px-2 py-1.5 text-left line-clamp-1 text-zinc-600 dark:text-zinc-300" title={ill.prompt}>
+                                            {promptName(ill.prompt)}
+                                        </p>
                                     </button>
                                 ))}
                                 </div>
