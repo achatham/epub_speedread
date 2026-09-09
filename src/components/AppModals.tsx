@@ -121,9 +121,9 @@ export function AppModals({
                 handleGenerateIllustration={handleGenerateIllustration}
                 illustrations={ui.illustrations as any}
                 illustrationSuggestions={ui.illustrationSuggestions}
-                setIllustrationSuggestions={ui.setIllustrationSuggestions as any}
+                setIllustrationSuggestions={ui.setIllustrationSuggestions}
                 selectedSuggestions={ui.selectedSuggestions}
-                setSelectedSuggestions={ui.setSelectedSuggestions as any}
+                setSelectedSuggestions={ui.setSelectedSuggestions}
                 isSuggesting={isSuggesting}
                 handleSuggestIllustrations={handleSuggestIllustrations}
                 handleGenerateMultipleIllustrations={handleGenerateMultipleIllustrations}

@@ -58,8 +58,8 @@ interface UIState {
   setIllustrationPrompt: (prompt: string) => void;
   setIllustrationImage: (img: string | null) => void;
   setIsIllustrationLoading: (loading: boolean) => void;
-  setIllustrationSuggestions: (suggestions: string[]) => void;
-  setSelectedSuggestions: (suggestions: string[]) => void;
+  setIllustrationSuggestions: (suggestions: string[] | ((prev: string[]) => string[])) => void;
+  setSelectedSuggestions: (suggestions: string[] | ((prev: string[]) => string[])) => void;
   setIsSuggesting: (suggesting: boolean) => void;
   setIllustrations: (illustrations: IllustrationRecord[] | ((prev: IllustrationRecord[]) => IllustrationRecord[])) => void;
   setPendingIllustrations: (pending: PendingIllustration[] | ((prev: PendingIllustration[]) => PendingIllustration[])) => void;
@@ -111,8 +111,14 @@ export const useUIStore = create<UIState>((set) => ({
   setIllustrationPrompt: (prompt) => set({ illustrationPrompt: prompt }),
   setIllustrationImage: (img) => set({ illustrationImage: img }),
   setIsIllustrationLoading: (loading) => set({ isIllustrationLoading: loading }),
-  setIllustrationSuggestions: (suggestions) => set({ illustrationSuggestions: suggestions }),
-  setSelectedSuggestions: (suggestions) => set({ selectedSuggestions: suggestions }),
+  // Updater-function form matters: the picker toggles one suggestion at a time
+  // off the latest selection.
+  setIllustrationSuggestions: (suggestions) => set((state) => ({
+    illustrationSuggestions: typeof suggestions === 'function' ? suggestions(state.illustrationSuggestions) : suggestions
+  })),
+  setSelectedSuggestions: (suggestions) => set((state) => ({
+    selectedSuggestions: typeof suggestions === 'function' ? suggestions(state.selectedSuggestions) : suggestions
+  })),
   setIsSuggesting: (suggesting) => set({ isSuggesting: suggesting }),
   setIllustrations: (illustrations) => set((state) => ({
     illustrations: typeof illustrations === 'function' ? illustrations(state.illustrations) : illustrations

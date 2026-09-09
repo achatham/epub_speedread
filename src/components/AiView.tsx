@@ -488,37 +488,77 @@ export function AiView({
 
                             {illustrationSuggestions.length > 0 ? (
                                 <div className="w-full space-y-3">
-                                    <div className="flex items-center justify-between">
-                                        <h3 className="text-xs font-semibold uppercase tracking-wider opacity-40 text-left px-1">Suggested Illustrations</h3>
-                                        <button
-                                            onClick={() => setSelectedSuggestions(selectedSuggestions.length === illustrationSuggestions.length ? [] : [...illustrationSuggestions])}
-                                            className="text-[10px] text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 underline"
-                                        >
-                                            {selectedSuggestions.length === illustrationSuggestions.length ? 'Deselect All' : 'Select All'}
-                                        </button>
-                                    </div>
-                                    <div className="space-y-2 text-left">
-                                        {illustrationSuggestions.map(s => (
+                                    <div className="flex items-center justify-between gap-3 px-1">
+                                        <h3 className="text-xs font-semibold uppercase tracking-wider opacity-40 text-left">
+                                            Pick illustrations
+                                            <span className="ml-2 font-normal normal-case tracking-normal">
+                                                {selectedSuggestions.length} of {illustrationSuggestions.length} selected
+                                            </span>
+                                        </h3>
+                                        <div className="flex items-center gap-3 shrink-0">
                                             <button
-                                                key={s}
-                                                onClick={() => setSelectedSuggestions(prev => prev.includes(s) ? prev.filter(i => i !== s) : [...prev, s])}
-                                                className="flex items-start gap-3 w-full p-3 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors group"
+                                                onClick={() => setSelectedSuggestions([...illustrationSuggestions])}
+                                                disabled={selectedSuggestions.length === illustrationSuggestions.length}
+                                                className="text-[11px] text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 underline disabled:opacity-30 disabled:no-underline"
                                             >
-                                                <div className="mt-0.5 text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-200">
-                                                    {selectedSuggestions.includes(s) ? <CheckSquare size={16} className="text-zinc-900 dark:text-zinc-100" /> : <Square size={16} />}
-                                                </div>
-                                                <span className="text-sm leading-tight">{s.split('\n')[0]}</span>
+                                                Select all
                                             </button>
-                                        ))}
+                                            <button
+                                                onClick={() => setSelectedSuggestions([])}
+                                                disabled={selectedSuggestions.length === 0}
+                                                className="text-[11px] text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 underline disabled:opacity-30 disabled:no-underline"
+                                            >
+                                                Clear
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="grid sm:grid-cols-2 gap-2 text-left">
+                                        {illustrationSuggestions.map(s => {
+                                            const selected = selectedSuggestions.includes(s);
+                                            const [title, ...rest] = s.split('\n');
+                                            const detail = rest.join(' ').trim();
+                                            return (
+                                                <button
+                                                    key={s}
+                                                    onClick={() => setSelectedSuggestions(prev => prev.includes(s) ? prev.filter(i => i !== s) : [...prev, s])}
+                                                    aria-pressed={selected}
+                                                    className={`flex items-start gap-2.5 w-full p-3 rounded-lg border text-left transition-colors ${selected
+                                                        ? 'border-zinc-900 dark:border-zinc-100 bg-zinc-900/5 dark:bg-zinc-100/10'
+                                                        : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-zinc-400 dark:hover:border-zinc-600'}`}
+                                                >
+                                                    <div className={`mt-0.5 shrink-0 ${selected ? 'text-zinc-900 dark:text-zinc-100' : 'text-zinc-400'}`}>
+                                                        {selected ? <CheckSquare size={16} /> : <Square size={16} />}
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <span className="block text-sm font-medium leading-snug">{title}</span>
+                                                        {detail && (
+                                                            <span className="block text-xs leading-snug mt-0.5 opacity-50 line-clamp-2">{detail}</span>
+                                                        )}
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
                                     </div>
                                     <button
-                                        onClick={handleGenerateMultipleIllustrations}
-                                        disabled={selectedSuggestions.length === 0 || isIllustrationLoading}
-                                        className="w-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 py-2.5 rounded-lg font-medium disabled:opacity-50 hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
+                                        onClick={handleSuggestIllustrations}
+                                        disabled={isSuggesting || isIllustrationLoading}
+                                        className="flex items-center gap-1.5 mx-auto text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 disabled:opacity-40"
                                     >
-                                        <Sparkles size={18} />
-                                        Generate {selectedSuggestions.length} Illustration{selectedSuggestions.length !== 1 ? 's' : ''}
+                                        {isSuggesting ? <Loader2 size={14} className="animate-spin" /> : <ListChecks size={14} />}
+                                        {isSuggesting ? 'Suggesting...' : 'Suggest a new set'}
                                     </button>
+                                    <div className="sticky bottom-0 -mx-1 px-1 pt-2 pb-1 bg-white dark:bg-zinc-900">
+                                        <button
+                                            onClick={handleGenerateMultipleIllustrations}
+                                            disabled={selectedSuggestions.length === 0 || isIllustrationLoading}
+                                            className="w-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 py-2.5 rounded-lg font-medium disabled:opacity-40 hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
+                                        >
+                                            <Sparkles size={18} />
+                                            {selectedSuggestions.length === 0
+                                                ? 'Tap the ones you want'
+                                                : `Generate ${selectedSuggestions.length} Illustration${selectedSuggestions.length !== 1 ? 's' : ''}`}
+                                        </button>
+                                    </div>
                                 </div>
                             ) : (
                                 <>

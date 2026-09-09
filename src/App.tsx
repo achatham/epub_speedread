@@ -195,8 +195,9 @@ function App() {
     try {
       const context = words.slice(0, currentIndex + 1).map(w => w.text).join(' ');
       const suggestions = await suggestIllustrations(context, ui.illustrations.map(i => i.prompt.split('\n')[0]));
+      // Nothing is preselected: picking a few from the list is much less work
+      // than unchecking most of a dozen.
       ui.setIllustrationSuggestions(suggestions);
-      ui.setSelectedSuggestions(suggestions);
     } catch (err) {
       console.error("Failed to suggest illustrations:", err);
     } finally {
@@ -225,7 +226,9 @@ function App() {
   const handleGenerateMultipleIllustrations = async () => {
     if (ui.selectedSuggestions.length === 0) return;
     const toGenerate = [...ui.selectedSuggestions];
-    ui.setIllustrationSuggestions([]);
+    // Keep the ones that weren't picked, so a second pass doesn't need a new
+    // round of suggestions.
+    ui.setIllustrationSuggestions(prev => prev.filter(s => !toGenerate.includes(s)));
     ui.setSelectedSuggestions([]);
 
     const context = words.slice(0, currentIndex + 1).map(w => w.text).join(' ');
@@ -362,6 +365,12 @@ function App() {
       setStorageProvider((p: any) => p || (MOCK_STORAGE as any));
       (window as any).MOCK_STORAGE = MOCK_STORAGE;
       setIsLoading(false);
+    };
+
+    // Lets specs drive the illustration picker without calling Gemini.
+    (window as any).__setIllustrationSuggestions = (suggestions: string[]) => {
+      useUIStore.getState().setIllustrationSuggestions(suggestions);
+      useUIStore.getState().setSelectedSuggestions([]);
     };
 
     (window as any).__setWpm = (newWpm: number) => {
