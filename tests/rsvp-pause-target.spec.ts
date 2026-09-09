@@ -19,29 +19,50 @@ async function startPlaying(page: any) {
 }
 
 // Hold-to-pause is fiddly, so RSVP also carries a visible pause target. It
-// freezes the word in place — it does not end playback, which would drop back
-// to the page view and rewind to the start of the sentence on resume.
-test('the pause target freezes RSVP in place and resumes from the same word', async ({ page }) => {
-  const area = await startPlaying(page);
+// freezes in place rather than ending playback (which would drop back to the
+// page view and rewind), but a request made mid-sentence lands at its end.
+test('the pause target finishes the current sentence, then freezes RSVP in place', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => typeof (window as any).__loadMockWords === 'function');
+  const words = Array.from({ length: 30 }, (_, i) => ({
+    text: `Word${i}`,
+    isParagraphStart: i === 0,
+    isSentenceStart: i === 0 || i === 5,
+  }));
+  await page.evaluate((mockWords: any[]) => (window as any).__loadMockWords(mockWords, []), words);
+  // A full second per word makes the targeted mid-sentence press reliable in
+  // Docker too; at 240 WPM polling can legitimately skip Word1.
+  await page.evaluate(() => (window as any).__setWpm?.(60));
+
+  const area = page.locator('[data-testid="paginated-reading-area"]');
+  await area.click();
   const pauseTarget = page.locator('[data-testid="rsvp-pause"]');
-  const rsvpWord = page.locator('.flex.w-full.items-baseline');
+  await expect(pauseTarget).toBeVisible();
 
-  await page.waitForTimeout(300); // let a few words go by
+  // Request a pause specifically while the first sentence is still in flight.
+  const rsvpWord = page.locator('[data-testid="rsvp-word"]');
+  await expect(rsvpWord).toHaveAttribute('data-word-index', '1');
   await pauseTarget.click();
+  await expect(pauseTarget).toHaveAttribute('data-pause-pending', 'true');
+  await expect(pauseTarget).toHaveAttribute('data-paused', 'false');
 
-  // Still in RSVP — not back on the page — and the word is frozen.
+  // Still in RSVP — not back on the page — but freeze on Word4, just before
+  // Word5 (the start of the next sentence), rather than on the requested word.
+  await expect(pauseTarget).toHaveAttribute('data-paused', 'true');
+  await expect(pauseTarget).toHaveAttribute('data-pause-pending', 'false');
   await expect(rsvpWord).toBeVisible();
   await expect(page.locator('button[title="Open Menu"]')).not.toBeVisible();
-  await expect(pauseTarget).toHaveAttribute('data-paused', 'true');
+  await expect(rsvpWord).toHaveAttribute('data-word-index', '4');
 
-  const pausedWord = await area.innerText();
-  await page.waitForTimeout(800); // would be many words at 800 wpm
-  expect(await area.innerText()).toBe(pausedWord);
+  await page.waitForTimeout(800);
+  await expect(rsvpWord).toHaveAttribute('data-word-index', '4');
 
-  // Resuming carries on from the word we stopped on, with no rewind.
+  // Resuming carries on from the sentence end, with no rewind.
   await pauseTarget.click();
   await expect(pauseTarget).toHaveAttribute('data-paused', 'false');
-  await expect.poll(() => area.innerText()).not.toBe(pausedWord);
+  await expect.poll(async () => Number(
+    await rsvpWord.getAttribute('data-word-index'),
+  )).toBeGreaterThan(4);
 });
 
 test('space pauses in place and escape leaves RSVP', async ({ page }) => {

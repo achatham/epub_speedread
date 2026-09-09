@@ -78,15 +78,41 @@ export function PaginatedReaderView({
   // The pause target freezes RSVP where it stands rather than ending playback:
   // the word stays on screen and resuming carries on from it, where stopping
   // would drop back to the page view and rewind to the start of the sentence.
+  // A press doesn't freeze mid-sentence, though — it arms a pending pause that
+  // lands once the displayed word is the sentence's last, so the reader isn't
+  // left hanging on half a thought.
   const [isTargetPaused, setIsTargetPaused] = useState(false);
+  const [isPausePending, setIsPausePending] = useState(false);
   useEffect(() => {
-    if (!isPlaying) setIsTargetPaused(false);
+    if (!isPlaying) {
+      setIsTargetPaused(false);
+      setIsPausePending(false);
+    }
   }, [isPlaying]);
 
   const setTargetPaused = useCallback((paused: boolean) => {
+    setIsPausePending(false);
     setIsTargetPaused(paused);
     setIsHoldPaused(paused);
   }, [setIsHoldPaused]);
+
+  const atSentenceEnd = currentIndex >= words.length - 1
+    || words[currentIndex + 1]?.isSentenceStart === true;
+
+  const togglePauseTarget = useCallback(() => {
+    if (isTargetPaused || isPausePending) {
+      // A second press while pending cancels the pause instead of queueing it.
+      setTargetPaused(false);
+    } else if (atSentenceEnd) {
+      setTargetPaused(true);
+    } else {
+      setIsPausePending(true);
+    }
+  }, [isTargetPaused, isPausePending, atSentenceEnd, setTargetPaused]);
+
+  useEffect(() => {
+    if (isPausePending && atSentenceEnd) setTargetPaused(true);
+  }, [isPausePending, atSentenceEnd, setTargetPaused]);
 
   // Track reading area dimensions
   useEffect(() => {
@@ -201,7 +227,7 @@ export function PaginatedReaderView({
       if (isPlaying) {
         if (e.key === ' ') {
           e.preventDefault();
-          setTargetPaused(!isTargetPaused);
+          togglePauseTarget();
         } else if (e.key === 'Escape') {
           e.preventDefault();
           lastPauseTimeRef.current = Date.now();
@@ -219,7 +245,7 @@ export function PaginatedReaderView({
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [navigateNextPage, navigatePrevPage, isPlaying, handleSetIsPlaying, setTargetPaused, isTargetPaused]);
+  }, [navigateNextPage, navigatePrevPage, isPlaying, handleSetIsPlaying, togglePauseTarget]);
   // Theme-derived classes
   const mainBg = theme === 'bedtime' ? 'bg-black' : 'bg-white dark:bg-zinc-900';
   const mainText = theme === 'bedtime' ? 'text-stone-400' : 'text-zinc-900 dark:text-zinc-100';
@@ -342,10 +368,10 @@ export function PaginatedReaderView({
   const toggleTargetPause = (e: React.PointerEvent) => {
     e.stopPropagation();
     e.preventDefault();
-    // Act on the press, not the release: the word must stop under the finger
-    // the instant it lands, and a release-based pause loses the event whenever
-    // the finger drifts off the target.
-    setTargetPaused(!isTargetPaused);
+    // Act on the press, not the release. The request is either fulfilled at
+    // this sentence boundary or kept pending until the next one; a
+    // release-based target can lose the event when the finger drifts away.
+    togglePauseTarget();
   };
 
   // RSVP Dynamic Font Size
@@ -491,7 +517,12 @@ export function PaginatedReaderView({
                 </div>
               </div>
             ) : (
-              <div className="flex w-full items-baseline justify-center font-medium transition-all duration-100" style={{ fontSize: `${currentFontSize}px` }}>
+              <div
+                data-testid="rsvp-word"
+                data-word-index={currentIndex}
+                className="flex w-full items-baseline justify-center font-medium transition-all duration-100"
+                style={{ fontSize: `${currentFontSize}px` }}
+              >
                 <div className={`text-right whitespace-pre ${rsvpContextClass} flex-[0_0_40%] pr-[0.6ch]`}>{prefix}</div>
                 <div className="w-0 flex justify-center items-baseline overflow-visible z-10">
                   <div className={`${rsvpFocusColor} font-bold text-center`}>{focus}</div>
@@ -562,6 +593,7 @@ export function PaginatedReaderView({
         <button
           data-testid="rsvp-pause"
           data-paused={isTargetPaused}
+          data-pause-pending={isPausePending}
           onPointerDown={toggleTargetPause}
           className={`fixed bottom-16 left-1/2 -translate-x-1/2 z-50 w-16 h-16 rounded-full border
             flex items-center justify-center transition-transform active:scale-95
