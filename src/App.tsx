@@ -17,6 +17,8 @@ import { useSettingsSync } from './hooks/useSettings';
 import { useLibrary } from './hooks/useLibrary';
 import { usePlayback } from './hooks/usePlayback';
 import { useReadingSession } from './hooks/useReadingSession';
+import { useProgressSync } from './hooks/useProgressSync';
+import { resolveStartPosition, forgetLocalProgress, writeLocalProgress } from './utils/progress';
 
 import { useSettingsStore } from './stores/useSettingsStore';
 import { useReaderStore } from './stores/useReaderStore';
@@ -53,7 +55,6 @@ function App() {
   const currentIndex = useReaderStore(state => state.currentIndex);
   const sections = useReaderStore(state => state.sections);
   const words = useReaderStore(state => state.words);
-  const furthestIndex = useReaderStore(state => state.furthestIndex);
   
   const setCurrentBookId = useReaderStore(state => state.setCurrentBookId);
   const setWords = useReaderStore(state => state.setWords);
@@ -92,6 +93,7 @@ function App() {
 
   // Synchronizers that watch Zustand stores and sync with backend
   useSettingsSync(storageProvider, onboardingCompleted);
+  const { flushProgress } = useProgressSync(storageProvider, lastLoadedBookIdRef);
 
   // Persist WPM changes per book
   useEffect(() => {
@@ -311,6 +313,15 @@ function App() {
     if (!currentBookId || !storageProvider) return;
     try {
       await storageProvider.clearFutureSessions(currentBookId, currentIndex);
+      // The local record keeps the highest word it has seen, so it has to be
+      // dropped here or it would restore the furthest mark we just cleared.
+      forgetLocalProgress(currentBookId);
+      writeLocalProgress(currentBookId, {
+        wordIndex: currentIndex,
+        reachedAt: Date.now(),
+        furthestWordIndex: currentIndex,
+        pendingSync: false,
+      });
       setFurthestIndex(currentIndex);
       await refreshSessions();
       setLibrary(await storageProvider.getAllBooks());
@@ -488,7 +499,7 @@ function App() {
 
     // Persist progress in the background
     if (bookIdToSave && storageProvider) {
-      storageProvider.updateBookProgress(bookIdToSave, indexToSave)
+      flushProgress(bookIdToSave, indexToSave)
         .then(async () => {
           setLibrary(await storageProvider.getAllBooks());
         })
@@ -511,11 +522,20 @@ function App() {
       const illusts = await storageProvider.getIllustrations(bookRecord.id);
       ui.setIllustrations(illusts);
 
+      // The record came from the library list, which is loaded once at startup
+      // and can be hours stale in a long-lived tab. Ask the server and this
+      // device's own record where reading actually got to.
+      const start = await resolveStartPosition(storageProvider, bookRecord.id, {
+        wordIndex: result.wordIndex,
+        reachedAt: bookRecord.progress.lastReadAt || 0,
+        furthestWordIndex: bookRecord.progress.furthestWordIndex ?? bookRecord.progress.wordIndex ?? 0,
+      });
+
       lastLoadedBookIdRef.current = bookRecord.id;
       setBookTitle(result.title);
       setWords(result.words);
       setSections(result.sections);
-      setCurrentIndex(result.wordIndex);
+      setCurrentIndex(start.wordIndex);
 
       let targetWpm = Math.round(result.wpm);
       // Sanity check to recover from corrupted data
@@ -533,7 +553,7 @@ function App() {
       }
 
       setRealEndIndex(result.realEndIndex);
-      setFurthestIndex(bookRecord.progress.furthestWordIndex ?? bookRecord.progress.wordIndex);
+      setFurthestIndex(start.furthestWordIndex);
 
       if (result.realEndQuote) {
         // Just to update the local library state if needed
@@ -584,19 +604,6 @@ function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentBookId, handleProcessBook, storageProvider]);
 
-  useEffect(() => {
-    // Only persist once this book has actually been loaded and its saved
-    // position restored; before that, currentIndex is still the default 0
-    // and writing it would clobber the real progress (e.g. when a PWA
-    // update reloads the page and it gets frozen mid-load).
-    if (!isPlaying && currentBookId && storageProvider && currentBookId === lastLoadedBookIdRef.current) {
-      storageProvider.updateBookProgress(currentBookId, currentIndex);
-    }
-    if (furthestIndex !== null && currentIndex > furthestIndex) {
-      setFurthestIndex(currentIndex);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPlaying, currentIndex, currentBookId, storageProvider, furthestIndex]);
 
 
 

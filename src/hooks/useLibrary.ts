@@ -3,6 +3,7 @@ import type { FirestoreStorage } from '../utils/storage';
 import { ref, getBytes } from 'firebase/storage';
 import { storage } from '../utils/firebase';
 import { useLibraryStore } from '../stores/useLibraryStore';
+import { forgetLocalProgress } from '../utils/progress';
 
 export function useLibrary(
     storageProvider: FirestoreStorage | null,
@@ -130,6 +131,7 @@ export function useLibrary(
         if (!storageProvider) return;
         if (confirm('Delete this book?')) {
             await storageProvider.deleteBook(id);
+            forgetLocalProgress(id);
             setLibrary(await storageProvider.getAllBooks());
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -3,6 +3,15 @@ import { db as firestore, storage as firebaseStorage } from './firebase';
 import { collection, doc, setDoc, getDocs, deleteDoc, getDoc, updateDoc, runTransaction, writeBatch, query, where, orderBy, getDocFromCache, getDocsFromCache } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { buildAggregatedSessions, getAggregationPlan, isImplausiblySlowSession, getSessionWordsRead } from './stats';
+import type { RemoteProgress } from './progress';
+
+/** Outcome of a progress write: what the server now holds, and whether it took ours. */
+export interface ProgressWriteResult extends RemoteProgress {
+  /** False when a more recent position from another device was kept instead. */
+  accepted: boolean;
+  /** True when the server could not be reached, so nothing was written. */
+  offline: boolean;
+}
 
 export interface RsvpSettings {
   periodMultiplier: number;
@@ -391,27 +400,81 @@ export class FirestoreStorage {
     }
   }
 
-  async updateBookProgress(id: string, index: number): Promise<void> {
+  /** What the server holds for a book after (or instead of) our write. */
+  async getBookProgress(id: string): Promise<RemoteProgress | null> {
     try {
-      // Fetch current book to check existing furthest progress
-      const currentBookRef = doc(this.booksCollection, id);
-      const snap = await getDoc(currentBookRef);
-      
-      let furthest = index;
-      if (snap.exists()) {
-        const data = snap.data() as BookRecord;
-        const previousFurthest = data.progress.furthestWordIndex || data.progress.wordIndex;
-        furthest = Math.max(index, previousFurthest);
-      }
+      const snap = await getDoc(doc(this.booksCollection, id));
+      if (!snap.exists()) return null;
+      const progress = (snap.data() as BookRecord).progress;
+      return {
+        wordIndex: progress?.wordIndex || 0,
+        reachedAt: progress?.lastReadAt || 0,
+        furthestWordIndex: Math.max(progress?.furthestWordIndex || 0, progress?.wordIndex || 0),
+        fromCache: snap.metadata?.fromCache === true,
+      };
+    } catch (e) {
+      console.warn("[Storage] Could not read saved position", e);
+      return null;
+    }
+  }
 
-      await updateDoc(currentBookRef, {
-        'progress.wordIndex': index,
-        'progress.lastReadAt': Date.now(),
-        'progress.furthestWordIndex': furthest
-      });
+  /**
+   * Saves a reading position, keeping the most recent reading rather than the
+   * most recent write.
+   *
+   * `reachedAt` is when the reader was at `index`. A device that has been
+   * asleep carries an old one, so its write no longer drags the position back
+   * to where it fell asleep — it only contributes its furthest mark, and the
+   * caller is told the server's position so it can catch up.
+   */
+  async updateBookProgress(id: string, index: number, reachedAt: number = Date.now()): Promise<ProgressWriteResult> {
+    const currentBookRef = doc(this.booksCollection, id);
+    let snap;
+    try {
+      snap = await getDoc(currentBookRef);
+    } catch (e) {
+      console.warn("[Storage] Could not read progress before writing", e);
+      return { wordIndex: index, reachedAt, furthestWordIndex: index, accepted: false, offline: true };
+    }
+
+    const stored = snap.exists() ? (snap.data() as BookRecord).progress : undefined;
+    const furthest = Math.max(index, stored?.furthestWordIndex || 0, stored?.wordIndex || 0);
+
+    // Offline, this snapshot is only what the cache last saw, so it cannot
+    // settle a conflict. Queueing a write here is exactly how a sleeping tab
+    // used to win against a device that had read further: leave it to the
+    // caller's local record and reconcile once the server answers.
+    if (snap.metadata?.fromCache === true) {
+      return { wordIndex: index, reachedAt, furthestWordIndex: furthest, accepted: false, offline: true };
+    }
+
+    const storedReachedAt = stored?.lastReadAt || 0;
+    const isStale = !!stored && storedReachedAt > reachedAt && stored.wordIndex !== index;
+
+    try {
+      await updateDoc(currentBookRef, isStale
+        ? { 'progress.furthestWordIndex': furthest }
+        : {
+          'progress.wordIndex': index,
+          'progress.lastReadAt': reachedAt,
+          'progress.furthestWordIndex': furthest
+        });
     } catch (e) {
       console.error("Failed to update progress", e);
+      return { wordIndex: index, reachedAt, furthestWordIndex: furthest, accepted: false, offline: true };
     }
+
+    if (isStale) {
+      console.log(`[Storage] Kept the newer saved position ${stored!.wordIndex} over this device's older ${index}.`);
+      return {
+        wordIndex: stored!.wordIndex,
+        reachedAt: storedReachedAt,
+        furthestWordIndex: furthest,
+        accepted: false,
+        offline: false
+      };
+    }
+    return { wordIndex: index, reachedAt, furthestWordIndex: furthest, accepted: true, offline: false };
   }
 
   async updateBookWpm(id: string, wpm: number): Promise<void> {

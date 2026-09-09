@@ -14,6 +14,9 @@ const MOCK_USER = { uid: 'mock-user' };
 
 let mockBooksList: any[] = [];
 let mockFiles: Record<string, File> = {};
+// Stands in for the saved position other devices write to. Specs seed it via
+// _setProgress to play the part of "someone else read further".
+let mockProgress: Record<string, { wordIndex: number; reachedAt: number; furthestWordIndex: number }> = {};
 
 // mock storage provider used by playwright tests
 const MOCK_STORAGE = {
@@ -21,7 +24,15 @@ const MOCK_STORAGE = {
     getAllBooks: async () => mockBooksList,
     getSessions: async () => [],
     getAggregatedSessions: async () => [],
-    updateBookProgress: async () => { },
+    updateBookProgress: async (id: string, index: number, reachedAt: number = Date.now()) => {
+        const furthestWordIndex = Math.max(index, mockProgress[id]?.furthestWordIndex || 0);
+        mockProgress[id] = { wordIndex: index, reachedAt, furthestWordIndex };
+        return { wordIndex: index, reachedAt, furthestWordIndex, accepted: true, offline: false };
+    },
+    getBookProgress: async (id: string) => mockProgress[id] || null,
+    _setProgress: (id: string, progress: { wordIndex: number; reachedAt: number; furthestWordIndex?: number }) => {
+        mockProgress[id] = { furthestWordIndex: progress.wordIndex, ...progress };
+    },
     updateBookWpm: async () => { },
     updateBookStats: async () => { },
     updateSettings: async () => { },
@@ -58,7 +69,7 @@ const MOCK_STORAGE = {
         mockFiles[id] = file;
         return id;
     },
-    _resetMocks: () => { mockBooksList = []; mockFiles = {}; },
+    _resetMocks: () => { mockBooksList = []; mockFiles = {}; mockProgress = {}; },
     _setMockBooks: (books: any[]) => { mockBooksList = books; }
 };
 

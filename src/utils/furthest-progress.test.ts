@@ -101,6 +101,68 @@ describe('Sync to Furthest Progress', () => {
     }));
   });
 
+  it('keeps a newer saved position when a sleeping device writes an older one', async () => {
+    const mockBook: Partial<BookRecord> = {
+      id: bookId,
+      // Another device read to 84400 this afternoon.
+      progress: { wordIndex: 84400, lastReadAt: 2_000_000, furthestWordIndex: 84400 }
+    };
+
+    vi.mocked(getDoc).mockResolvedValue({
+      exists: () => true,
+      data: () => mockBook,
+      metadata: { fromCache: false }
+    } as any);
+
+    // A tab that has been asleep since this morning wakes up at 79969.
+    const result = await storage.updateBookProgress(bookId, 79969, 1_000_000);
+
+    expect(updateDoc).toHaveBeenCalledWith(expect.anything(), {
+      'progress.furthestWordIndex': 84400
+    });
+    expect(result).toMatchObject({ accepted: false, wordIndex: 84400 });
+  });
+
+  it('still moves backward when the reader deliberately goes back now', async () => {
+    const mockBook: Partial<BookRecord> = {
+      id: bookId,
+      progress: { wordIndex: 84400, lastReadAt: 1_000_000, furthestWordIndex: 84400 }
+    };
+
+    vi.mocked(getDoc).mockResolvedValue({
+      exists: () => true,
+      data: () => mockBook,
+      metadata: { fromCache: false }
+    } as any);
+
+    const result = await storage.updateBookProgress(bookId, 80000, 2_000_000);
+
+    expect(updateDoc).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      'progress.wordIndex': 80000,
+      'progress.lastReadAt': 2_000_000,
+      'progress.furthestWordIndex': 84400
+    }));
+    expect(result).toMatchObject({ accepted: true });
+  });
+
+  it('writes nothing offline, where the cached copy cannot settle a conflict', async () => {
+    const mockBook: Partial<BookRecord> = {
+      id: bookId,
+      progress: { wordIndex: 100, lastReadAt: 1_000_000, furthestWordIndex: 100 }
+    };
+
+    vi.mocked(getDoc).mockResolvedValue({
+      exists: () => true,
+      data: () => mockBook,
+      metadata: { fromCache: true }
+    } as any);
+
+    const result = await storage.updateBookProgress(bookId, 200, 2_000_000);
+
+    expect(updateDoc).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ offline: true, accepted: false });
+  });
+
   it('should correctly aggregate sessions while preserving furthest progress in session group', () => {
     const sessions: ReadingSession[] = [
       {
