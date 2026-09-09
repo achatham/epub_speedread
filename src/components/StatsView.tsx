@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { X, Clock, BookOpen, BarChart2, TrendingUp, Volume2, Library, Zap } from 'lucide-react';
 import type { ReadingSession, BookRecord } from '../utils/storage';
-import { getSessionKey, calculateFinishedBooks } from '../utils/stats';
+import { getSessionKey, calculateFinishedBooks, getRangeThreshold, RANGE_LABELS } from '../utils/stats';
 import { BookProgressChart } from './stats/BookProgressChart';
 import { BooksReadChart } from './stats/BooksReadChart';
 import { ReadingHistoryChart } from './stats/ReadingHistoryChart';
@@ -89,51 +89,15 @@ export function StatsView({
   }, [isOpen, activeTab, timeRange]);
 
   // 3. Filter sessions for "Overall History" tab
-  const historySessions = useMemo(() => {
-    let threshold = 0;
-    if (timeRange === 'week') threshold = now - 7 * 24 * 60 * 60 * 1000;
-    else if (timeRange === 'month') threshold = now - 30 * 24 * 60 * 60 * 1000;
-    else if (timeRange === 'year') {
-      const d = new Date(now);
-      d.setDate(1);
-      d.setMonth(d.getMonth() - 11);
-      d.setHours(0, 0, 0, 0);
-      threshold = d.getTime();
-    }
-    return sessions.filter(s => s.startTime >= threshold);
-  }, [sessions, timeRange, now]);
+  const historySessions = useMemo(
+    () => sessions.filter(s => s.startTime >= getRangeThreshold(timeRange, now)),
+    [sessions, timeRange, now]
+  );
 
   // Finished books for the new tab
   const displayFinishedBooks = useMemo(() => {
-    let threshold = 0;
-    let endThreshold = Infinity;
-
-    // Convert 'now' back to a Date object for the localized math
-    const nowDateObj = new Date(now);
-
-    if (timeRange === 'ytd') {
-      threshold = new Date(nowDateObj.getFullYear(), 0, 1).getTime();
-    } else if (timeRange === 'pastYear') {
-      const d = new Date(nowDateObj);
-      d.setDate(1);
-      d.setMonth(d.getMonth() - 11);
-      d.setHours(0, 0, 0, 0);
-      threshold = d.getTime();
-      endThreshold = nowDateObj.getTime();
-    } else if (timeRange === 'fiveYears') {
-      threshold = nowDateObj.getTime() - 5 * 365 * 24 * 60 * 60 * 1000;
-    } else {
-      // Fallback for history ranges if somehow active
-      if (timeRange === 'week') threshold = nowDateObj.getTime() - 7 * 24 * 60 * 60 * 1000;
-      else if (timeRange === 'month') threshold = nowDateObj.getTime() - 30 * 24 * 60 * 60 * 1000;
-      else if (timeRange === 'year') {
-        const d = new Date(nowDateObj);
-        d.setDate(1);
-        d.setMonth(d.getMonth() - 11);
-        d.setHours(0, 0, 0, 0);
-        threshold = d.getTime();
-      }
-    }
+    const threshold = getRangeThreshold(timeRange, now);
+    const endThreshold = timeRange === 'pastYear' ? now : Infinity;
 
     return finishedBooks.results
       .filter(b => b.date >= threshold && b.date <= endThreshold)
@@ -166,6 +130,12 @@ export function StatsView({
   const totalPagesPaginated = Math.round(totalWordsPaginated / WORDS_PER_PAGE);
   const totalPagesHeard = Math.round(totalWordsHeard / WORDS_PER_PAGE);
 
+  // The cards cover the selected window, not a lifetime total, so they say
+  // which window: a week's worth of pages read like an all-time count without
+  // it, which is a confusing thing to compare against the page you are on.
+  const summaryScope = activeTab === 'book'
+    ? (bookToView ? `All Time · ${bookToView.meta.title}` : 'All Time')
+    : RANGE_LABELS[timeRange] || 'All Time';
 
 
   return (
@@ -244,26 +214,29 @@ export function StatsView({
           )}
 
           {/* Summary Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className={`p-4 rounded-xl ${cardBgClass} flex flex-col items-center justify-center text-center`}>
-              <BookOpen size={20} className="mb-2 opacity-50 text-blue-500" />
-              <span className="text-xl font-bold">{totalRsvpMinutes + totalPaginatedMinutes}</span>
-              <span className="text-[10px] uppercase tracking-wider opacity-50">Read Mins</span>
-            </div>
-            <div className={`p-4 rounded-xl ${cardBgClass} flex flex-col items-center justify-center text-center`}>
-              <Volume2 size={20} className="mb-2 opacity-50 text-purple-500" />
-              <span className="text-xl font-bold">{totalListenMinutes}</span>
-              <span className="text-[10px] uppercase tracking-wider opacity-50">Listen Mins</span>
-            </div>
-            <div className={`p-4 rounded-xl ${cardBgClass} flex flex-col items-center justify-center text-center`}>
-              <Clock size={20} className="mb-2 opacity-50" />
-              <span className="text-xl font-bold">{totalRsvpMinutes + totalPaginatedMinutes + totalListenMinutes}</span>
-              <span className="text-[10px] uppercase tracking-wider opacity-50">Total Mins</span>
-            </div>
-            <div className={`p-4 rounded-xl ${cardBgClass} flex flex-col items-center justify-center text-center`}>
-              <TrendingUp size={20} className="mb-2 opacity-50" />
-              <span className="text-xl font-bold">{totalPagesRsvp + totalPagesPaginated + totalPagesHeard}</span>
-              <span className="text-[10px] uppercase tracking-wider opacity-50">Total Pages</span>
+          <div className="space-y-3">
+            <h3 className="text-sm font-medium opacity-70 truncate">Totals: {summaryScope}</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className={`p-4 rounded-xl ${cardBgClass} flex flex-col items-center justify-center text-center`}>
+                <BookOpen size={20} className="mb-2 opacity-50 text-blue-500" />
+                <span className="text-xl font-bold">{totalRsvpMinutes + totalPaginatedMinutes}</span>
+                <span className="text-[10px] uppercase tracking-wider opacity-50">Read Mins</span>
+              </div>
+              <div className={`p-4 rounded-xl ${cardBgClass} flex flex-col items-center justify-center text-center`}>
+                <Volume2 size={20} className="mb-2 opacity-50 text-purple-500" />
+                <span className="text-xl font-bold">{totalListenMinutes}</span>
+                <span className="text-[10px] uppercase tracking-wider opacity-50">Listen Mins</span>
+              </div>
+              <div className={`p-4 rounded-xl ${cardBgClass} flex flex-col items-center justify-center text-center`}>
+                <Clock size={20} className="mb-2 opacity-50" />
+                <span className="text-xl font-bold">{totalRsvpMinutes + totalPaginatedMinutes + totalListenMinutes}</span>
+                <span className="text-[10px] uppercase tracking-wider opacity-50">Total Mins</span>
+              </div>
+              <div className={`p-4 rounded-xl ${cardBgClass} flex flex-col items-center justify-center text-center`}>
+                <TrendingUp size={20} className="mb-2 opacity-50" />
+                <span className="text-xl font-bold">{totalPagesRsvp + totalPagesPaginated + totalPagesHeard}</span>
+                <span className="text-[10px] uppercase tracking-wider opacity-50">Total Pages</span>
+              </div>
             </div>
           </div>
 

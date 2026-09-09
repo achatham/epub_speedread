@@ -48,6 +48,42 @@ export function isImplausiblySlowSession(s: ReadingSession): boolean {
   return effectiveWpm < MIN_PLAUSIBLE_WPM;
 }
 
+export const RANGE_LABELS: Record<string, string> = {
+  week: 'Past Week',
+  month: 'Past 30 Days',
+  year: 'Past Year',
+  ytd: 'Year to Date',
+  pastYear: 'Past Year',
+  fiveYears: 'Past 5 Years',
+};
+
+/**
+ * Start of the selected window. Shared by the charts and the summary cards so
+ * the headline totals always cover the range the selector says they do — the
+ * cards used to fall back to every session ever recorded whenever a range from
+ * the "Books Read" tab was active.
+ */
+export function getRangeThreshold(timeRange: string, now: number): number {
+  const nowDate = new Date(now);
+  const startOfMonthsAgo = (months: number) => {
+    const d = new Date(now);
+    d.setDate(1);
+    d.setMonth(d.getMonth() - months);
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  };
+
+  switch (timeRange) {
+    case 'week': return now - 7 * 24 * 60 * 60 * 1000;
+    case 'month': return now - 30 * 24 * 60 * 60 * 1000;
+    case 'year':
+    case 'pastYear': return startOfMonthsAgo(11);
+    case 'ytd': return new Date(nowDate.getFullYear(), 0, 1).getTime();
+    case 'fiveYears': return now - 5 * 365 * 24 * 60 * 60 * 1000;
+    default: return 0;
+  }
+}
+
 export function getDayKey(startTime: number): string {
   const d = new Date(startTime);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;

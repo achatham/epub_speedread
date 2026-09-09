@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildAggregatedSessions, getAggregationPlan, getSessionKey, getHistoryRangeData, getBookProgressTrendData, calculateFinishedBooks, isImplausiblySlowSession } from './stats';
+import { buildAggregatedSessions, getAggregationPlan, getSessionKey, getHistoryRangeData, getBookProgressTrendData, calculateFinishedBooks, isImplausiblySlowSession, getRangeThreshold } from './stats';
 import type { ReadingSession, BookRecord } from './storage';
 
 // Mock crypto.randomUUID
@@ -330,5 +330,27 @@ describe('isImplausiblySlowSession', () => {
     it('falls back to word index span when wordsRead is missing', () => {
         const s = { ...base, wordsRead: 0, startWordIndex: 0, endWordIndex: 5, durationSeconds: 3600 };
         expect(isImplausiblySlowSession(s)).toBe(true); // 5 words / 60 min
+    });
+});
+
+describe('getRangeThreshold', () => {
+    const now = new Date('2026-09-08T20:00:00').getTime();
+
+    it('covers the trailing week', () => {
+        expect(getRangeThreshold('week', now)).toBe(now - 7 * 24 * 60 * 60 * 1000);
+    });
+
+    it('starts the year-to-date range on January 1st', () => {
+        expect(getRangeThreshold('ytd', now)).toBe(new Date(2026, 0, 1).getTime());
+    });
+
+    it('gives the "Books Read" ranges a real cutoff rather than all of history', () => {
+        for (const range of ['ytd', 'pastYear', 'fiveYears']) {
+            expect(getRangeThreshold(range, now)).toBeGreaterThan(0);
+        }
+    });
+
+    it('treats an unknown range as all time', () => {
+        expect(getRangeThreshold('whenever', now)).toBe(0);
     });
 });
