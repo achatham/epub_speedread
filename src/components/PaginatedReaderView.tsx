@@ -609,12 +609,13 @@ export function PaginatedReaderView({
       {/* ── Footer / controls ──────────────────────────────────── */}
       <div className={`shrink-0 px-4 pt-3 pb-8 flex flex-col gap-2`}>
         <div className="flex flex-col gap-1.5">
-          {/* Chapter Progress bar */}
+          {/* Chapter Progress bar. Kept fully opaque: on a dim screen in a dark
+              room the translucent version washed out into the track entirely. */}
           <div
-            className={`w-full h-1 rounded-sm relative ${theme === 'bedtime' ? 'bg-zinc-900/50' : 'bg-zinc-200/50 dark:bg-zinc-800/50'}`}
+            className={`w-full h-1 rounded-sm relative ${theme === 'bedtime' ? 'bg-zinc-900' : 'bg-zinc-200 dark:bg-zinc-800'}`}
           >
             <div
-              className={`h-full rounded-sm transition-all duration-300 ${theme === 'bedtime' ? 'bg-amber-600/60' : 'bg-red-500/50'}`}
+              className={`h-full rounded-sm transition-all duration-300 ${theme === 'bedtime' ? 'bg-amber-500' : 'bg-red-600 dark:bg-red-500'}`}
               style={{ width: `${chapterProgress}%` }}
             />
           </div>
