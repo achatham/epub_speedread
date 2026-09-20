@@ -40,6 +40,8 @@ interface AiViewProps {
   retryPendingIllustration: (id: string) => void;
   dismissPendingIllustration: (id: string) => void;
   ttsSpeed: number;
+  /** The paginated reader's font size; answers are read like book text, so they match it. */
+  readerFontSize: number;
 }
 
 const CANNED_QUESTIONS = [
@@ -93,8 +95,12 @@ export function AiView({
   pendingIllustrations,
   retryPendingIllustration,
   dismissPendingIllustration,
-  ttsSpeed
+  ttsSpeed,
+  readerFontSize
 }: AiViewProps) {
+  // Clamped at the top end because the reader goes to 64px, which would leave
+  // only a few words per line in this narrower column.
+  const answerFontSize = Math.min(Math.max(readerFontSize, 16), 28);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const audioRef = useRef<AudioController | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -301,7 +307,12 @@ export function AiView({
                   {aiExchanges.map((exchange, i) => (
                     <div key={i} className="py-3 first:pt-0 space-y-2">
                       <p className="text-sm font-medium text-zinc-400 dark:text-zinc-500">{exchange.question}</p>
-                      <div className="text-sm leading-relaxed whitespace-pre-wrap prose dark:prose-invert max-w-none">
+                      <div
+                        // No whitespace-pre-wrap: markdown already spaces the blocks, and the
+                        // duplicated blank lines get glaring once the text is reader-sized.
+                        className="leading-relaxed prose dark:prose-invert max-w-none"
+                        style={{ fontSize: `${answerFontSize}px` }}
+                      >
                         <ReactMarkdown>{exchange.answer}</ReactMarkdown>
                       </div>
                     </div>

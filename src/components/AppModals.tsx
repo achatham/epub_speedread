@@ -131,6 +131,7 @@ export function AppModals({
                 retryPendingIllustration={handleRetryPendingIllustration}
                 dismissPendingIllustration={(id) => ui.setPendingIllustrations(prev => prev.filter(p => p.id !== id))}
                 ttsSpeed={settings.ttsSpeed}
+                readerFontSize={settings.paginatedFontSize}
             />
 
             <StatsView
