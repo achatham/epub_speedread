@@ -27,6 +27,9 @@ export interface RsvpSettings {
 
 export type ReadingMode = 'rsvp' | 'paginated';
 
+/** Whether reading progress is reported as pages covered or minutes spent. */
+export type ProgressUnit = 'pages' | 'time';
+
 export interface UserSettings {
   geminiApiKey?: string;
   syncApiKey?: boolean;
@@ -37,6 +40,7 @@ export interface UserSettings {
   rsvp?: RsvpSettings;
   onboardingCompleted?: boolean;
   readingMode?: ReadingMode;
+  progressUnit?: ProgressUnit;
   paginatedFontSize?: number;
   lastBookId?: string | null;
   lastUpdated: number;

@@ -1,4 +1,4 @@
-import type { ReadingSession, BookRecord } from './storage';
+import type { ReadingSession, BookRecord, ProgressUnit } from './storage';
 
 export interface FinishedBook {
   id: string;
@@ -39,6 +39,18 @@ export const MIN_PLAUSIBLE_WPM = 1;
 
 export function getSessionWordsRead(s: ReadingSession): number {
   return s.wordsRead || Math.max(0, s.endWordIndex - s.startWordIndex);
+}
+
+/**
+ * A "page" is a reporting unit, not a rendered page: the paginated view fits a
+ * different number of words per screen at every font size and orientation, so
+ * progress counted that way would change meaning between sessions. This is a
+ * typical paperback page of prose, which is what "I read 20 pages" means.
+ */
+export const WORDS_PER_PAGE = 300;
+
+export function wordsToPages(words: number): number {
+  return Math.round(words / WORDS_PER_PAGE);
 }
 
 export function isImplausiblySlowSession(s: ReadingSession): boolean {
@@ -103,9 +115,14 @@ export interface HistoryDataPoint {
   timestamp: number;
 }
 
+/**
+ * Per-bucket totals for the history chart, in whichever unit the reader asked
+ * for: minutes spent, or pages covered.
+ */
 export function getHistoryRangeData(
   timeRange: 'week' | 'month' | 'year',
-  sessions: ReadingSession[]
+  sessions: ReadingSession[],
+  unit: ProgressUnit = 'time'
 ): HistoryDataPoint[] {
   const isYear = timeRange === 'year';
   const data = new Map<string, HistoryDataPoint>();
@@ -146,13 +163,18 @@ export function getHistoryRangeData(
 
     const existing = data.get(key);
     if (existing) {
+      // Kept fractional and only rounded for display: a run of short sessions
+      // would otherwise each round to zero and vanish from the bar.
+      const amount = unit === 'pages'
+        ? getSessionWordsRead(s) / WORDS_PER_PAGE
+        : s.durationSeconds / 60;
       if (s.type === 'listening') {
-          existing.listen += s.durationSeconds / 60;
+          existing.listen += amount;
       } else if (s.type === 'paginated') {
-          existing.paginated += s.durationSeconds / 60;
+          existing.paginated += amount;
       } else {
           // Legacy 'reading' and new 'rsvp' both map to RSVP
-          existing.rsvp += s.durationSeconds / 60;
+          existing.rsvp += amount;
       }
     }
   }

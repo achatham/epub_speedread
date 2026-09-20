@@ -46,6 +46,7 @@ function App() {
   const setFontFamily = useSettingsStore(state => state.setFontFamily);
   const setRsvpSettings = useSettingsStore(state => state.setRsvpSettings);
   const setPaginatedFontSize = useSettingsStore(state => state.setPaginatedFontSize);
+  const setProgressUnit = useSettingsStore(state => state.setProgressUnit);
 
   // Reader Store
   const currentBookId = useReaderStore(state => state.currentBookId);
@@ -451,6 +452,7 @@ function App() {
           if (s.autoLandscape !== undefined) setAutoLandscape(s.autoLandscape);
           if (s.rsvp) setRsvpSettings(normalizeRsvpSettings({ ...rsvpSettings, ...s.rsvp }));
           if (s.paginatedFontSize) setPaginatedFontSize(s.paginatedFontSize);
+          if (s.progressUnit) setProgressUnit(s.progressUnit);
           if (s.lastBookId !== undefined) setLastBookId(s.lastBookId);
 
           if (s.onboardingCompleted) {

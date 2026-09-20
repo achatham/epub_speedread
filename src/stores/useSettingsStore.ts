@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { DEFAULT_RSVP_SETTINGS, DEFAULT_PAGINATED_FONT_SIZE } from '../constants';
-import type { RsvpSettings, ReadingMode } from '../utils/storage';
+import type { RsvpSettings, ReadingMode, ProgressUnit } from '../utils/storage';
 import { getGeminiApiKey, setGeminiApiKey as saveGeminiApiKey } from '../utils/gemini';
 import { normalizeRsvpSettings } from '../utils/rsvp-settings';
 
@@ -18,6 +18,7 @@ interface SettingsState {
   rsvpSettings: RsvpSettings;
   paginatedFontSize: number;
   readingMode: ReadingMode;
+  progressUnit: ProgressUnit;
   lastBookId: string | null | undefined;
   onboardingCompleted: boolean;
   wpm: number;
@@ -33,6 +34,7 @@ interface SettingsState {
   setRsvpSettings: (settings: Partial<RsvpSettings>) => void;
   setPaginatedFontSize: (size: number) => void;
   setReadingMode: (mode: ReadingMode) => void;
+  setProgressUnit: (unit: ProgressUnit) => void;
   setLastBookId: (id: string | null) => void;
   setOnboardingCompleted: (completed: boolean) => void;
   setWpm: (wpm: number) => void;
@@ -58,6 +60,10 @@ export const useSettingsStore = create<SettingsState>()(
       rsvpSettings: DEFAULT_RSVP_SETTINGS,
       paginatedFontSize: DEFAULT_PAGINATED_FONT_SIZE,
       readingMode: 'rsvp',
+      // Pages by default: "I read 30 pages" is how people describe a
+      // sitting, and it is the number that means the same thing whatever
+      // speed you happen to be reading at.
+      progressUnit: 'pages',
       lastBookId: undefined,
       onboardingCompleted: false,
       wpm: 300,
@@ -77,6 +83,7 @@ export const useSettingsStore = create<SettingsState>()(
       setRsvpSettings: (settings) => set((state) => ({ rsvpSettings: { ...state.rsvpSettings, ...settings } })),
       setPaginatedFontSize: (size) => set({ paginatedFontSize: size }),
       setReadingMode: (mode) => set({ readingMode: mode }),
+      setProgressUnit: (unit) => set({ progressUnit: unit }),
       setLastBookId: (id) => set({ lastBookId: id }),
       setOnboardingCompleted: (completed) => set({ onboardingCompleted: completed }),
       setWpm: (wpm) => set({ wpm }),

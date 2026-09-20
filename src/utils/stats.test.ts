@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildAggregatedSessions, getAggregationPlan, getSessionKey, getHistoryRangeData, getBookProgressTrendData, calculateFinishedBooks, isImplausiblySlowSession, getRangeThreshold } from './stats';
+import { buildAggregatedSessions, getAggregationPlan, getSessionKey, getHistoryRangeData, getBookProgressTrendData, calculateFinishedBooks, isImplausiblySlowSession, getRangeThreshold, wordsToPages } from './stats';
 import type { ReadingSession, BookRecord } from './storage';
 
 // Mock crypto.randomUUID
@@ -165,6 +165,70 @@ describe('getHistoryRangeData', () => {
     it('should return 12 months for year range', () => {
         const data = getHistoryRangeData('year', []);
         expect(data).toHaveLength(12);
+    });
+
+    it('buckets pages read instead of minutes when asked for pages', () => {
+        const now = Date.now();
+        const sessions: ReadingSession[] = [{
+            id: 's1',
+            bookId: 'b1',
+            bookTitle: 'B1',
+            startTime: now,
+            endTime: now + 60000,
+            startWordIndex: 0,
+            endWordIndex: 600,
+            wordsRead: 600,
+            durationSeconds: 60,
+            type: 'reading'
+        }, {
+            id: 's2',
+            bookId: 'b1',
+            bookTitle: 'B1',
+            startTime: now,
+            endTime: now + 60000,
+            startWordIndex: 0,
+            endWordIndex: 900,
+            wordsRead: 900,
+            durationSeconds: 60,
+            type: 'listening'
+        }];
+        const todayKey = new Date(now).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        const today = getHistoryRangeData('week', sessions, 'pages').find(d => d.key === todayKey);
+        expect(today?.rsvp).toBe(2);
+        expect(today?.listen).toBe(3);
+    });
+
+    it('keeps page fractions so short sessions still stack up', () => {
+        const now = Date.now();
+        const short = (id: string): ReadingSession => ({
+            id,
+            bookId: 'b1',
+            bookTitle: 'B1',
+            startTime: now,
+            endTime: now + 1000,
+            startWordIndex: 0,
+            endWordIndex: 100,
+            wordsRead: 100,
+            durationSeconds: 10,
+            type: 'reading'
+        });
+        const todayKey = new Date(now).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        const today = getHistoryRangeData('week', [short('a'), short('b'), short('c')], 'pages')
+            .find(d => d.key === todayKey);
+        expect(today?.rsvp).toBeCloseTo(1);
+    });
+});
+
+describe('wordsToPages', () => {
+    it('counts a paperback page as 300 words', () => {
+        expect(wordsToPages(300)).toBe(1);
+        expect(wordsToPages(6000)).toBe(20);
+    });
+
+    it('rounds a part page to the nearest whole', () => {
+        expect(wordsToPages(0)).toBe(0);
+        expect(wordsToPages(100)).toBe(0);
+        expect(wordsToPages(200)).toBe(1);
     });
 });
 

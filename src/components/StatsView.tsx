@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect } from 'react';
 import { X, Clock, BookOpen, BarChart2, TrendingUp, Volume2, Library, Zap } from 'lucide-react';
 import type { ReadingSession, BookRecord } from '../utils/storage';
-import { getSessionKey, calculateFinishedBooks, getRangeThreshold, RANGE_LABELS } from '../utils/stats';
+import { getSessionKey, calculateFinishedBooks, getRangeThreshold, RANGE_LABELS, wordsToPages, getSessionWordsRead } from '../utils/stats';
+import { useSettingsStore } from '../stores/useSettingsStore';
 import { BookProgressChart } from './stats/BookProgressChart';
 import { BooksReadChart } from './stats/BooksReadChart';
 import { ReadingHistoryChart } from './stats/ReadingHistoryChart';
@@ -27,6 +28,9 @@ export function StatsView({
 }: StatsViewProps) {
   const [activeTab, setActiveTab] = useState<'book' | 'history' | 'books'>('book');
   const [timeRange, setTimeRange] = useState<string>('week');
+  // Shared with the reader menu's "remaining" readout, so picking pages here
+  // switches that over too.
+  const { progressUnit, setProgressUnit } = useSettingsStore();
 
   useEffect(() => {
     if (activeTab === 'books') {
@@ -62,8 +66,6 @@ export function StatsView({
   const bgClass = theme === 'bedtime' ? 'bg-black' : 'bg-white dark:bg-zinc-900';
   const textClass = theme === 'bedtime' ? 'text-stone-400' : 'text-zinc-900 dark:text-zinc-100';
   const cardBgClass = theme === 'bedtime' ? 'bg-zinc-900/50' : 'bg-zinc-50 dark:bg-zinc-800/50';
-
-  const WORDS_PER_PAGE = 300;
 
   // 1. Determine which book to show for "Current Book" tab
   const bookToViewId = activeBookId || (sessions.length > 0 ? sessions[0].bookId : null);
@@ -126,9 +128,28 @@ export function StatsView({
   const totalWordsPaginated = paginatedSessions.reduce((acc, s) => acc + (s.wordsRead || Math.max(0, s.endWordIndex - s.startWordIndex)), 0);
   const totalWordsHeard = listenSessions.reduce((acc, s) => acc + (s.wordsRead || Math.max(0, s.endWordIndex - s.startWordIndex)), 0);
 
-  const totalPagesRsvp = Math.round(totalWordsRsvp / WORDS_PER_PAGE);
-  const totalPagesPaginated = Math.round(totalWordsPaginated / WORDS_PER_PAGE);
-  const totalPagesHeard = Math.round(totalWordsHeard / WORDS_PER_PAGE);
+  const totalPagesRsvp = wordsToPages(totalWordsRsvp);
+  const totalPagesPaginated = wordsToPages(totalWordsPaginated);
+  const totalPagesHeard = wordsToPages(totalWordsHeard);
+
+  const totalMinutes = totalRsvpMinutes + totalPaginatedMinutes + totalListenMinutes;
+  const totalPages = totalPagesRsvp + totalPagesPaginated + totalPagesHeard;
+
+  // The fourth card always carries the unit you did not pick, so switching to
+  // pages never loses the time total outright.
+  const summaryCards = progressUnit === 'pages'
+    ? [
+        { icon: <BookOpen size={20} className="mb-2 opacity-50 text-blue-500" />, value: totalPagesRsvp + totalPagesPaginated, label: 'Read Pages' },
+        { icon: <Volume2 size={20} className="mb-2 opacity-50 text-purple-500" />, value: totalPagesHeard, label: 'Listen Pages' },
+        { icon: <TrendingUp size={20} className="mb-2 opacity-50" />, value: totalPages, label: 'Total Pages' },
+        { icon: <Clock size={20} className="mb-2 opacity-50" />, value: totalMinutes, label: 'Total Mins' },
+      ]
+    : [
+        { icon: <BookOpen size={20} className="mb-2 opacity-50 text-blue-500" />, value: totalRsvpMinutes + totalPaginatedMinutes, label: 'Read Mins' },
+        { icon: <Volume2 size={20} className="mb-2 opacity-50 text-purple-500" />, value: totalListenMinutes, label: 'Listen Mins' },
+        { icon: <Clock size={20} className="mb-2 opacity-50" />, value: totalMinutes, label: 'Total Mins' },
+        { icon: <TrendingUp size={20} className="mb-2 opacity-50" />, value: totalPages, label: 'Total Pages' },
+      ];
 
   // The cards cover the selected window, not a lifetime total, so they say
   // which window: a week's worth of pages read like an all-time count without
@@ -148,7 +169,7 @@ export function StatsView({
             <BarChart2 className="text-red-500" size={24} />
             <h2 className="text-xl font-semibold">Reading Stats</h2>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-colors">
+          <button onClick={onClose} aria-label="Close stats" className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-colors">
             <X size={24} />
           </button>
         </div>
@@ -215,28 +236,32 @@ export function StatsView({
 
           {/* Summary Cards */}
           <div className="space-y-3">
-            <h3 className="text-sm font-medium opacity-70 truncate">Totals: {summaryScope}</h3>
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-medium opacity-70 truncate">Totals: {summaryScope}</h3>
+              <div className="bg-zinc-100 dark:bg-zinc-800 p-1 rounded-lg flex gap-1 shrink-0">
+                {([
+                  { id: 'pages', label: 'Pages' },
+                  { id: 'time', label: 'Time' }
+                ] as const).map(unit => (
+                  <button
+                    key={unit.id}
+                    onClick={() => setProgressUnit(unit.id)}
+                    aria-pressed={progressUnit === unit.id}
+                    className={`px-3 py-1 text-[11px] font-semibold rounded-md transition-all ${progressUnit === unit.id ? 'bg-white dark:bg-zinc-700 shadow-sm text-red-500' : 'opacity-50 hover:opacity-100'}`}
+                  >
+                    {unit.label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div className={`p-4 rounded-xl ${cardBgClass} flex flex-col items-center justify-center text-center`}>
-                <BookOpen size={20} className="mb-2 opacity-50 text-blue-500" />
-                <span className="text-xl font-bold">{totalRsvpMinutes + totalPaginatedMinutes}</span>
-                <span className="text-[10px] uppercase tracking-wider opacity-50">Read Mins</span>
-              </div>
-              <div className={`p-4 rounded-xl ${cardBgClass} flex flex-col items-center justify-center text-center`}>
-                <Volume2 size={20} className="mb-2 opacity-50 text-purple-500" />
-                <span className="text-xl font-bold">{totalListenMinutes}</span>
-                <span className="text-[10px] uppercase tracking-wider opacity-50">Listen Mins</span>
-              </div>
-              <div className={`p-4 rounded-xl ${cardBgClass} flex flex-col items-center justify-center text-center`}>
-                <Clock size={20} className="mb-2 opacity-50" />
-                <span className="text-xl font-bold">{totalRsvpMinutes + totalPaginatedMinutes + totalListenMinutes}</span>
-                <span className="text-[10px] uppercase tracking-wider opacity-50">Total Mins</span>
-              </div>
-              <div className={`p-4 rounded-xl ${cardBgClass} flex flex-col items-center justify-center text-center`}>
-                <TrendingUp size={20} className="mb-2 opacity-50" />
-                <span className="text-xl font-bold">{totalPagesRsvp + totalPagesPaginated + totalPagesHeard}</span>
-                <span className="text-[10px] uppercase tracking-wider opacity-50">Total Pages</span>
-              </div>
+              {summaryCards.map(card => (
+                <div key={card.label} className={`p-4 rounded-xl ${cardBgClass} flex flex-col items-center justify-center text-center`}>
+                  {card.icon}
+                  <span className="text-xl font-bold">{card.value}</span>
+                  <span className="text-[10px] uppercase tracking-wider opacity-50">{card.label}</span>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -255,7 +280,7 @@ export function StatsView({
               {activeTab === 'book'
                 ? <BookProgressChart bookToView={bookToView || null} bookSessions={bookSessions} theme={theme} />
                 : activeTab === 'history'
-                  ? <ReadingHistoryChart timeRange={timeRange} historySessions={historySessions} theme={theme} totalRsvpMinutes={totalRsvpMinutes} totalPaginatedMinutes={totalPaginatedMinutes} totalListenMinutes={totalListenMinutes} />
+                  ? <ReadingHistoryChart timeRange={timeRange} historySessions={historySessions} theme={theme} unit={progressUnit} total={progressUnit === 'pages' ? totalPages : totalMinutes} />
                   : <BooksReadChart now={now} timeRange={timeRange} finishedBooks={finishedBooks} theme={theme} />
               }
             </div>
@@ -328,7 +353,7 @@ export function StatsView({
                           {Math.floor(session.durationSeconds / 60)}m {session.durationSeconds % 60}s
                         </td>
                         <td className="py-3 text-right opacity-60">
-                          {Math.round((session.wordsRead || Math.max(0, session.endWordIndex - session.startWordIndex)) / WORDS_PER_PAGE)}
+                          {wordsToPages(getSessionWordsRead(session))}
                         </td>
                       </tr>
                     ))}

@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import type { NavigationType } from '../utils/navigation';
 import { useSettingsStore } from '../stores/useSettingsStore';
+import { wordsToPages } from '../utils/stats';
 import { useReaderStore } from '../stores/useReaderStore';
 import { useUIStore } from '../stores/useUIStore';
 
@@ -29,7 +30,7 @@ export function ReaderMenu({
   const [activeTab, setActiveTab] = useState<'main' | 'toc' | 'nav'>('main');
   const activeChapterRef = useRef<HTMLButtonElement>(null);
 
-  const { wpm, setWpm, theme, toggleTheme } = useSettingsStore();
+  const { wpm, setWpm, theme, toggleTheme, progressUnit } = useSettingsStore();
   const { bookTitle, sections, setCurrentIndex, isReadingAloud, isSynthesizing, furthestIndex, words, currentIndex } = useReaderStore();
   const { setIsSettingsOpen, setIsBookSettingsOpen, setIsStatsOpen, setIsAskAiOpen } = useUIStore();
 
@@ -39,9 +40,6 @@ export function ReaderMenu({
   const wordsLeftChapter = Math.max(0, nextChapterStart - currentIndex);
   const wordsLeftBook = Math.max(0, effectiveTotalWords - currentIndex);
 
-  const minutesLeftChapter = wordsLeftChapter / wpm;
-  const minutesLeftBook = wordsLeftBook / wpm;
-
   const formatTimeLeft = (minutes: number) => {
     if (minutes < 1) return '< 1 min';
     const hrs = Math.floor(minutes / 60);
@@ -49,6 +47,17 @@ export function ReaderMenu({
     if (hrs > 0) return `${hrs}h ${mins}m`;
     return `${mins} min`;
   };
+
+  const formatPagesLeft = (words: number) => {
+    const pages = wordsToPages(words);
+    if (pages < 1) return '< 1 page';
+    return `${pages} page${pages === 1 ? '' : 's'}`;
+  };
+
+  // Pages don't move when you change WPM, which is the point: the toggle lives
+  // on the stats view and this readout follows it.
+  const formatLeft = (words: number) =>
+    progressUnit === 'pages' ? formatPagesLeft(words) : formatTimeLeft(words / wpm);
 
   // Reset to main tab when menu opens
   useEffect(() => {
@@ -139,8 +148,8 @@ export function ReaderMenu({
                   </button>
                 </div>
                 <div className="flex justify-between px-1 text-[11px] opacity-60 font-medium">
-                  <span>{formatTimeLeft(minutesLeftChapter)} remaining in chapter</span>
-                  <span>{formatTimeLeft(minutesLeftBook)} remaining in book</span>
+                  <span>{formatLeft(wordsLeftChapter)} remaining in chapter</span>
+                  <span>{formatLeft(wordsLeftBook)} remaining in book</span>
                 </div>
               </div>
 

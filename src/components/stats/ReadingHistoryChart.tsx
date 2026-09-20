@@ -1,24 +1,26 @@
-import type { ReadingSession } from '../../utils/storage';
+import type { ReadingSession, ProgressUnit } from '../../utils/storage';
 import { getHistoryRangeData } from '../../utils/stats';
 
 interface ReadingHistoryChartProps {
     timeRange: string;
     historySessions: ReadingSession[];
     theme: 'light' | 'dark' | 'bedtime';
-    totalRsvpMinutes: number;
-    totalPaginatedMinutes: number;
-    totalListenMinutes: number;
+    /** Minutes spent or pages covered — the bars and axis follow it. */
+    unit: ProgressUnit;
+    /** Window total in the same unit, for the footer. */
+    total: number;
 }
 
 export function ReadingHistoryChart({
     timeRange,
     historySessions,
     theme,
-    totalRsvpMinutes,
-    totalPaginatedMinutes,
-    totalListenMinutes
+    unit,
+    total
 }: ReadingHistoryChartProps) {
-    const sortedData = getHistoryRangeData(timeRange as 'week' | 'month' | 'year', historySessions);
+    const sortedData = getHistoryRangeData(timeRange as 'week' | 'month' | 'year', historySessions, unit);
+    const isPages = unit === 'pages';
+    const tickSuffix = isPages ? 'pg' : 'm';
 
     if (sortedData.length === 0) return (
         <div className="h-32 flex items-center justify-center opacity-40 italic text-sm">
@@ -33,7 +35,8 @@ export function ReadingHistoryChart({
     const paddingTop = 20;
     const paddingBottom = 30;
 
-    const maxMins = Math.max(15, ...sortedData.map(d => d.rsvp + d.paginated + d.listen));
+    // A floor keeps a single short session from filling the chart.
+    const maxValue = Math.max(15, ...sortedData.map(d => d.rsvp + d.paginated + d.listen));
     const totalBars = sortedData.length;
     const chartWidth = width - paddingLeft - paddingRight;
 
@@ -56,7 +59,7 @@ export function ReadingHistoryChart({
                         <g key={tick}>
                             <line x1={paddingLeft - 5} y1={y} x2={paddingLeft} y2={y} stroke="currentColor" strokeWidth="1" opacity="0.1" />
                             <text x={paddingLeft - 10} y={y} textAnchor="end" alignmentBaseline="middle" className="text-[10px] fill-current opacity-40 font-mono">
-                                {Math.round(tick * maxMins)}m
+                                {Math.round(tick * maxValue)}{tickSuffix}
                             </text>
                         </g>
                     );
@@ -65,9 +68,9 @@ export function ReadingHistoryChart({
                 {/* Bars */}
                 {sortedData.map((d, i) => {
                     const x = paddingLeft + i * (oBarWidth + oGap) + oGap / 2;
-                    const rsvpH = (d.rsvp / maxMins) * (height - paddingTop - paddingBottom);
-                    const paginatedH = (d.paginated / maxMins) * (height - paddingTop - paddingBottom);
-                    const listenH = (d.listen / maxMins) * (height - paddingTop - paddingBottom);
+                    const rsvpH = (d.rsvp / maxValue) * (height - paddingTop - paddingBottom);
+                    const paginatedH = (d.paginated / maxValue) * (height - paddingTop - paddingBottom);
+                    const listenH = (d.listen / maxValue) * (height - paddingTop - paddingBottom);
 
                     return (
                         <g key={d.key} className="group/bar">
@@ -97,7 +100,7 @@ export function ReadingHistoryChart({
                             <g className="opacity-0 group-hover/bar:opacity-100 pointer-events-none transition-opacity">
                                 <rect x={x + oBarWidth / 2 - 35} y={height - paddingBottom - rsvpH - paginatedH - listenH - 30} width="70" height="22" rx="4" className="fill-zinc-800 dark:fill-zinc-100" />
                                 <text x={x + oBarWidth / 2} y={height - paddingBottom - rsvpH - paginatedH - listenH - 16} textAnchor="middle" className="text-[9px] font-bold fill-white dark:fill-zinc-900">
-                                    {d.key}: {Math.round(d.rsvp + d.paginated + d.listen)}m
+                                    {d.key}: {Math.round(d.rsvp + d.paginated + d.listen)}{tickSuffix}
                                 </text>
                             </g>
                         </g>
@@ -106,7 +109,7 @@ export function ReadingHistoryChart({
             </svg>
             <div className="flex justify-between text-[10px] opacity-50 mt-2" style={{ paddingLeft: `${paddingLeft}px`, paddingRight: `${paddingRight}px` }}>
                 <span>{sortedData[0]?.key}</span>
-                <span>Total Time: {totalRsvpMinutes + totalPaginatedMinutes + totalListenMinutes} mins</span>
+                <span>{isPages ? `Total Pages: ${total}` : `Total Time: ${total} mins`}</span>
                 <span>{sortedData[sortedData.length - 1]?.key}</span>
             </div>
         </div>
