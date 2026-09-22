@@ -1,7 +1,8 @@
 import { useRef, useState, useEffect, useLayoutEffect, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FoldHorizontal, Pause, Play, UnfoldHorizontal } from 'lucide-react';
 
 import { ReaderMenu } from './ReaderMenu';
+import { MAX_PAGINATED_MARGIN, MIN_PAGINATED_MARGIN } from '../constants';
 import { splitWord } from '../utils/orp';
 import type { WordData } from '../utils/text-processing';
 import { useReaderLayout } from '../hooks/useReaderLayout';
@@ -27,6 +28,9 @@ const FONT_FAMILY_CSS: Record<FontFamily, string> = {
   opendyslexic: 'OpenDyslexic, sans-serif',
   atkinson: 'AtkinsonHyperlegible, sans-serif',
 };
+
+/** How much one press of the margin buttons moves the page edge, in px. */
+const MARGIN_STEP = 8;
 
 /** Width of the tap-to-turn-page strip down each side of the page. */
 const EDGE_TAP_WIDTH = 'clamp(56px, 14%, 140px)';
@@ -57,9 +61,9 @@ export function PaginatedReaderView({
     setCurrentIndex, sections, bookTitle, 
     isPlaying, setIsHoldPaused, isChapterBreak 
   } = useReaderStore();
-  const { 
-    theme, fontFamily, paginatedFontSize: fontSize, 
-    setPaginatedFontSize: onFontSizeChange
+  const {
+    theme, fontFamily, paginatedFontSize: fontSize, paginatedMargin: margin,
+    setPaginatedFontSize: onFontSizeChange, setPaginatedMargin: onMarginChange
   } = useSettingsStore();
 
   const pressStartTimeRef = useRef<number | null>(null);
@@ -147,6 +151,7 @@ export function PaginatedReaderView({
     words,
     sections,
     areaDims,
+    horizontalPadding: margin,
     fontSize,
     fontFamilyStr,
     lineHeight,
@@ -463,6 +468,28 @@ export function PaginatedReaderView({
             >
               A+
             </button>
+
+            <span className={`w-px h-5 border-l ${borderColor}`} aria-hidden="true" />
+
+            {/* Margins sit next to the type size because they are the same
+                decision: how much text you want on a page. */}
+            <button
+              data-testid="margin-decrease"
+              onClick={() => onMarginChange(Math.max(MIN_PAGINATED_MARGIN, margin - MARGIN_STEP))}
+              className={`px-2 py-1 rounded border ${borderColor} ${mutedText} hover:opacity-80 transition-opacity`}
+              title="Narrower margins"
+            >
+              <UnfoldHorizontal size={14} />
+            </button>
+            <span data-testid="margin-value" className={`text-xs font-mono ${mutedText} w-8 text-center`}>{margin}</span>
+            <button
+              data-testid="margin-increase"
+              onClick={() => onMarginChange(Math.min(MAX_PAGINATED_MARGIN, margin + MARGIN_STEP))}
+              className={`px-2 py-1 rounded border ${borderColor} ${mutedText} hover:opacity-80 transition-opacity`}
+              title="Wider margins"
+            >
+              <FoldHorizontal size={14} />
+            </button>
           </div>
         </div>
       )}
@@ -534,8 +561,10 @@ export function PaginatedReaderView({
         ) : (
           <div
             ref={innerRef}
-            className="h-full w-full px-8 pt-8 pb-16 overflow-hidden"
+            className="h-full w-full pt-8 pb-16 overflow-hidden"
             style={{
+              paddingLeft: `${margin}px`,
+              paddingRight: `${margin}px`,
               fontSize: `${fontSize}px`,
               lineHeight: `${lineHeight}px`,
               opacity: 1,

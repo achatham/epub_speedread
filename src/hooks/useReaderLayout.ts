@@ -2,12 +2,17 @@ import { useState, useRef, useEffect, useCallback, useLayoutEffect } from 'react
 import type { WordData } from '../utils/text-processing';
 import { computePageEndIndex } from '../utils/layout';
 
+/** Space above and below the page text, in px — matches the reader's pt-8. */
+const VERTICAL_PADDING = 32;
+
 interface UseReaderLayoutProps {
   currentIndex: number;
   isPlaying: boolean;
   words: WordData[];
   sections: { startIndex: number; label: string }[];
   areaDims: { w: number; h: number } | null;
+  /** Side margin of the page, in px — the user-set reading margin. */
+  horizontalPadding: number;
   fontSize: number;
   fontFamilyStr: string;
   lineHeight: number;
@@ -20,6 +25,7 @@ export function useReaderLayout({
   words,
   sections,
   areaDims,
+  horizontalPadding,
   fontSize,
   fontFamilyStr,
   lineHeight,
@@ -46,7 +52,7 @@ export function useReaderLayout({
 
   useEffect(() => {
     setLayoutState(prev => ({ start: prev.start, end: null }));
-  }, [areaDims?.w, areaDims?.h, fontSize, fontFamilyStr, lineHeight]);
+  }, [areaDims?.w, areaDims?.h, horizontalPadding, fontSize, fontFamilyStr, lineHeight]);
 
   // Synchronous reset for layout coordination
   useLayoutEffect(() => {
@@ -63,14 +69,13 @@ export function useReaderLayout({
           if (!areaDims || areaDims.w <= 0 || areaDims.h <= 0) {
             desiredStart = Math.max(chapterStart, currentIndex - 40);
           } else {
-            const PADDING = 32;
-            const effectiveHeight = Math.max(lineHeight, areaDims.h - PADDING * 2 - lineHeight);
+            const effectiveHeight = Math.max(lineHeight, areaDims.h - VERTICAL_PADDING * 2 - lineHeight);
             const targetHalfHeight = effectiveHeight / 2;
             const estimatedStart = Math.max(chapterStart, currentIndex - 400);
             
             let curr = estimatedStart;
             while (curr < currentIndex) {
-              const next = computePageEndIndex(words, curr, areaDims.w - PADDING * 2, targetHalfHeight, fontSize, fontFamilyStr, nextChapterStart);
+              const next = computePageEndIndex(words, curr, areaDims.w - horizontalPadding * 2, targetHalfHeight, fontSize, fontFamilyStr, nextChapterStart);
               if (next >= currentIndex || next === curr) {
                 break;
               }
@@ -86,7 +91,7 @@ export function useReaderLayout({
         }
     }
     prevIsPlayingRef.current = isPlaying;
-  }, [isPlaying, layoutState.start, currentIndex, sections, areaDims, lineHeight, fontSize, fontFamilyStr, words]);
+  }, [isPlaying, layoutState.start, currentIndex, sections, areaDims, horizontalPadding, lineHeight, fontSize, fontFamilyStr, words]);
 
   const navigateNextPage = useCallback(() => {
     if (layoutState.end !== null && layoutState.end < words.length) {
@@ -126,11 +131,10 @@ export function useReaderLayout({
 
       const estimatedStart = Math.max(anchor, currentIndex - 800);
       let curr = estimatedStart;
-      const PADDING = 32;
-      const effectiveHeight = Math.max(lineHeight, areaDims.h - PADDING * 2 - lineHeight);
+      const effectiveHeight = Math.max(lineHeight, areaDims.h - VERTICAL_PADDING * 2 - lineHeight);
 
       while (curr < currentIndex) {
-        const next = computePageEndIndex(words, curr, areaDims.w - PADDING * 2, effectiveHeight, fontSize, fontFamilyStr, nextChapterStart);
+        const next = computePageEndIndex(words, curr, areaDims.w - horizontalPadding * 2, effectiveHeight, fontSize, fontFamilyStr, nextChapterStart);
         if (next >= currentIndex || next === curr) {
           break;
         }
@@ -151,7 +155,7 @@ export function useReaderLayout({
     expectedIndexRef.current = targetIndex;
     setCurrentIndex(targetIndex);
     setLayoutState({ start: targetIndex, end: null });
-  }, [currentIndex, areaDims, sections, setCurrentIndex, words, fontSize, fontFamilyStr, lineHeight]);
+  }, [currentIndex, areaDims, horizontalPadding, sections, setCurrentIndex, words, fontSize, fontFamilyStr, lineHeight]);
 
   return {
     layoutState,

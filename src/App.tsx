@@ -46,6 +46,7 @@ function App() {
   const setFontFamily = useSettingsStore(state => state.setFontFamily);
   const setRsvpSettings = useSettingsStore(state => state.setRsvpSettings);
   const setPaginatedFontSize = useSettingsStore(state => state.setPaginatedFontSize);
+  const setPaginatedMargin = useSettingsStore(state => state.setPaginatedMargin);
   const setProgressUnit = useSettingsStore(state => state.setProgressUnit);
 
   // Reader Store
@@ -452,6 +453,8 @@ function App() {
           if (s.autoLandscape !== undefined) setAutoLandscape(s.autoLandscape);
           if (s.rsvp) setRsvpSettings(normalizeRsvpSettings({ ...rsvpSettings, ...s.rsvp }));
           if (s.paginatedFontSize) setPaginatedFontSize(s.paginatedFontSize);
+          // Zero is a real margin, so this one can't be a truthiness check.
+          if (s.paginatedMargin !== undefined) setPaginatedMargin(s.paginatedMargin);
           if (s.progressUnit) setProgressUnit(s.progressUnit);
           if (s.lastBookId !== undefined) setLastBookId(s.lastBookId);
 

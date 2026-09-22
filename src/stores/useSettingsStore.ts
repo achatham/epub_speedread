@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { DEFAULT_RSVP_SETTINGS, DEFAULT_PAGINATED_FONT_SIZE } from '../constants';
+import { DEFAULT_RSVP_SETTINGS, DEFAULT_PAGINATED_FONT_SIZE, DEFAULT_PAGINATED_MARGIN } from '../constants';
 import type { RsvpSettings, ReadingMode, ProgressUnit } from '../utils/storage';
 import { getGeminiApiKey, setGeminiApiKey as saveGeminiApiKey } from '../utils/gemini';
 import { normalizeRsvpSettings } from '../utils/rsvp-settings';
@@ -17,6 +17,7 @@ interface SettingsState {
   fontFamily: FontFamily;
   rsvpSettings: RsvpSettings;
   paginatedFontSize: number;
+  paginatedMargin: number;
   readingMode: ReadingMode;
   progressUnit: ProgressUnit;
   lastBookId: string | null | undefined;
@@ -33,6 +34,7 @@ interface SettingsState {
   setFontFamily: (family: FontFamily) => void;
   setRsvpSettings: (settings: Partial<RsvpSettings>) => void;
   setPaginatedFontSize: (size: number) => void;
+  setPaginatedMargin: (margin: number) => void;
   setReadingMode: (mode: ReadingMode) => void;
   setProgressUnit: (unit: ProgressUnit) => void;
   setLastBookId: (id: string | null) => void;
@@ -59,6 +61,7 @@ export const useSettingsStore = create<SettingsState>()(
       fontFamily: 'system',
       rsvpSettings: DEFAULT_RSVP_SETTINGS,
       paginatedFontSize: DEFAULT_PAGINATED_FONT_SIZE,
+      paginatedMargin: DEFAULT_PAGINATED_MARGIN,
       readingMode: 'rsvp',
       // Pages by default: "I read 30 pages" is how people describe a
       // sitting, and it is the number that means the same thing whatever
@@ -82,6 +85,7 @@ export const useSettingsStore = create<SettingsState>()(
       setFontFamily: (family) => set({ fontFamily: family }),
       setRsvpSettings: (settings) => set((state) => ({ rsvpSettings: { ...state.rsvpSettings, ...settings } })),
       setPaginatedFontSize: (size) => set({ paginatedFontSize: size }),
+      setPaginatedMargin: (margin) => set({ paginatedMargin: margin }),
       setReadingMode: (mode) => set({ readingMode: mode }),
       setProgressUnit: (unit) => set({ progressUnit: unit }),
       setLastBookId: (id) => set({ lastBookId: id }),

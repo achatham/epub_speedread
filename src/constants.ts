@@ -12,6 +12,11 @@ export const WPM_VANITY_RATIO = 1.25;
 
 export const DEFAULT_PAGINATED_FONT_SIZE = 20;
 
+/** Side margin of the page view, in px — the `px-8` the page used to hardcode. */
+export const DEFAULT_PAGINATED_MARGIN = 32;
+export const MIN_PAGINATED_MARGIN = 0;
+export const MAX_PAGINATED_MARGIN = 160;
+
 // The chapter interlude used to hold for 3 seconds, which at any real reading
 // speed is a dead stop of 15-40 words' worth of time. Settings saved before the
 // shorter default was introduced still carry this value, so we migrate it.
