@@ -6,7 +6,7 @@ export function useSettingsSync(storageProvider: FirestoreStorage | null, onboar
     const {
         ttsSpeed, autoLandscape, theme, fontFamily,
         syncApiKey, geminiApiKey, rsvpSettings,
-        readingMode, paginatedFontSize, paginatedMargin, lastBookId, progressUnit
+        readingMode, lastBookId, progressUnit
     } = useSettingsStore();
 
     // Apply theme class to document
@@ -37,11 +37,9 @@ export function useSettingsSync(storageProvider: FirestoreStorage | null, onboar
                 onboardingCompleted,
                 readingMode,
                 progressUnit,
-                paginatedFontSize,
-                paginatedMargin,
                 lastBookId
             });
         }, 1000);
         return () => clearTimeout(timer);
-    }, [ttsSpeed, autoLandscape, theme, fontFamily, syncApiKey, geminiApiKey, rsvpSettings, storageProvider, onboardingCompleted, readingMode, paginatedFontSize, paginatedMargin, lastBookId, progressUnit]);
+    }, [ttsSpeed, autoLandscape, theme, fontFamily, syncApiKey, geminiApiKey, rsvpSettings, storageProvider, onboardingCompleted, readingMode, lastBookId, progressUnit]);
 }

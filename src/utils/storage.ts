@@ -41,8 +41,6 @@ export interface UserSettings {
   onboardingCompleted?: boolean;
   readingMode?: ReadingMode;
   progressUnit?: ProgressUnit;
-  paginatedFontSize?: number;
-  paginatedMargin?: number;
   lastBookId?: string | null;
   lastUpdated: number;
   /** @deprecated Aggregation is now a pure rebuild from the raw session log,
