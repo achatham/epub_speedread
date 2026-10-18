@@ -616,15 +616,21 @@ export function PaginatedReaderView({
         )}
       </div>
 
-      {/* Visible pause target — holding the screen is easy to get wrong, so
-          give RSVP an unambiguous button that stops on the press itself. */}
-      {isPlaying && (
+      {/* Visible pause targets — holding the screen is easy to get wrong, so
+          give RSVP an unambiguous button that stops on the press itself. The
+          second sits on the right edge, below the word, where a thumb holding
+          a portrait tablet already rests; reaching for bottom-centre isn't. */}
+      {isPlaying && ([
+        ['rsvp-pause', 'bottom-16 left-1/2 -translate-x-1/2'],
+        ['rsvp-pause-side', 'right-4 top-2/3 -translate-y-1/2'],
+      ] as const).map(([testId, position]) => (
         <button
-          data-testid="rsvp-pause"
+          key={testId}
+          data-testid={testId}
           data-paused={isTargetPaused}
           data-pause-pending={isPausePending}
           onPointerDown={toggleTargetPause}
-          className={`fixed bottom-16 left-1/2 -translate-x-1/2 z-50 w-16 h-16 rounded-full border
+          className={`fixed ${position} z-50 w-16 h-16 rounded-full border
             flex items-center justify-center transition-transform active:scale-95
             ${isTargetPaused ? pausedTargetClass : pauseTargetClass}`}
           style={{ touchAction: 'none' }}
@@ -633,7 +639,7 @@ export function PaginatedReaderView({
         >
           {isTargetPaused ? <Play size={26} className="translate-x-0.5" /> : <Pause size={26} />}
         </button>
-      )}
+      ))}
 
       {/* ── Footer / controls ──────────────────────────────────── */}
       <div className={`shrink-0 px-4 pt-3 pb-8 flex flex-col gap-2`}>

@@ -84,6 +84,27 @@ test('space pauses in place and escape leaves RSVP', async ({ page }) => {
   await expect(pauseTarget).toHaveCount(0);
 });
 
+// On a portrait tablet the bottom-centre target is a stretch for a hand that's
+// holding the device, so a second one sits on the right edge, clear of the word.
+test('the right-edge pause target works on a portrait tablet', async ({ page }) => {
+  await page.setViewportSize({ width: 800, height: 1280 });
+  await startPlaying(page);
+  const sideTarget = page.locator('[data-testid="rsvp-pause-side"]');
+  const centreTarget = page.locator('[data-testid="rsvp-pause"]');
+
+  const box = (await sideTarget.boundingBox())!;
+  expect(box.x + box.width).toBeGreaterThan(800 - 40);
+  const wordBox = (await page.locator('[data-testid="rsvp-word"]').boundingBox())!;
+  expect(box.y).toBeGreaterThan(wordBox.y + wordBox.height);
+
+  await sideTarget.click();
+  await expect(centreTarget).toHaveAttribute('data-paused', 'true');
+  await expect(sideTarget).toHaveAttribute('data-paused', 'true');
+
+  await sideTarget.click();
+  await expect(sideTarget).toHaveAttribute('data-paused', 'false');
+});
+
 // Tapping the screen is still the way out of RSVP, and it must work while the
 // pause target is engaged rather than being read as a hold-release.
 test('tapping the screen while paused in place returns to the page', async ({ page }) => {
